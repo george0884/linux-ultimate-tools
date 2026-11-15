@@ -106,3 +106,15 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 ## Tarjeta de rescate de tu PC (opción 18 → 14)
 
 ![Tarjeta de rescate de tu PC (opción 18 → 14)](17-tarjeta-rescate.png)
+
+---
+
+## Modo arranque en otras distribuciones (Arch Linux)
+
+![Modo arranque en otras distribuciones (Arch Linux)](18-modo-arranque-arch.png)
+
+---
+
+## Menú de arranque en Arch Linux (opción 18)
+
+![Menú de arranque en Arch Linux (opción 18)](19-arranque-arch.png)

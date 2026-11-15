@@ -61,7 +61,9 @@ print_header() {
     echo "║              Transformación y Optimización Extrema               ║"
     echo "╚══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
-    echo -e "${GREEN}🐧 Detectado: ${FLAVOR_NAME} $(os_release_value VERSION_ID) · ${DESKTOP_NAME}${NC}"
+    local version
+    version=$(os_release_value VERSION_ID)
+    echo -e "${GREEN}🐧 Detectado: ${FLAVOR_NAME}${version:+ $version} · ${DESKTOP_NAME}${NC}"
     echo -e "${YELLOW}📁 Log activo: $LOG_FILE${NC}\n"
 }
 
@@ -982,7 +984,14 @@ kernel_versions() {
 }
 
 secure_boot_enabled() {
-    command -v mokutil &> /dev/null && mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"
+    if command -v mokutil &> /dev/null; then
+        mokutil --sb-state 2>/dev/null | grep -qi "SecureBoot enabled"
+        return
+    fi
+    # Sin mokutil (Arch, Manjaro...): se lee la variable del firmware (el último byte es 1 si está activo)
+    local var
+    var=$(ls /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d0-aa0d-00e098032b8c 2>/dev/null) || return 1
+    [ "$(od -An -t u1 "$var" 2>/dev/null | awk '{print $NF}')" = 1 ]
 }
 
 # Comprobaciones antes de instalar un kernel de terceros
@@ -1116,7 +1125,7 @@ grub_entry_path() {
 ensure_grub_saved() {
     grep -Eq '^GRUB_DEFAULT="?saved"?$' /etc/default/grub && return 0
     set_grub_default saved
-    run "Falló update-grub" sudo update-grub || return 1
+    run "No se pudo regenerar el menú" grub_update || return 1
     return 2
 }
 
@@ -3216,7 +3225,257 @@ reinstall_snap() {
 # OPCIÓN 18: REPARAR GRUB (COLOR: MAGENTA)
 # ============================================================
 
+# ------------------------------------------------------------
+# Arranque en cualquier distribución: Ubuntu/Debian, Arch/Manjaro, Fedora y openSUSE.
+# Todo lo de GRUB pasa por estas funciones, así el menú 18 sirve en todas.
+# BOOT_ROOT vacío = el sistema que está corriendo; con una ruta = el sistema montado
+# desde un Live USB (los comandos se ejecutan dentro de él con chroot).
+# ------------------------------------------------------------
+
+BOOT_ROOT=""
+BOOT_FAMILY=""      # debian | arch | fedora | suse | otra
+BOOT_DISTRO=""      # Nombre para mostrar (Ubuntu, Debian GNU/Linux, Arch Linux, Manjaro...)
+BOOT_ID=""          # ID de os-release (ubuntu, debian, arch, manjaro, fedora...)
+GRUB_PREFIX="grub"  # Fedora y openSUSE usan grub2-mkconfig, grub2-install...
+GRUB_DIR="/boot/grub"
+GRUB_CFG="/boot/grub/grub.cfg"
+GRUB_REGEN=()       # Cómo se regenera el menú (update-grub o grub-mkconfig -o ...)
+ESP_DIR="/boot/efi"  # Dónde está montada la partición EFI (/boot/efi, /efi o /boot)
+EFI_ID="ubuntu"     # Carpeta de la distro dentro de EFI/ (ubuntu, debian, GRUB, manjaro, fedora...)
+
+# Valor de /etc/os-release del sistema de arranque (el actual o el montado)
+boot_os_value() {
+    (. "$BOOT_ROOT/etc/os-release" 2>/dev/null && eval "echo \"\${$1:-}\"")
+}
+
+boot_has_cmd() {
+    local d
+    for d in /usr/sbin /usr/bin /sbin /bin; do
+        [ -x "$BOOT_ROOT$d/$1" ] && return 0
+    done
+    return 1
+}
+
+# Ejecuta un comando como administrador en el sistema de arranque
+on_target() {
+    if [ -n "$BOOT_ROOT" ]; then
+        sudo chroot "$BOOT_ROOT" "$@"
+    else
+        sudo "$@"
+    fi
+}
+
+# Detecta la familia, los comandos de GRUB y la partición EFI. Uso: boot_detect [raíz]
+boot_detect() {
+    BOOT_ROOT="${1:-}"
+    local like
+    BOOT_ID=$(boot_os_value ID)
+    like=" $BOOT_ID $(boot_os_value ID_LIKE) "
+    BOOT_DISTRO=$(boot_os_value NAME)
+    [ -n "$BOOT_DISTRO" ] || BOOT_DISTRO="Linux"
+    # En Ubuntu, el sabor detectado es más preciso (Kubuntu también se llama "Ubuntu" en os-release)
+    [ -z "$BOOT_ROOT" ] && [ -n "$FLAVOR_NAME" ] && [ "${BOOT_ONLY:-false}" = false ] && BOOT_DISTRO="$FLAVOR_NAME"
+    case $like in
+        *" ubuntu "*|*" debian "*) BOOT_FAMILY=debian ;;
+        *" arch "*|*" archlinux "*|*" manjaro "*) BOOT_FAMILY=arch ;;
+        *" fedora "*|*" rhel "*|*" centos "*) BOOT_FAMILY=fedora ;;
+        *" suse "*|*" opensuse "*|*" sles "*) BOOT_FAMILY=suse ;;
+        *) BOOT_FAMILY=otra ;;
+    esac
+
+    GRUB_PREFIX=grub
+    if ! boot_has_cmd grub-mkconfig && boot_has_cmd grub2-mkconfig; then
+        GRUB_PREFIX=grub2
+    fi
+    GRUB_DIR=/boot/grub
+    [ "$GRUB_PREFIX" = grub2 ] && [ -d "$BOOT_ROOT/boot/grub2" ] && GRUB_DIR=/boot/grub2
+    GRUB_CFG="$GRUB_DIR/grub.cfg"
+    if boot_has_cmd update-grub; then
+        GRUB_REGEN=(update-grub)
+    else
+        GRUB_REGEN=("$GRUB_PREFIX-mkconfig")
+        # Fedora 38+: sin esta opción, los parámetros del kernel no llegan a las entradas BLS
+        if [ "$BOOT_FAMILY" = fedora ] && on_target "$GRUB_PREFIX-mkconfig" --help 2>/dev/null | grep -q update-bls-cmdline; then
+            GRUB_REGEN+=(--update-bls-cmdline)
+        fi
+        GRUB_REGEN+=(-o "$GRUB_CFG")
+    fi
+
+    ESP_DIR=$(boot_find_esp)
+    EFI_ID=$(boot_find_efi_id)
+}
+
+# Punto de montaje de la partición EFI (FAT): primero el que dice fstab
+boot_find_esp() {
+    local mp
+    for mp in /boot/efi /efi /boot; do
+        if [ -n "$BOOT_ROOT" ]; then
+            awk -v m="$mp" '$1 !~ /^#/ && $2 == m && $3 ~ /vfat|fat/ {f = 1} END {exit !f}' "$BOOT_ROOT/etc/fstab" 2>/dev/null \
+                && { echo "$mp"; return; }
+        elif [ "$(findmnt -no FSTYPE "$mp" 2>/dev/null)" = vfat ]; then
+            echo "$mp"
+            return
+        fi
+    done
+    echo /boot/efi
+}
+
+# Carpeta de la distro dentro de EFI/: la que ya tiene GRUB, o la que usaría grub-install
+boot_find_efi_id() {
+    local id dir
+    for id in "$BOOT_ID" $(boot_os_value ID_LIKE) ubuntu debian GRUB grub arch manjaro endeavouros fedora opensuse; do
+        [ -n "$id" ] || continue
+        dir=$(sudo find "$BOOT_ROOT$ESP_DIR/EFI" -maxdepth 1 -iname "$id" 2>/dev/null | head -n1)
+        if [ -n "$dir" ] && sudo find "$dir" -maxdepth 1 \( -iname 'grubx64.efi' -o -iname 'shimx64.efi' \) 2>/dev/null | grep -q .; then
+            basename "$dir"
+            return
+        fi
+    done
+    case $BOOT_FAMILY in
+        debian) [ "$BOOT_ID" = debian ] && echo debian || echo ubuntu ;;
+        arch) case $BOOT_ID in manjaro|endeavouros) echo "$BOOT_ID" ;; *) echo GRUB ;; esac ;;
+        fedora) echo fedora ;;
+        suse) echo opensuse ;;
+        *) echo "${BOOT_ID:-GRUB}" ;;
+    esac
+}
+
+# ¿Hay GRUB en este sistema? (Arch y EndeavourOS a veces usan systemd-boot)
+grub_available() {
+    boot_has_cmd "$GRUB_PREFIX-mkconfig" || boot_has_cmd update-grub
+}
+
+grub_required() {
+    grub_available && return 0
+    if on_target bootctl is-installed &> /dev/null; then
+        log_warning "$BOOT_DISTRO arranca con systemd-boot, no con GRUB: esta opción no aplica"
+    else
+        log_error "GRUB no está instalado en $BOOT_DISTRO"
+    fi
+    return 1
+}
+
+# Menú de GRUB con entradas BLS (Fedora): los kernels no están en grub.cfg
+grub_uses_bls() {
+    sudo grep -q '^[[:space:]]*blscfg' "$BOOT_ROOT$GRUB_CFG" 2>/dev/null
+}
+
+grub_update() { on_target "${GRUB_REGEN[@]}"; }
+grub_set_default() { on_target "$GRUB_PREFIX-set-default" "$@"; }
+grub_editenv_list() { on_target "$GRUB_PREFIX-editenv" "$GRUB_DIR/grubenv" list 2>/dev/null; }
+grub_probe() { on_target "$GRUB_PREFIX-probe" "$@"; }
+
+# Paquetes de GRUB de cada familia: uefi | bios
+grub_packages() {
+    case $BOOT_FAMILY:$1 in
+        debian:uefi) echo grub-efi-amd64 grub-efi-amd64-signed shim-signed ;;
+        debian:bios) echo grub-pc ;;
+        arch:uefi) echo grub efibootmgr ;;
+        arch:bios) echo grub ;;
+        fedora:uefi) echo grub2-efi-x64 shim-x64 grub2-tools ;;
+        fedora:bios) echo grub2-pc grub2-tools ;;
+        suse:uefi) echo grub2-x86_64-efi shim ;;
+        suse:bios) echo grub2-i386-pc ;;
+    esac
+}
+
+boot_pkg_supported() {
+    [ "$BOOT_FAMILY" != otra ] && return 0
+    log_error "No sé instalar paquetes en $BOOT_DISTRO: hazlo con su gestor de paquetes"
+    return 1
+}
+
+boot_pkg_installed() {
+    case $BOOT_FAMILY in
+        debian) installed_pkgs "$@" ;;
+        arch) pacman -Qq "$@" 2>/dev/null ;;
+        fedora|suse) rpm -q --qf '%{NAME}\n' "$@" 2>/dev/null | grep -v 'not installed' ;;
+    esac
+}
+
+boot_pkg_install() {
+    boot_pkg_supported || return 1
+    case $BOOT_FAMILY in
+        debian)
+            [ -z "$BOOT_ROOT" ] && apt_update
+            on_target env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" ;;
+        arch) on_target pacman -S --needed --noconfirm "$@" ;;
+        fedora) on_target dnf install -y "$@" ;;
+        suse) on_target zypper --non-interactive install "$@" ;;
+    esac
+}
+
+# Reinstala paquetes reponiendo los archivos que falten
+boot_pkg_reinstall() {
+    boot_pkg_supported || return 1
+    case $BOOT_FAMILY in
+        debian)
+            [ -z "$BOOT_ROOT" ] && apt_update
+            on_target env DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y \
+                -o Dpkg::Options::=--force-confmiss "$@" ;;
+        arch) on_target pacman -S --noconfirm "$@" ;;
+        fedora) on_target dnf reinstall -y "$@" ;;
+        suse) on_target zypper --non-interactive install --force "$@" ;;
+    esac
+}
+
+boot_pkg_remove() {
+    boot_pkg_supported || return 1
+    case $BOOT_FAMILY in
+        debian) on_target env DEBIAN_FRONTEND=noninteractive apt-get purge -y "$@" ;;
+        arch) on_target pacman -Rns --noconfirm "$@" ;;
+        fedora) on_target dnf remove -y "$@" ;;
+        suse) on_target zypper --non-interactive remove "$@" ;;
+    esac
+}
+
+# Archivos de /etc/grub.d que instalan los paquetes: "paquete ruta" (aunque falten)
+boot_grubd_owned() {
+    case $BOOT_FAMILY in
+        debian) dpkg-query -S '/etc/grub.d/*' 2>/dev/null | grep -v '^diversion' \
+            | awk -F': ' '{n = split($1, p, ", "); for (i = 1; i <= n; i++) print p[i], $2}' ;;
+        arch) pacman -Ql 2>/dev/null ;;
+        fedora|suse) rpm -qa --filesbypkg 2>/dev/null ;;
+    esac | awk '$2 ~ "^/etc/grub.d/[^/]+$" {print $1, $2}' | sort -u
+}
+
+# Instala GRUB en la partición EFI o en el disco (BIOS), según la distro
+grub_install_uefi() {
+    case $BOOT_FAMILY in
+        # Fedora no usa grub2-install en UEFI: los archivos firmados vienen en los paquetes
+        fedora) boot_pkg_reinstall shim-x64 grub2-efi-x64 ;;
+        suse)
+            if boot_has_cmd shim-install; then
+                on_target shim-install --config-file="$GRUB_CFG"
+            else
+                on_target grub2-install --target=x86_64-efi --efi-directory="$ESP_DIR" --bootloader-id="$EFI_ID"
+            fi ;;
+        *)
+            if [ "$BOOT_FAMILY" = arch ] && secure_boot_enabled 2>/dev/null; then
+                log_warning "Secure Boot está activo: el GRUB de $BOOT_DISTRO no viene firmado y puede no arrancar"
+                echo -e "${YELLOW}  Desactiva Secure Boot en la BIOS, o firma GRUB (por ejemplo con sbctl).${NC}"
+            fi
+            on_target "$GRUB_PREFIX-install" --target=x86_64-efi --efi-directory="$ESP_DIR" \
+                --bootloader-id="$EFI_ID" --recheck ;;
+    esac
+}
+
+grub_install_bios() {
+    on_target "$GRUB_PREFIX-install" --target=i386-pc --recheck "$1"
+}
+
+# Nombre de la sesión Live: Ubuntu (casper), Debian (live), Arch, Manjaro y Fedora
+is_live_session() {
+    local cmdline
+    cmdline=$(cat /proc/cmdline 2>/dev/null)
+    [[ "$cmdline" == *boot=casper* || "$cmdline" == *boot=live* || "$cmdline" == *archisobasedir* \
+        || "$cmdline" == *misobasedir* || "$cmdline" == *rd.live.image* ]] && return 0
+    [ -d /cdrom/casper ] || [ -d /run/archiso ] || [ "$(findmnt -no FSTYPE / 2>/dev/null)" = overlay ]
+}
+
+
 grub_repair_menu() {
+    boot_detect
     while true; do
         clear
         echo -e "${PURPLE}${BOLD}"
@@ -3225,7 +3484,13 @@ grub_repair_menu() {
         echo "╚══════════════════════════════════════════════════════════════════╝"
         echo -e "${NC}"
 
-        is_live_session && echo -e "${GREEN}💿 Sesión Live USB detectada: usa la opción 10${NC}"
+        if is_live_session; then
+            echo -e "${GREEN}💿 Sesión Live USB detectada: usa la opción 10${NC}"
+        else
+            echo -e "${CYAN}🐧 $BOOT_DISTRO · menú en $GRUB_CFG$([ -d /sys/firmware/efi ] && echo " · EFI en $ESP_DIR")${NC}"
+            grub_available || echo -e "${YELLOW}⚠ GRUB no está instalado (¿usas systemd-boot?): solo sirven 1, 5, 8 y las guías${NC}"
+            echo ""
+        fi
         echo -e "${PURPLE}🔍 Diagnóstico:${NC}"
         echo -e "  ${PURPLE} 1)${NC} 📊 DIAGNÓSTICO - Estado del arranque (y guardar un informe)"
         echo -e "\n${PURPLE}🔧 Reparar (con el sistema arrancado):${NC}"
@@ -3247,27 +3512,27 @@ grub_repair_menu() {
         echo -e "  ${PURPLE}14)${NC} 🪪 TARJETA DE RESCATE - Los comandos exactos de TU PC para 'grub>' y"
         echo -e "         'grub rescue>', para fotografiar y copiar al pendrive junto con el script"
         echo -e "  ${PURPLE}15)${NC} 🛟 ARRANQUE DE RESPALDO UEFI - Que la PC arranque aunque la BIOS"
-        echo -e "         pierda la entrada de Ubuntu (actualización de BIOS, reseteo...)"
+        echo -e "         pierda la entrada de tu sistema (actualización de BIOS, reseteo...)"
         echo -e "\n  ${PURPLE} 0)${NC} 🔙 Volver al menú principal"
         echo ""
         read -r -p "📌 Opción (0-15): " grub_option
 
         case $grub_option in
             1) grub_diagnostic ;;
-            2) grub_normal_repair ;;
-            3) grub_full_repair; pause ;;
-            4) grub_reinstall_to_disk ;;
+            2) grub_required && grub_normal_repair || pause ;;
+            3) grub_required && grub_full_repair; pause ;;
+            4) grub_required && grub_reinstall_to_disk || pause ;;
             5) esp_check_repair; pause ;;
-            6) grub_default_entry_menu; pause ;;
-            7) grub_os_prober_toggle; pause ;;
+            6) grub_required && grub_default_entry_menu; pause ;;
+            7) grub_required && grub_os_prober_toggle; pause ;;
             8) uefi_boot_order_menu; pause ;;
-            9) grub_customize_menu ;;
+            9) grub_required && grub_customize_menu || pause ;;
             10) grub_live_repair ;;
             11) grub_prompt_guide ;;
             12) grub_rescue_guide ;;
             13) grub_live_guide ;;
-            14) rescue_card_menu ;;
-            15) uefi_fallback_menu ;;
+            14) grub_required && rescue_card_menu || pause ;;
+            15) grub_required && uefi_fallback_menu || pause ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
         esac
@@ -3278,6 +3543,7 @@ grub_repair_menu() {
 boot_report() {
     echo "== Fecha: $(date '+%Y-%m-%d %H:%M')"
     echo "== Sistema: $(os_release_value PRETTY_NAME) · kernel en uso $(uname -r)"
+    echo "   Familia: $BOOT_FAMILY · GRUB: $GRUB_PREFIX-* · menú: $GRUB_CFG · regenerar: ${GRUB_REGEN[*]}"
     echo ""
     echo "== MODO DE ARRANQUE"
     if [ -d /sys/firmware/efi ]; then
@@ -3293,17 +3559,20 @@ boot_report() {
     df -h /boot 2>/dev/null | sed 's/^/  /'
     echo ""
     echo "== KERNELS INSTALADOS"
-    installed_pkgs 'linux-image-[0-9]*' | sed 's/^linux-image-/  /' | sort -V
+    ls /boot/vmlinuz-* 2>/dev/null | sed 's|^/boot/vmlinuz-|  |' | sort -V
     echo ""
     echo "== GRUB"
-    if command -v grub-install &> /dev/null; then
-        echo "  $(grub-install --version 2>/dev/null | head -1)"
+    if command -v "$GRUB_PREFIX-install" &> /dev/null; then
+        echo "  $("$GRUB_PREFIX-install" --version 2>/dev/null | head -1)"
+        grub_uses_bls && echo "  Entradas de kernels en formato BLS (/boot/loader/entries)"
+    elif bootctl is-installed &> /dev/null; then
+        echo "  ✗ GRUB no está instalado: el sistema usa systemd-boot"
     else
         echo "  ✗ GRUB NO está instalado"
     fi
     grep -E '^GRUB_(DEFAULT|TIMEOUT|TIMEOUT_STYLE|SAVEDEFAULT|DISABLE_OS_PROBER|DISABLE_RECOVERY|CMDLINE_LINUX_DEFAULT|GFXMODE|BACKGROUND)=' \
         /etc/default/grub 2>/dev/null | sed 's/^/  /'
-    echo "  Entrada guardada: $(grub-editenv /boot/grub/grubenv list 2>/dev/null | sed -n 's/^saved_entry=//p')"
+    echo "  Entrada guardada: $(grub_editenv_list | sed -n 's/^saved_entry=//p')"
     [ -d /etc/grub.d/proxifiedScripts ] && echo "  ⚠ Configuración modificada por Grub Customizer"
     echo ""
     echo "== MENÚ DE ARRANQUE"
@@ -3314,11 +3583,11 @@ boot_report() {
         LC_ALL=C efibootmgr 2>/dev/null | sed 's/\t.*//; s/^/  /'
         echo ""
         echo "== PARTICIÓN EFI"
-        if findmnt /boot/efi > /dev/null 2>&1; then
-            df -h /boot/efi | sed 's/^/  /'
-            echo "  Carpetas: $(sudo ls /boot/efi/EFI 2>/dev/null | tr '\n' ' ')"
+        if findmnt "$ESP_DIR" > /dev/null 2>&1; then
+            df -h "$ESP_DIR" | sed 's/^/  /'
+            echo "  Carpetas: $(sudo ls "$ESP_DIR/EFI" 2>/dev/null | tr '\n' ' ')(la de esta distro: $EFI_ID)"
         else
-            echo "  ✗ No hay partición EFI montada en /boot/efi"
+            echo "  ✗ No hay partición EFI montada (en /boot/efi, /efi ni /boot)"
         fi
     fi
 }
@@ -3342,13 +3611,12 @@ grub_normal_repair() {
 
     local ok=true
     if [ -d /sys/firmware/efi ]; then
-        echo -e "${PURPLE}🔄 Reparando GRUB en modo UEFI...${NC}"
-        if ! findmnt /boot/efi > /dev/null 2>&1; then
-            log_error "La partición EFI no está montada en /boot/efi (revisa la opción 5)"
+        echo -e "${PURPLE}🔄 Reparando GRUB en modo UEFI (partición EFI en $ESP_DIR, carpeta $EFI_ID)...${NC}"
+        if ! findmnt "$ESP_DIR" > /dev/null 2>&1; then
+            log_error "La partición EFI no está montada (revisa la opción 5)"
             ok=false
         else
-            run_visible "Falló grub-install" sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi \
-                --bootloader-id=ubuntu --recheck || ok=false
+            run_visible "Falló la instalación de GRUB" grub_install_uefi || ok=false
         fi
     else
         local root_dev boot_disk
@@ -3360,12 +3628,12 @@ grub_normal_repair() {
             ok=false
         else
             echo -e "${PURPLE}🔄 Reparando GRUB en modo BIOS (disco: /dev/$boot_disk)...${NC}"
-            run_visible "Falló grub-install" sudo grub-install --target=i386-pc --recheck "/dev/$boot_disk" || ok=false
+            run_visible "Falló la instalación de GRUB" grub_install_bios "/dev/$boot_disk" || ok=false
         fi
     fi
 
-    echo -e "${PURPLE}🔄 Regenerando configuración...${NC}"
-    run_visible "Falló update-grub" sudo update-grub || ok=false
+    echo -e "${PURPLE}🔄 Regenerando configuración (${GRUB_REGEN[*]})...${NC}"
+    run_visible "No se pudo regenerar el menú" grub_update || ok=false
 
     if $ok; then
         log_success "GRUB reparado correctamente"
@@ -3403,8 +3671,8 @@ grub_reinstall_to_disk() {
         return 0
     fi
 
-    if run_visible "Falló grub-install" sudo grub-install --target=i386-pc --recheck "$target_disk" \
-        && run_visible "Falló update-grub" sudo update-grub; then
+    if run_visible "Falló la instalación de GRUB" grub_install_bios "$target_disk" \
+        && run_visible "No se pudo regenerar el menú" grub_update; then
         log_success "GRUB instalado en $target_disk"
     fi
     echo -e "\n${YELLOW}📌 Presiona Enter para volver...${NC}"
@@ -3460,15 +3728,17 @@ grub_prompt_guide() {
     echo -e "Desde ahí se puede arrancar escribiendo unos comandos. ${BOLD}TAB${NC} autocompleta.\n"
     guide_my_commands prompt
     cat << 'EOF'
-CAMINO RÁPIDO: QUE GRUB BUSQUE SOLO DÓNDE ESTÁ UBUNTU
+CAMINO RÁPIDO: QUE GRUB BUSQUE SOLO DÓNDE ESTÁ TU SISTEMA
   Escribe estas 2 líneas. La primera busca la partición que tiene el menú:
     search --no-floppy --file --set=root /boot/grub/grub.cfg
     configfile /boot/grub/grub.cfg
   • Si aparece el menú de siempre: elige tu sistema y ve al PASO FINAL.
   • Si dice "no such device": puede que /boot esté en su propia partición
-    o que uses btrfs. Prueba cambiando /boot/grub/grub.cfg (en las 2 líneas) por:
+    que uses btrfs o una distro con "grub2". Prueba cambiando /boot/grub/grub.cfg
+    (en las 2 líneas) por:
         /grub/grub.cfg              (/boot en partición aparte)
-        /@/boot/grub/grub.cfg       (btrfs)
+        /@/boot/grub/grub.cfg       (btrfs, como Ubuntu o Fedora)
+        /boot/grub2/grub.cfg        (Fedora, openSUSE)
   • Si tienes DOS Linux instalados, puede encontrar el otro primero:
     usa el CAMINO MANUAL.
 
@@ -3476,7 +3746,7 @@ CAMINO MANUAL: BUSCAR LA PARTICIÓN A MANO
   1. Lista los discos y particiones:
         ls
      Verás algo como: (hd0) (hd0,gpt1) (hd0,gpt2) ...  (o msdos1, msdos2)
-  2. Mira cada una hasta encontrar la de Ubuntu (muestra boot/, etc/, home/...):
+  2. Mira cada una hasta encontrar la de tu sistema (muestra boot/, etc/, home/...):
         ls (hd0,gpt2)/
      Con "ls (hd0,gpt2)" (sin la barra) GRUB dice el tipo (ext*) y el tamaño.
   3. Arranca con ella (cambia hd0,gpt2 por la tuya):
@@ -3484,7 +3754,11 @@ CAMINO MANUAL: BUSCAR LA PARTICIÓN A MANO
         linux /boot/vmlinuz root=/dev/sda2 ro
         initrd /boot/initrd.img
         boot
-     • /boot/vmlinuz e /boot/initrd.img siempre apuntan al kernel más nuevo.
+     • Los nombres del kernel cambian según la distro (TAB los autocompleta):
+         Ubuntu y Debian:  /boot/vmlinuz           /boot/initrd.img
+         Arch y Manjaro:   /boot/vmlinuz-linux     /boot/initramfs-linux.img
+                           (en Manjaro: vmlinuz-6.x-x86_64 e initramfs-6.x-x86_64.img)
+         Fedora:           /boot/vmlinuz-<versión> /boot/initramfs-<versión>.img
      • root= usa el nombre de LINUX, no el de GRUB: (hd0,gpt2) suele ser
        /dev/sda2 (SATA) o /dev/nvme0n1p2 (NVMe). Si te equivocas, verás
        "(initramfs)": reinicia y prueba con el otro nombre.
@@ -3515,6 +3789,7 @@ PASO 2: ENCONTRAR LA QUE TIENE GRUB
   • "unknown filesystem": esa no es (suele ser la EFI o la de Windows), sigue.
   • /boot en partición aparte:  ls (hd0,gpt3)/grub
   • btrfs:                       ls (hd0,gpt2)/@/boot/grub
+  • Fedora, openSUSE:            ls (hd0,gpt2)/boot/grub2
 
 PASO 3: CARGAR GRUB (cambia hd0,gpt2 y la ruta por las que encontraste)
     set prefix=(hd0,gpt2)/boot/grub
@@ -3527,7 +3802,7 @@ PASO 4: YA DENTRO DEL SISTEMA
   Ejecuta este script → opción 18 → 2 (REPARACIÓN RÁPIDA) o → 3 (COMPLETA).
 
 SI "insmod normal" FALLA
-  Los archivos de GRUB están dañados: arranca desde un USB de Ubuntu (de tu sabor)
+  Los archivos de GRUB están dañados: arranca desde un USB de tu distribución
   y usa la opción 10 (reparación automática desde Live USB).
 EOF
     echo -e "\n${YELLOW}📌 Presiona Enter para volver...${NC}"
@@ -3537,42 +3812,54 @@ EOF
 grub_live_guide() {
     grub_guide_header "📖 REPARACIÓN MANUAL DESDE LIVE USB"
     cat << 'EOF'
-Arranca desde un USB de Ubuntu de tu sabor ("Probar Ubuntu") y abre una terminal.
+Arranca desde un USB de instalación de tu distribución ("Probar Ubuntu", el Live
+de Debian, el USB de Arch o de Manjaro, el Live de Fedora...) y abre una terminal.
 La opción 10 de este menú hace todo esto automáticamente.
 
 1. IDENTIFICAR LA PARTICIÓN DEL SISTEMA (y la EFI, si el equipo es UEFI)
     sudo fdisk -l            (o: lsblk -f)
-  • Sistema: la partición ext4/btrfs grande (ej: /dev/sda2)
+  • Sistema: la partición ext4/btrfs/xfs grande (ej: /dev/sda2)
   • EFI: la partición FAT32 de ~100-1000 MB "EFI System" (ej: /dev/sda1)
   • ¿UEFI o BIOS? Si existe /sys/firmware/efi, es UEFI.
 
 2. MONTAR EL SISTEMA
     sudo mount /dev/sda2 /mnt
     sudo mount /dev/sda1 /mnt/boot/efi            (solo UEFI)
-  • btrfs: sudo mount -o subvol=@ /dev/sda2 /mnt
+  • La partición EFI va donde la monta tu sistema: mira /mnt/etc/fstab
+    (Ubuntu, Debian y Fedora: /boot/efi · Arch y Manjaro: a veces /boot o /efi)
+  • btrfs: sudo mount -o subvol=@ /dev/sda2 /mnt   (Fedora: subvol=root)
   • Cifrado (LUKS): sudo cryptsetup open /dev/sda3 cripta
                     sudo vgchange -ay   y monta el volumen que aparezca
-  • /boot separado: sudo mount /dev/sdaX /mnt/boot (antes que /boot/efi)
+  • /boot separado: sudo mount /dev/sdaX /mnt/boot (antes que la EFI)
 
 3. PREPARAR EL ENTORNO PARA EL CHROOT
     for d in dev dev/pts proc sys run; do sudo mount --bind /$d /mnt/$d; done
     sudo mount -t efivarfs efivarfs /mnt/sys/firmware/efi/efivars   (solo UEFI)
+  (En el USB de Arch o Manjaro, arch-chroot / manjaro-chroot hace este paso solo.)
 
 4. ENTRAR AL SISTEMA DAÑADO
     sudo chroot /mnt
 
-5. REINSTALAR GRUB (dentro del chroot)
-  UEFI:
-    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu
-  BIOS (al DISCO, no a la partición: /dev/sda, no /dev/sda2):
-    grub-install --target=i386-pc /dev/sda
-  Después, en ambos casos:
+5. REINSTALAR GRUB Y REGENERAR EL MENÚ (dentro del chroot)
+  Ubuntu y Debian:
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi     (UEFI)
+    grub-install --target=i386-pc /dev/sda                          (BIOS: el DISCO)
     update-grub
-  (update-grub = grub-mkconfig -o /boot/grub/grub.cfg; no hace falta ejecutar los dos)
+  Arch y Manjaro (cambia /boot/efi por donde esté la EFI):
+    grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=GRUB
+    grub-mkconfig -o /boot/grub/grub.cfg
+  Fedora (en UEFI no se usa grub2-install):
+    dnf reinstall shim-x64 grub2-efi-x64                            (UEFI)
+    grub2-install /dev/sda                                          (BIOS)
+    grub2-mkconfig -o /boot/grub2/grub.cfg
+  openSUSE:
+    shim-install --config-file=/boot/grub2/grub.cfg                 (UEFI)
+    grub2-mkconfig -o /boot/grub2/grub.cfg
 
   Si grub-install falla por archivos que faltan, reinstala GRUB (necesita internet):
-    apt install --reinstall grub-efi-amd64-signed shim-signed     (UEFI)
-    apt install --reinstall grub-pc                               (BIOS)
+    Ubuntu/Debian:  apt install --reinstall grub-efi-amd64-signed shim-signed  (BIOS: grub-pc)
+    Arch/Manjaro:   pacman -S grub efibootmgr
+    Fedora:         dnf reinstall grub2-efi-x64 shim-x64 grub2-tools         (BIOS: grub2-pc)
 
 6. SALIR, DESMONTAR Y REINICIAR
     exit
@@ -3587,12 +3874,7 @@ EOF
 # Reparación automática desde Live USB
 # ------------------------------------------------------------
 
-RESCUE_MNT="/mnt/rescate-ubuntu"
-
-is_live_session() {
-    grep -qw 'boot=casper' /proc/cmdline 2>/dev/null || [ -d /cdrom/casper ] \
-        || [ "$(findmnt -no FSTYPE / 2>/dev/null)" = "overlay" ]
-}
+RESCUE_MNT="/mnt/rescate-arranque"
 
 # Particiones con sistema de archivos de Linux: "dispositivo|tamaño|tipo|etiqueta"
 linux_partitions() {
@@ -3617,6 +3899,8 @@ unlock_encrypted_partitions() {
 }
 
 rescue_umount() {
+    # De vuelta al sistema que está corriendo (el USB)
+    [ "$BOOT_ROOT" = "$RESCUE_MNT" ] && boot_detect
     findmnt "$RESCUE_MNT" > /dev/null 2>&1 || return 0
     sudo umount -R "$RESCUE_MNT" 2>> "$LOG_FILE" || sudo umount -lR "$RESCUE_MNT" 2>> "$LOG_FILE"
 }
@@ -3624,10 +3908,9 @@ rescue_umount() {
 rescue_grub_install() {
     local uefi="$1" disk="$2"
     if $uefi; then
-        run_visible "Falló grub-install" sudo chroot "$RESCUE_MNT" \
-            grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck
+        run_visible "Falló la instalación de GRUB" grub_install_uefi
     else
-        run_visible "Falló grub-install" sudo chroot "$RESCUE_MNT" grub-install --target=i386-pc --recheck "$disk"
+        run_visible "Falló la instalación de GRUB" grub_install_bios "$disk"
     fi
 }
 
@@ -3636,8 +3919,8 @@ grub_live_repair() {
 
     if ! is_live_session; then
         log_warning "Esto no parece una sesión Live USB"
-        echo -e "${YELLOW}  Esta opción es para cuando Ubuntu no arranca: inicia desde un USB de Ubuntu,${NC}"
-        echo -e "${YELLOW}  elige 'Probar Ubuntu', abre una terminal y ejecuta este script.${NC}"
+        echo -e "${YELLOW}  Esta opción es para cuando el sistema no arranca: inicia desde un USB de instalación${NC}"
+        echo -e "${YELLOW}  de tu distribución (modo \"Probar\" o Live), abre una terminal y ejecuta este script.${NC}"
         echo -e "${YELLOW}  Si el sistema arranca, usa la opción 2 (RÁPIDA) o 3 (COMPLETA).${NC}\n"
         if ! confirm "${PURPLE}¿Continuar de todos modos?${NC}"; then
             return 0
@@ -3684,8 +3967,9 @@ grub_live_repair() {
     rescue_umount
     sudo mkdir -p "$RESCUE_MNT"
     if [ "$root_fs" = "btrfs" ]; then
-        # Ubuntu instala la raíz en el subvolumen @
+        # Ubuntu, Debian, Arch y Manjaro usan el subvolumen @; Fedora, "root"
         sudo mount -o subvol=@ "$root_dev" "$RESCUE_MNT" 2>> "$LOG_FILE" \
+            || sudo mount -o subvol=root "$root_dev" "$RESCUE_MNT" 2>> "$LOG_FILE" \
             || run "No se pudo montar $root_dev" sudo mount "$root_dev" "$RESCUE_MNT" || return 1
     else
         run "No se pudo montar $root_dev" sudo mount "$root_dev" "$RESCUE_MNT" || return 1
@@ -3698,10 +3982,16 @@ grub_live_repair() {
         return 1
     fi
 
+    boot_detect "$RESCUE_MNT"
+    echo -e "${GREEN}🐧 Sistema encontrado: $BOOT_DISTRO${NC}"
+    if [ "$BOOT_FAMILY" = otra ]; then
+        log_warning "No conozco esta distribución: se intentará igual con los comandos estándar de GRUB"
+    fi
+
     echo -e "${PURPLE}[2/5] Montando /boot y la partición EFI...${NC}"
     local mp spec esp
     # Particiones separadas según el fstab del sistema instalado (primero /boot)
-    for mp in /boot /boot/efi; do
+    for mp in /boot /boot/efi /efi; do
         spec=$(awk -v m="$mp" '$1 !~ /^#/ && $2 == m {print $1; exit}' "$RESCUE_MNT/etc/fstab")
         if [ -n "$spec" ]; then
             sudo mkdir -p "$RESCUE_MNT$mp"
@@ -3709,16 +3999,18 @@ grub_live_repair() {
             log_success "$mp montado ($spec)"
         fi
     done
-    if $uefi && ! findmnt "$RESCUE_MNT/boot/efi" > /dev/null 2>&1; then
+    boot_detect "$RESCUE_MNT"   # con la EFI montada se sabe qué carpeta usa la distro
+    if $uefi && [ "$(findmnt -no FSTYPE "$RESCUE_MNT$ESP_DIR" 2>/dev/null)" != vfat ]; then
         esp=$(lsblk -lnpo NAME,PARTTYPE | awk 'tolower($2) == "c12a7328-f81f-11d2-ba4b-00a0c93ec93b" || $2 == "0xef" {print $1; exit}')
         if [ -z "$esp" ]; then
             log_error "No se encontró la partición EFI (FAT32, tipo 'EFI System')"
             rescue_umount
             return 1
         fi
-        sudo mkdir -p "$RESCUE_MNT/boot/efi"
-        run "No se pudo montar la partición EFI $esp" sudo mount "$esp" "$RESCUE_MNT/boot/efi" || { rescue_umount; return 1; }
-        log_success "Partición EFI montada ($esp)"
+        sudo mkdir -p "$RESCUE_MNT$ESP_DIR"
+        run "No se pudo montar la partición EFI $esp" sudo mount "$esp" "$RESCUE_MNT$ESP_DIR" || { rescue_umount; return 1; }
+        log_success "Partición EFI montada en $ESP_DIR ($esp)"
+        boot_detect "$RESCUE_MNT"
     fi
 
     echo -e "${PURPLE}[3/5] Preparando el entorno chroot...${NC}"
@@ -3741,8 +4033,14 @@ grub_live_repair() {
     fi
 
     echo -e "\n${PURPLE}📋 Resumen:${NC}"
-    echo -e "  • Sistema: $root_dev ($root_fs)"
-    $uefi && echo -e "  • Modo: UEFI (partición EFI en /boot/efi)" || echo -e "  • Modo: BIOS, GRUB en $disk"
+    echo -e "  • Sistema: $BOOT_DISTRO en $root_dev ($root_fs)"
+    $uefi && echo -e "  • Modo: UEFI (partición EFI en $ESP_DIR, carpeta $EFI_ID)" || echo -e "  • Modo: BIOS, GRUB en $disk"
+    echo -e "  • Menú: ${GRUB_REGEN[*]}"
+    if ! grub_available; then
+        log_error "El sistema instalado no tiene GRUB (¿usa systemd-boot?): no se puede reparar con esta opción"
+        rescue_umount
+        return 1
+    fi
     if ! confirm "${PURPLE}¿Reinstalar GRUB ahora?${NC}"; then
         rescue_umount
         return 0
@@ -3752,18 +4050,20 @@ grub_live_repair() {
     local ok=0
     if ! rescue_grub_install "$uefi" "$disk"; then
         ok=1
-        local grub_pkgs="grub-pc"
-        $uefi && grub_pkgs="grub-efi-amd64 grub-efi-amd64-signed shim-signed"
-        if confirm "${PURPLE}¿Reinstalar los paquetes de GRUB del sistema y reintentar? (necesita internet)${NC}"; then
-            # shellcheck disable=SC2086  # lista de paquetes
-            run_visible "No se pudieron reinstalar los paquetes de GRUB" sudo chroot "$RESCUE_MNT" \
-                env DEBIAN_FRONTEND=noninteractive apt-get install --reinstall -y $grub_pkgs \
+        local grub_pkgs
+        read -r -a grub_pkgs <<< "$(grub_packages "$($uefi && echo uefi || echo bios)")"
+        if [ ${#grub_pkgs[@]} -gt 0 ] \
+            && confirm "${PURPLE}¿Reinstalar los paquetes de GRUB (${grub_pkgs[*]}) y reintentar? (necesita internet)${NC}"; then
+            # Sin esto, el gestor de paquetes no resuelve nombres dentro del chroot
+            [ -f "$RESCUE_MNT/etc/resolv.conf" ] && [ ! -L "$RESCUE_MNT/etc/resolv.conf" ] \
+                && sudo mount --bind /etc/resolv.conf "$RESCUE_MNT/etc/resolv.conf" 2>> "$LOG_FILE"
+            run_visible "No se pudieron reinstalar los paquetes de GRUB" boot_pkg_reinstall "${grub_pkgs[@]}" \
                 && rescue_grub_install "$uefi" "$disk" && ok=0
         fi
     fi
 
     if [ $ok -eq 0 ]; then
-        run_visible "Falló update-grub" sudo chroot "$RESCUE_MNT" update-grub
+        run_visible "No se pudo regenerar el menú" grub_update
         ok=$?
     fi
 
@@ -3804,7 +4104,7 @@ set_grub_var() {
 
 # Entradas del menú de GRUB: "ruta para grub-set-default|título visible"
 grub_menu_entries() {
-    local cfg="/boot/grub/grub.cfg" sub_line entry_line sub_title entry_title sub_id entry_id
+    local cfg="$BOOT_ROOT$GRUB_CFG" sub_line entry_line sub_title entry_title sub_id entry_id
     # Separador \037: con un tabulador, read se come el campo vacío de las entradas sin submenú
     while IFS=$'\037' read -r sub_line entry_line; do
         entry_id=$(grub_line_id "$entry_line")
@@ -3826,9 +4126,15 @@ grub_menu_entries() {
 grub_default_entry_menu() {
     grub_guide_header "📂 SISTEMA POR DEFECTO Y TIEMPO DEL MENÚ"
     local entries=() entry i=0 choice timeout
-    mapfile -t entries < <(grub_menu_entries)
+    # Fedora (BLS): los kernels no están en grub.cfg; se leen con grubby ("bls:índice|título")
+    if grub_uses_bls && command -v grubby &> /dev/null; then
+        mapfile -t entries < <(sudo grubby --info=ALL 2>/dev/null | awk -F= '
+            /^index=/ {i = $2}
+            /^title=/ {t = substr($0, 7); gsub(/^"|"$/, "", t); print "bls:" i "|" t}')
+    fi
+    mapfile -t -O "${#entries[@]}" entries < <(grub_menu_entries)
     if [ ${#entries[@]} -eq 0 ]; then
-        log_error "No se pudo leer el menú de GRUB (/boot/grub/grub.cfg)"
+        log_error "No se pudo leer el menú de GRUB ($GRUB_CFG)"
         return 1
     fi
 
@@ -3845,10 +4151,16 @@ grub_default_entry_menu() {
             return 1
         fi
         entry=${entries[$((choice - 1))]}
-        ensure_grub_saved
-        [ $? -eq 1 ] && return 1
-        run "No se pudo cambiar el sistema por defecto" sudo grub-set-default "${entry%%|*}" \
-            && log_success "Por defecto: ${entry#*|}"
+        if [[ "$entry" == bls:* ]]; then
+            entry=${entry#bls:}
+            run "No se pudo cambiar el sistema por defecto" sudo grubby --set-default-index="${entry%%|*}" \
+                && log_success "Por defecto: ${entry#*|}"
+        else
+            ensure_grub_saved
+            [ $? -eq 1 ] && return 1
+            run "No se pudo cambiar el sistema por defecto" grub_set_default "${entry%%|*}" \
+                && log_success "Por defecto: ${entry#*|}"
+        fi
     fi
 
     timeout=$(sed -n 's/^GRUB_TIMEOUT=//p' /etc/default/grub | tr -d '"')
@@ -3865,7 +4177,7 @@ grub_default_entry_menu() {
         else
             set_grub_var GRUB_TIMEOUT_STYLE menu
         fi
-        run_visible "Falló update-grub" sudo update-grub \
+        run_visible "No se pudo regenerar el menú" grub_update \
             && log_success "El menú de GRUB espera $choice segundos"
     fi
 }
@@ -3883,15 +4195,15 @@ grub_os_prober_toggle() {
         if confirm "${PURPLE}¿Desactivarla? (los otros sistemas desaparecerán del menú)${NC}"; then
             sudo rm -f "$GRUB_OTHERS_FIRST"
             set_grub_var GRUB_DISABLE_OS_PROBER true
-            run_visible "Falló update-grub" sudo update-grub && log_success "Detección de otros sistemas desactivada"
+            run_visible "No se pudo regenerar el menú" grub_update && log_success "Detección de otros sistemas desactivada"
         fi
         return 0
     fi
 
-    echo -e "${PURPLE}Desde GRUB 2.06, Ubuntu no busca otros sistemas (Windows, otras distros) por seguridad.${NC}"
+    echo -e "${PURPLE}Desde GRUB 2.06, muchas distros (Ubuntu, Debian, Arch...) no buscan otros sistemas por seguridad.${NC}"
     echo -e "${PURPLE}Al activarlo, aparecerán en el menú de arranque.${NC}\n"
     confirm "${PURPLE}¿Activar la detección de otros sistemas?${NC}" || return 0
-    command -v os-prober &> /dev/null || { apt_update; apt_install os-prober || return 1; }
+    command -v os-prober &> /dev/null || boot_pkg_install os-prober || return 1
     set_grub_var GRUB_DISABLE_OS_PROBER false
     echo -e "${PURPLE}🔍 Buscando otros sistemas...${NC}"
     local found
@@ -3902,7 +4214,7 @@ grub_os_prober_toggle() {
     else
         log_warning "No se encontró otro sistema (si está en otro disco, conéctalo y vuelve a intentarlo)"
     fi
-    run_visible "Falló update-grub" sudo update-grub && log_success "Detección activada"
+    run_visible "No se pudo regenerar el menú" grub_update && log_success "Detección activada"
     echo -e "${YELLOW}ℹ Si el menú no aparece al encender, usa la opción 6 para darle unos segundos${NC}"
 }
 
@@ -3912,7 +4224,7 @@ uefi_boot_order_menu() {
         log_warning "Este equipo arranca en modo BIOS (Legacy): el orden se cambia en la BIOS"
         return 0
     fi
-    command -v efibootmgr &> /dev/null || { apt_update; apt_install efibootmgr || return 1; }
+    command -v efibootmgr &> /dev/null || boot_pkg_install efibootmgr || return 1
 
     local out entries=() order current entry i=0 choice action num
     out=$(LC_ALL=C efibootmgr 2>> "$LOG_FILE")
@@ -3966,15 +4278,15 @@ uefi_boot_order_menu() {
 esp_check_repair() {
     grub_guide_header "🩺 PARTICIÓN EFI"
     local dev
-    dev=$(findmnt -no SOURCE /boot/efi 2>/dev/null)
+    dev=$(findmnt -no SOURCE "$ESP_DIR" 2>/dev/null)
     if [ -z "$dev" ]; then
-        log_warning "No hay partición EFI montada en /boot/efi (¿el equipo arranca en modo BIOS?)"
+        log_warning "No hay partición EFI montada en /boot/efi, /efi ni /boot (¿el equipo arranca en modo BIOS?)"
         return 0
     fi
     echo -e "${PURPLE}💾 Partición EFI: $dev${NC}"
-    df -h /boot/efi | sed 's/^/  /'
+    df -h "$ESP_DIR" | sed 's/^/  /'
     echo -e "\n${PURPLE}📁 Sistemas registrados en ella:${NC}"
-    sudo ls /boot/efi/EFI 2>/dev/null | sed 's/^/  • /'
+    sudo ls "$ESP_DIR/EFI" 2>/dev/null | sed 's/^/  • /'
     echo -e "\n${YELLOW}ℹ Windows con 'inicio rápido' o un apagado brusco pueden dañarla y dejar GRUB sin arrancar${NC}\n"
     confirm "${PURPLE}¿Verificar y reparar la partición EFI? (se desmonta unos segundos)${NC}" || return 0
 
@@ -3984,11 +4296,11 @@ esp_check_repair() {
 # Desmonta la partición EFI, la verifica con fsck.vfat y la vuelve a montar
 esp_fsck() {
     local dev="$1"
-    command -v fsck.vfat &> /dev/null || { apt_update; apt_install dosfstools || return 1; }
-    run "No se pudo desmontar /boot/efi (¿la está usando otro programa?)" sudo umount /boot/efi || return 1
+    command -v fsck.vfat &> /dev/null || boot_pkg_install dosfstools || return 1
+    run "No se pudo desmontar $ESP_DIR (¿la está usando otro programa?)" sudo umount "$ESP_DIR" || return 1
     sudo fsck.vfat -a "$dev" 2>&1 | tee -a "$LOG_FILE"
     local rc=${PIPESTATUS[0]}
-    run "No se pudo volver a montar /boot/efi" sudo mount /boot/efi || return 1
+    run "No se pudo volver a montar $ESP_DIR" sudo mount "$ESP_DIR" || return 1
     # fsck: 0 = sin errores, 1 = errores corregidos, más = quedaron errores
     case $rc in
         0) log_success "Partición EFI sin errores" ;;
@@ -4016,16 +4328,16 @@ regen_grub() {
     [ -f "$GRUB_FILTER_AWK" ] && write_grub_filter
     echo -e "${PURPLE}🔄 Regenerando el menú de GRUB...${NC}"
     local out rc
-    out=$(sudo update-grub 2>&1)
+    out=$(grub_update 2>&1)
     rc=$?
-    echo "[$(date '+%H:%M:%S')] \$ update-grub" >> "$LOG_FILE"
+    echo "[$(date '+%H:%M:%S')] \$ ${GRUB_REGEN[*]}" >> "$LOG_FILE"
     echo "$out" >> "$LOG_FILE"
     if [ $rc -eq 0 ]; then
         rescue_card_refresh
         return 0
     fi
 
-    log_error "Falló update-grub (código $rc). El menú de arranque anterior sigue intacto."
+    log_error "Falló ${GRUB_REGEN[0]} (código $rc). El menú de arranque anterior sigue intacto."
     echo -e "${YELLOW}Últimas líneas del error:${NC}"
     tail -8 <<< "$out" | sed 's/^/   /'
     if [ -d /etc/grub.d/proxifiedScripts ]; then
@@ -4133,7 +4445,7 @@ grub_cfg_entries() {
             t = $0; sub("^[ \t]*menuentry[ \t]+[" q "\"]", "", t); sub("[" q "\"].*", "", t)
             print src "|" (s != "" ? s " › " t : t) "|" t
         }
-    ' /boot/grub/grub.cfg 2>/dev/null
+    ' "$GRUB_CFG" 2>/dev/null
 }
 
 grub_hide_entries() {
@@ -4148,6 +4460,10 @@ grub_hide_entries() {
     fi
     local entries=() tags=() line src shown title i=0 hidden=()
     on() { if "$@"; then echo "|ON"; fi; }
+    if grub_uses_bls; then
+        echo -e "${YELLOW}ℹ En ${BOOT_DISTRO} los kernels van en formato BLS: no aparecen en esta lista y no se ocultan.${NC}"
+        echo -e "${YELLOW}  Sí se pueden ocultar Windows, otros sistemas, memtest y la configuración UEFI.${NC}\n"
+    fi
     [ -f "$GRUB_HIDDEN_LIST" ] && mapfile -t hidden < "$GRUB_HIDDEN_LIST"
 
     # Grupos completos
@@ -4196,7 +4512,7 @@ grub_hide_entries() {
         [[ "$chosen" == *" ${tag%%|*} "* ]] && new_hidden+=("$script|$title_only")
     done
     if [ "$kubuntu_total" -gt 0 ] && [ "$kubuntu_left" -eq 0 ]; then
-        log_error "No puedes ocultar todas las entradas de ${FLAVOR_NAME}: no podrías arrancarlo. No se cambió nada."
+        log_error "No puedes ocultar todas las entradas de ${BOOT_DISTRO}: no podrías arrancarlo. No se cambió nada."
         return 1
     fi
 
@@ -4257,14 +4573,14 @@ EOF
 # 30_os-prober, y el original queda desactivado con GRUB_DISABLE_OS_PROBER=true.
 grub_others_first_toggle() {
     if [ -f "$GRUB_OTHERS_FIRST" ]; then
-        confirm "${PURPLE}Los otros sistemas ya aparecen primero. ¿Volver a mostrar ${FLAVOR_NAME} primero?${NC}" || return 0
+        confirm "${PURPLE}Los otros sistemas ya aparecen primero. ¿Volver a mostrar ${BOOT_DISTRO} primero?${NC}" || return 0
         sudo rm -f "$GRUB_OTHERS_FIRST"
         set_grub_var GRUB_DISABLE_OS_PROBER false
-        regen_grub && log_success "${FLAVOR_NAME} vuelve a estar primero en el menú"
+        regen_grub && log_success "${BOOT_DISTRO} vuelve a estar primero en el menú"
         return
     fi
-    confirm "${PURPLE}¿Mostrar Windows y los otros sistemas ANTES que ${FLAVOR_NAME} en el menú?${NC}" || return 0
-    command -v os-prober &> /dev/null || { apt_update; apt_install os-prober || return 1; }
+    confirm "${PURPLE}¿Mostrar Windows y los otros sistemas ANTES que ${BOOT_DISTRO} en el menú?${NC}" || return 0
+    command -v os-prober &> /dev/null || boot_pkg_install os-prober || return 1
     write_others_first_script
     set_grub_var GRUB_DISABLE_OS_PROBER true
     # Que el orden no cambie lo que arranca solo: Ubuntu sigue siendo el predeterminado
@@ -4272,12 +4588,12 @@ grub_others_first_toggle() {
     [ $? -eq 1 ] && return 1
     regen_grub || return 1
     local saved kubuntu
-    saved=$(sudo grub-editenv list 2>/dev/null | sed -n 's/^saved_entry=//p')
+    saved=$(grub_editenv_list | sed -n 's/^saved_entry=//p')
     if [ -z "$saved" ] || [ "$saved" = "0" ]; then
         kubuntu=$(grub_menu_entries | grep -m1 '^gnulinux-simple-' | cut -d'|' -f1)
-        [ -n "$kubuntu" ] && sudo grub-set-default "$kubuntu"
+        [ -n "$kubuntu" ] && grub_set_default "$kubuntu"
     fi
-    log_success "Los otros sistemas aparecen primero (${FLAVOR_NAME} sigue arrancando por defecto; cámbialo con la opción 6)"
+    log_success "Los otros sistemas aparecen primero (${BOOT_DISTRO} sigue arrancando por defecto; cámbialo con la opción 6)"
 }
 
 grub_remember_last_toggle() {
@@ -4314,7 +4630,7 @@ grub_appearance_menu() {
     echo -e "  ${PURPLE}1)${NC} Colores Tokyo Night (azul y lila)"
     echo -e "  ${PURPLE}2)${NC} Colores alto contraste (blanco y negro)"
     echo -e "  ${PURPLE}3)${NC} Colores verde terminal"
-    echo -e "  ${PURPLE}4)${NC} Colores originales de Ubuntu"
+    echo -e "  ${PURPLE}4)${NC} Colores originales de tu distribución"
     echo -e "  ${PURPLE}5)${NC} Imagen de fondo (PNG o JPG)"
     echo -e "  ${PURPLE}6)${NC} Quitar la imagen de fondo"
     echo -e "  ${PURPLE}7)${NC} Resolución del menú"
@@ -4336,14 +4652,14 @@ grub_appearance_menu() {
                 return 1
             fi
             # Dentro de /boot/grub, donde GRUB la puede leer al arrancar
-            sudo rm -f /boot/grub/ubuntu-ultimate-tools-fondo.*
-            sudo cp "$file" "/boot/grub/ubuntu-ultimate-tools-fondo.$ext"
-            set_grub_var GRUB_BACKGROUND "\"/boot/grub/ubuntu-ultimate-tools-fondo.$ext\""
+            sudo rm -f "$GRUB_DIR"/ubuntu-ultimate-tools-fondo.*
+            sudo cp "$file" "$GRUB_DIR/ubuntu-ultimate-tools-fondo.$ext"
+            set_grub_var GRUB_BACKGROUND "\"$GRUB_DIR/ubuntu-ultimate-tools-fondo.$ext\""
             ;;
         6)
             backup_grub_config
             sudo sed -i '/^GRUB_BACKGROUND=/d' /etc/default/grub
-            sudo rm -f /boot/grub/ubuntu-ultimate-tools-fondo.*
+            sudo rm -f "$GRUB_DIR"/ubuntu-ultimate-tools-fondo.*
             ;;
         7)
             echo -e "  1) Automática  2) 1920x1080  3) 1366x768  4) 1280x1024  5) 1024x768  0) Volver"
@@ -4371,7 +4687,7 @@ grub_kernel_params_menu() {
     current=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=//p' /etc/default/grub | tr -d '"')
     echo -e "${PURPLE}⚙ Parámetros actuales:${NC} ${current:-(ninguno)}\n"
     echo -e "  ${PURPLE}1)${NC} Ver los mensajes al arrancar (quita 'quiet splash': útil si algo falla)"
-    echo -e "  ${PURPLE}2)${NC} Arranque silencioso con logo (pone 'quiet splash', lo normal en Ubuntu)"
+    echo -e "  ${PURPLE}2)${NC} Arranque silencioso con logo (pone 'quiet splash', lo normal en Ubuntu y Fedora)"
     echo -e "  ${PURPLE}3)${NC} Escribirlos a mano"
     echo -e "\n  ${PURPLE}0)${NC} 🔙 Volver"
     echo ""
@@ -4404,7 +4720,7 @@ undo_grub_customizer() {
         return 0
     fi
     echo -e "${PURPLE}Grub Customizer cambió los scripts de GRUB: los renumeró, los movió a${NC}"
-    echo -e "${PURPLE}proxifiedScripts y puso los suyos (*_proxy). Esto los deja como los instala Ubuntu.${NC}\n"
+    echo -e "${PURPLE}proxifiedScripts y puso los suyos (*_proxy). Esto los deja como los instala ${BOOT_DISTRO}.${NC}\n"
     confirm "${PURPLE}¿Deshacer los cambios de Grub Customizer?${NC}" || return 0
 
     local backup
@@ -4413,13 +4729,13 @@ undo_grub_customizer() {
     log_success "Copia de seguridad: $backup"
 
     # Scripts que instalan los paquetes (grub-common, memtest86+, fwupd...)
-    local owned=() pkgs=() path name candidate missing_pkgs=()
-    mapfile -t owned < <(dpkg-query -S '/etc/grub.d/*' 2>/dev/null | grep -v '^diversion' \
-        | awk -F': ' '$2 ~ "^/etc/grub.d/[^/]+$" {print $2}' | sort -u)
+    local owned=() owners=() pkgs=() path name candidate missing_pkgs=()
+    mapfile -t owners < <(boot_grubd_owned)
+    mapfile -t owned < <(printf '%s\n' "${owners[@]}" | awk 'NF == 2 {print $2}' | sort -u)
     # Seguro: sin la lista de los originales no se toca nada (se borraría todo)
     if ! printf '%s\n' "${owned[@]}" | grep -q '/00_header$' \
         || ! printf '%s\n' "${owned[@]}" | grep -q '/10_linux$'; then
-        log_error "No se pudo saber qué scripts instala Ubuntu: no se cambió nada"
+        log_error "No se pudo saber qué scripts instalan los paquetes de ${BOOT_DISTRO}: no se cambió nada"
         return 1
     fi
     for path in "${owned[@]}"; do
@@ -4437,7 +4753,7 @@ undo_grub_customizer() {
             sudo chmod +x "$path"
             echo -e "  ${GREEN}✓ ${path##*/} vuelve a su lugar${NC}"
         else
-            mapfile -t pkgs < <(dpkg-query -S "$path" 2>/dev/null | cut -d: -f1 | tr ',' '\n' | xargs -n1)
+            mapfile -t pkgs < <(printf '%s\n' "${owners[@]}" | awk -v f="$path" '$2 == f {print $1}')
             missing_pkgs+=("${pkgs[@]}")
         fi
     done
@@ -4452,24 +4768,22 @@ undo_grub_customizer() {
         $keep || sudo rm -rf "$entry"
     done
 
-    # Los que no tenían copia se recuperan del paquete (dpkg repone los archivos que faltan)
+    # Los que no tenían copia se recuperan reinstalando su paquete (repone los archivos que faltan)
     if [ ${#missing_pkgs[@]} -gt 0 ]; then
         mapfile -t missing_pkgs < <(printf '%s\n' "${missing_pkgs[@]}" | sort -u)
         echo -e "${PURPLE}📦 Recuperando del paquete: ${missing_pkgs[*]}${NC}"
-        apt_update
-        run "No se pudieron recuperar los scripts originales" sudo env DEBIAN_FRONTEND=noninteractive \
-            apt-get install --reinstall -y -o Dpkg::Options::=--force-confmiss "${missing_pkgs[@]}"
+        run "No se pudieron recuperar los scripts originales" boot_pkg_reinstall "${missing_pkgs[@]}"
     fi
 
     if regen_grub; then
         log_success "Cambios de Grub Customizer deshechos"
     else
-        log_error "update-grub sigue fallando: la copia de /etc/grub.d está en $backup"
+        log_error "${GRUB_REGEN[0]} sigue fallando: la copia de /etc/grub.d está en $backup"
         return 1
     fi
-    if installed_pkgs grub-customizer | grep -qx grub-customizer \
+    if boot_pkg_installed grub-customizer | grep -qx grub-customizer \
         && confirm "${PURPLE}¿Desinstalar Grub Customizer para que no vuelva a cambiar el menú?${NC}"; then
-        apt_purge grub-customizer && forget_installed grub-customizer
+        run "No se pudo desinstalar Grub Customizer" boot_pkg_remove grub-customizer && forget_installed grub-customizer
     fi
 }
 
@@ -4483,7 +4797,7 @@ grub_restore_original() {
     if [ -f "$GRUB_DEFAULT_BACKUP" ]; then
         sudo cp -p "$GRUB_DEFAULT_BACKUP" /etc/default/grub && sudo rm -f "$GRUB_DEFAULT_BACKUP"
     fi
-    sudo rm -f "$GRUB_LOOK_FILE" "$GRUB_OTHERS_FIRST" /boot/grub/ubuntu-ultimate-tools-fondo.*
+    sudo rm -f "$GRUB_LOOK_FILE" "$GRUB_OTHERS_FIRST" $GRUB_DIR/ubuntu-ultimate-tools-fondo.*
     local wrapper
     for wrapper in /etc/grub.d/*_ubuntu_ultimate_tools; do
         [ -f "$wrapper" ] && remove_grub_filter_wrapper "${wrapper%_ubuntu_ultimate_tools}"
@@ -4491,7 +4805,7 @@ grub_restore_original() {
     sudo rm -f "$GRUB_HIDDEN_LIST" "$GRUB_FILTER_AWK"
     grub_scripts_chmod +x memtest86+
     grub_scripts_chmod +x uefi-firmware
-    regen_grub && run "No se pudo fijar el kernel por defecto" sudo grub-set-default 0 \
+    regen_grub && run "No se pudo fijar el kernel por defecto" grub_set_default 0 \
         && log_success "Menú de GRUB restaurado"
 }
 
@@ -4508,7 +4822,7 @@ grub_customize_menu() {
         fi
         echo ""
         echo -e "  ${PURPLE}1)${NC} Ocultar o mostrar entradas: marca cada una (kernels, Windows, memtest...)"
-        echo -e "  ${PURPLE}2)${NC} Orden: otros sistemas (Windows...) antes o después de ${FLAVOR_NAME}"
+        echo -e "  ${PURPLE}2)${NC} Orden: otros sistemas (Windows...) antes o después de ${BOOT_DISTRO}"
         echo -e "  ${PURPLE}3)${NC} Recordar el último sistema elegido"
         echo -e "  ${PURPLE}4)${NC} Apariencia: colores, imagen de fondo y resolución"
         echo -e "  ${PURPLE}5)${NC} Parámetros de arranque del kernel"
@@ -4538,22 +4852,26 @@ grub_customize_menu() {
 
 # Quita rEFInd (versiones anteriores del script podían instalarlo) y vuelve a GRUB
 remove_refind() {
-    apt_purge refind && forget_installed refind
+    run "No se pudo desinstalar rEFInd" boot_pkg_remove refind && forget_installed refind
     # Su entrada UEFI y sus archivos en la partición EFI no se borran con el paquete
     local num
     for num in $(LC_ALL=C efibootmgr 2>/dev/null | sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} \{1,\}rEFInd.*/\1/p'); do
         run "No se pudo quitar la entrada UEFI de rEFInd" sudo efibootmgr -b "$num" -B
     done
-    sudo rm -rf /boot/efi/EFI/refind
+    sudo rm -rf "$ESP_DIR/EFI/refind"
     log_success "rEFInd quitado"
 }
 
-# Pone primera la entrada UEFI de Ubuntu (todos los sabores usan "ubuntu")
-uefi_ubuntu_first() {
+# Pone primera la entrada UEFI de esta distro (su etiqueta es la carpeta EFI: ubuntu, debian, GRUB...)
+uefi_distro_first() {
     local out order num new_order
     out=$(LC_ALL=C efibootmgr 2>/dev/null)
     order=$(sed -n 's/^BootOrder: //p' <<< "$out")
-    num=$(sed -n 's/^Boot\([0-9A-Fa-f]\{4\}\)\*\{0,1\} \{1,\}[Uu]buntu.*/\1/p' <<< "$out" | head -1)
+    num=$(awk -v id="$EFI_ID" -v name="$BOOT_DISTRO" '
+        match($0, /^Boot[0-9A-Fa-f]{4}\*? +/) {
+            label = substr($0, RLENGTH + 1); sub(/\t.*/, "", label)
+            if (tolower(label) == tolower(id) || tolower(label) == tolower(name)) { print substr($0, 5, 4); exit }
+        }' <<< "$out")
     [ -n "$num" ] || return 0
     [ "${order%%,*}" = "$num" ] && return 0
     new_order=$(tr ',' '\n' <<< "$order" | grep -vix "$num" | paste -sd, -)
@@ -4567,64 +4885,65 @@ grub_full_repair() {
 
     echo -e "${PURPLE}📋 Se hará, en orden:${NC}"
     $uefi && echo -e "  • Verificar y reparar la partición EFI"
-    echo -e "  • Reinstalar los paquetes de GRUB$($uefi && echo " (y shim para Secure Boot)")"
+    echo -e "  • Reinstalar los paquetes de GRUB: $(grub_packages "$($uefi && echo uefi || echo bios)")"
     echo -e "  • Reinstalar GRUB en $($uefi && echo "la partición EFI" || echo "el disco del sistema")"
     echo -e "  • Regenerar el menú de arranque"
-    $uefi && echo -e "  • Poner ${FLAVOR_NAME} primero en el orden de arranque UEFI"
+    $uefi && echo -e "  • Poner ${BOOT_DISTRO} primero en el orden de arranque UEFI"
     $uefi && echo -e "  • Arranque de respaldo UEFI (se pregunta; si ya está, se actualiza)"
     echo -e "  • Comprobar el resultado y actualizar la tarjeta de rescate"
     echo -e "\n${YELLOW}ℹ Para un sistema que NO arranca, usa la opción 10 desde un Live USB${NC}\n"
     confirm "${PURPLE}¿Empezar la reparación completa?${NC}" || return 0
 
-    if installed_pkgs refind | grep -qx refind \
+    if boot_pkg_installed refind | grep -qx refind \
         && confirm "${PURPLE}rEFInd está instalado y puede tapar a GRUB. ¿Quitarlo?${NC}"; then
         remove_refind
     fi
 
     if $uefi; then
         step=$((step + 1)); echo -e "\n${PURPLE}[$step/$total] Partición EFI...${NC}"
-        if findmnt /boot/efi > /dev/null 2>&1; then
-            esp_fsck "$(findmnt -no SOURCE /boot/efi)" || failed+=("partición EFI")
+        if findmnt "$ESP_DIR" > /dev/null 2>&1; then
+            esp_fsck "$(findmnt -no SOURCE "$ESP_DIR")" || failed+=("partición EFI")
         else
-            log_error "No hay partición EFI montada en /boot/efi"
+            log_error "No hay partición EFI montada (en /boot/efi, /efi ni /boot)"
             failed+=("partición EFI")
         fi
     fi
 
     step=$((step + 1)); echo -e "\n${PURPLE}[$step/$total] Reinstalando los paquetes de GRUB...${NC}"
-    local pkgs=(grub-pc)
-    $uefi && pkgs=(grub-efi-amd64 grub-efi-amd64-signed shim-signed)
-    apt_update
-    run_visible "No se pudieron reinstalar los paquetes de GRUB" \
-        sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install --reinstall "${pkgs[@]}" \
-        || failed+=("paquetes de GRUB")
+    local pkgs=()
+    read -r -a pkgs <<< "$(grub_packages "$($uefi && echo uefi || echo bios)")"
+    if [ ${#pkgs[@]} -gt 0 ]; then
+        run_visible "No se pudieron reinstalar los paquetes de GRUB" boot_pkg_reinstall "${pkgs[@]}" \
+            || failed+=("paquetes de GRUB")
+    else
+        log_warning "No sé qué paquetes de GRUB usa ${BOOT_DISTRO}: se reinstala solo GRUB"
+    fi
 
     step=$((step + 1)); echo -e "\n${PURPLE}[$step/$total] Reinstalando GRUB...${NC}"
     if $uefi; then
-        run_visible "Falló grub-install" sudo grub-install --target=x86_64-efi --efi-directory=/boot/efi \
-            --bootloader-id=ubuntu --recheck || failed+=("grub-install")
+        run_visible "Falló la instalación de GRUB" grub_install_uefi || failed+=("instalar GRUB")
     else
         disk=$(lsblk -rnso NAME,TYPE "$(findmnt -no SOURCE /)" 2>/dev/null | awk '$2 == "disk" {print $1; exit}')
         if [ -n "$disk" ]; then
-            run_visible "Falló grub-install" sudo grub-install --target=i386-pc --recheck "/dev/$disk" || failed+=("grub-install")
+            run_visible "Falló la instalación de GRUB" grub_install_bios "/dev/$disk" || failed+=("instalar GRUB")
         else
             log_error "No se pudo detectar el disco del sistema (usa la opción 4)"
-            failed+=("grub-install")
+            failed+=("instalar GRUB")
         fi
     fi
 
     step=$((step + 1)); echo -e "\n${PURPLE}[$step/$total] Regenerando el menú...${NC}"
-    run_visible "Falló update-grub" sudo update-grub || failed+=("update-grub")
+    run_visible "No se pudo regenerar el menú" grub_update || failed+=("regenerar el menú")
 
     if $uefi; then
         step=$((step + 1)); echo -e "\n${PURPLE}[$step/$total] Orden de arranque UEFI...${NC}"
-        uefi_ubuntu_first || failed+=("orden UEFI")
+        uefi_distro_first || failed+=("orden UEFI")
         step=$((step + 1)); echo -e "\n${PURPLE}[$step/$total] Arranque de respaldo UEFI...${NC}"
         if [ "$(uefi_fallback_state)" = nuestro ]; then
             install_uefi_fallback || failed+=("arranque de respaldo")
         elif [ "$(uefi_fallback_state)" = vacio ]; then
-            echo -e "${CYAN}ℹ Si la BIOS pierde la entrada de Ubuntu (al actualizarla o resetearla), la PC no arranca.${NC}"
-            echo -e "${CYAN}  El arranque de respaldo lo evita: arranca igual y Ubuntu vuelve a crear su entrada.${NC}"
+            echo -e "${CYAN}ℹ Si la BIOS pierde la entrada de ${BOOT_DISTRO} (al actualizarla o resetearla), la PC no arranca.${NC}"
+            echo -e "${CYAN}  El arranque de respaldo lo evita: arranca igual por la ruta de emergencia.${NC}"
             if confirm "${PURPLE}¿Instalar el arranque de respaldo? (recomendado)${NC}"; then
                 install_uefi_fallback || failed+=("arranque de respaldo")
             fi
@@ -4636,14 +4955,14 @@ grub_full_repair() {
     step=$((step + 1)); echo -e "\n${PURPLE}[$step/$total] Comprobando...${NC}"
     local entry_count
     entry_count=$(grub_menu_entries | wc -l)
-    if [ -s /boot/grub/grub.cfg ] && [ "$entry_count" -gt 0 ]; then
+    if [ -s "$GRUB_CFG" ] && [ "$entry_count" -gt 0 ]; then
         log_success "El menú de GRUB tiene $entry_count entradas"
     else
         log_error "El menú de GRUB quedó vacío"
         failed+=("comprobación")
     fi
-    if $uefi && ! LC_ALL=C efibootmgr 2>/dev/null | grep -qi 'ubuntu'; then
-        log_error "No hay entrada UEFI de Ubuntu"
+    if $uefi && ! LC_ALL=C efibootmgr 2>/dev/null | grep -qiE "^Boot[0-9A-F]{4}\*? +($EFI_ID|$BOOT_DISTRO)"; then
+        log_error "No hay entrada UEFI de ${BOOT_DISTRO} (carpeta $EFI_ID)"
         failed+=("entrada UEFI")
     fi
     if [ -f "$RESCUE_CARD" ]; then
@@ -4665,11 +4984,11 @@ grub_full_repair() {
 # ------------------------------------------------------------
 
 RESCUE_CARD="$HOME/tarjeta-rescate-arranque.txt"
-RESCUE_CARD_ESP="/boot/efi/tarjeta-rescate-arranque.txt"
+RESCUE_CARD_ESP="/boot/efi/tarjeta-rescate-arranque.txt"   # se ajusta a la partición EFI de cada distro
 
 # Datos del arranque de ESTA PC, como los ve GRUB. Deja variables rc_* listas para la tarjeta.
 rescue_card_collect() {
-    local grubdir=/boot/grub mnt fsroot rel dev part disk pnum pttype idx name
+    local grubdir="$GRUB_DIR" mnt fsroot rel dev part disk pnum pttype idx name
     rc_ok=false rc_approx=false rc_crypt=false rc_lvm=false
     [ -d "$grubdir" ] || return 1
     dev=$(findmnt -no SOURCE -T "$grubdir" 2>/dev/null | sed 's/\[.*//')
@@ -4679,20 +4998,20 @@ rescue_card_collect() {
     rel=${grubdir#"${mnt%/}"}
     # Ruta de /boot/grub DENTRO de su partición (con /boot aparte es /grub; con btrfs @ es /@/boot/grub)
     rc_grubpath="${fsroot%/}$rel"
-    rc_bootpath="${rc_grubpath%/grub}"
+    rc_bootpath="${rc_grubpath%/*}"   # /boot/grub → /boot · /grub2 (boot aparte) → vacío
     rc_uuid=$(lsblk -no UUID "$dev" 2>/dev/null | head -n1)
     rc_fstype=$(lsblk -no FSTYPE "$dev" 2>/dev/null | head -n1)
     rc_size=$(lsblk -no SIZE "$dev" 2>/dev/null | head -n1 | tr -d ' ')
     rc_dev=$dev
 
     local abstraction
-    abstraction=$(sudo grub-probe --target=abstraction "$grubdir" 2>/dev/null)
+    abstraction=$(grub_probe --target=abstraction "$grubdir" 2>/dev/null)
     [[ "$abstraction" == *crypt* || "$abstraction" == *luks* ]] && rc_crypt=true
     [[ "$abstraction" == *lvm* ]] && rc_lvm=true
     if lsblk -no TYPE "$dev" 2>/dev/null | grep -qx crypt; then rc_crypt=true; fi
 
     # Nombre de la partición para GRUB, p. ej. (hd0,gpt2)
-    name=$(sudo grub-probe --target=drive "$grubdir" 2>/dev/null)
+    name=$(grub_probe --target=drive "$grubdir" 2>/dev/null)
     if [[ "$name" =~ ^\((hd[0-9]+,(gpt|msdos)[0-9]+|lvm/[^\)]+)\)$ ]]; then
         rc_drive=${name:1:-1}
     else
@@ -4710,10 +5029,21 @@ rescue_card_collect() {
 
     # Parámetros del kernel con los que arrancó este sistema (root= y, si hay, rootflags=)
     rc_root=$(tr ' ' '\n' < /proc/cmdline | grep -E '^(root|rootflags)=' | paste -sd' ')
-    rc_kernel="$rc_bootpath/vmlinuz"
-    rc_initrd="$rc_bootpath/initrd.img"
-    [ -e /boot/vmlinuz ] || rc_kernel="$rc_bootpath/vmlinuz-$(uname -r)"
-    [ -e /boot/initrd.img ] || rc_initrd="$rc_bootpath/initrd.img-$(uname -r)"
+    # Nombres del kernel e initramfs. Ubuntu y openSUSE tienen enlaces fijos (siempre el más
+    # nuevo); Arch usa vmlinuz-linux; Fedora y Debian, la versión. Se toma el que arrancó.
+    local img k ver f
+    img=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^BOOT_IMAGE=//p' | sed 's/^([^)]*)//')
+    k=${img##*/}
+    [ -n "$k" ] || k="vmlinuz-$(uname -r)"
+    [ -e /boot/vmlinuz ] && k=vmlinuz
+    ver=${k#vmlinuz}; ver=${ver#-}
+    rc_initrd=""
+    for f in initrd.img initrd "initramfs-$ver.img" "initrd.img-$ver" "initrd-$ver"; do
+        [ "$k" != vmlinuz ] && { [ "$f" = initrd.img ] || [ "$f" = initrd ]; } && continue
+        [ -e "/boot/$f" ] && { rc_initrd="$rc_bootpath/$f"; break; }
+    done
+    rc_kernel="$rc_bootpath/$k"
+    [ -n "$rc_initrd" ] || rc_initrd="$rc_bootpath/initrd.img"
     [ -n "$rc_uuid" ] && [ -n "$rc_root" ] && rc_ok=true
 }
 
@@ -4781,7 +5111,7 @@ rescue_card_text() {
     echo "----------------------------------------------------------------"
     echo " D) SI NADA DE ESTO FUNCIONA"
     echo "----------------------------------------------------------------"
-    echo " Arranca con un USB de instalación de Ubuntu ('Probar Ubuntu'),"
+    echo " Arranca con un USB de instalación de tu distribución (modo Live),"
     echo " abre este script desde el pendrive y usa la opción 18 -> 10."
     echo "    bash /media/\$USER/<pendrive>/ubuntu-ultimate-tools.sh"
     echo "================================================================"
@@ -4789,10 +5119,11 @@ rescue_card_text() {
 
 # Guarda la tarjeta en la carpeta personal y en la partición EFI (sin preguntas)
 rescue_card_write() {
+    RESCUE_CARD_ESP="$ESP_DIR/tarjeta-rescate-arranque.txt"
     rescue_card_collect && $rc_ok || return 1
     rescue_card_text > "$RESCUE_CARD" || return 1
     # En la partición EFI se puede leer desde un Live USB o desde Windows
-    if findmnt /boot/efi > /dev/null 2>&1; then
+    if [ "$(findmnt -no FSTYPE "$ESP_DIR" 2>/dev/null)" = vfat ]; then
         sudo cp "$RESCUE_CARD" "$RESCUE_CARD_ESP" 2>> "$LOG_FILE"
     fi
     return 0
@@ -4858,7 +5189,7 @@ sola cada vez que el script cambia GRUB.
 EXPL
     echo ""
     if ! rescue_card_write; then
-        log_error "No se pudieron leer los datos del arranque (¿falta /boot/grub?). Usa el diagnóstico (opción 1)"
+        log_error "No se pudieron leer los datos del arranque (¿falta $GRUB_DIR?). Usa el diagnóstico (opción 1)"
         echo -e "\n${YELLOW}📌 Presiona Enter para volver...${NC}"; read -r
         return 1
     fi
@@ -4868,7 +5199,7 @@ EXPL
     sed -E "s/^(    .*)$/$(printf '\033[1;36m')\1$(printf '\033[0m')/" "$RESCUE_CARD"
     echo ""
     echo -e "${GREEN}💾 Guardada en: $RESCUE_CARD${NC}"
-    findmnt /boot/efi > /dev/null 2>&1 && echo -e "${GREEN}💾 Copia en la partición EFI: $RESCUE_CARD_ESP${NC}"
+    [ "$(findmnt -no FSTYPE "$ESP_DIR" 2>/dev/null)" = vfat ] && echo -e "${GREEN}💾 Copia en la partición EFI: $RESCUE_CARD_ESP${NC}"
     echo ""
     if confirm "${PURPLE}¿Copiar la tarjeta y este script a un pendrive?${NC}"; then
         rescue_copy_to_usb
@@ -4892,21 +5223,22 @@ rescue_card_refresh() {
 
 UEFI_FALLBACK_MARK="$UUT_ETC/arranque-respaldo"
 UEFI_FALLBACK_HOOK="/etc/apt/apt.conf.d/99ubuntu-ultimate-tools-arranque-respaldo"
+UEFI_FALLBACK_HOOK_PACMAN="/etc/pacman.d/hooks/99-ubuntu-ultimate-tools-arranque-respaldo.hook"
 UEFI_FALLBACK_TOOL="/usr/local/sbin/ubuntu-ultimate-tools-arranque-respaldo"
 UEFI_FALLBACK_BACKUP="$UUT_ETC/efi-boot-anterior"
 
-# El programa que copia los archivos: lo usa el script y lo llama apt después de
-# cada actualización, para que la copia nunca quede vieja.
+# El programa que copia los archivos: lo usa el script y lo llama el gestor de paquetes
+# (apt o pacman) después de cada actualización, para que la copia nunca quede vieja.
 write_uefi_fallback_tool() {
     sudo install -d -m 755 "$UUT_ETC" /usr/local/sbin
-    sudo tee "$UEFI_FALLBACK_TOOL" > /dev/null << 'TOOL'
+    sed -e "s|__ESP__|$ESP_DIR|" -e "s|__ID__|$EFI_ID|" << 'TOOL' | sudo tee "$UEFI_FALLBACK_TOOL" > /dev/null
 #!/bin/sh
-# Ubuntu Ultimate Tools: mantiene el arranque de respaldo UEFI (\EFI\BOOT) igual
-# al de Ubuntu (\EFI\ubuntu). Solo toca \EFI\BOOT si lo puso el script.
+# Ubuntu Ultimate Tools: mantiene el arranque de respaldo UEFI (\EFI\BOOT) igual al de
+# la distribución (\EFI\__ID__). Solo toca \EFI\BOOT si lo puso el script.
 MARK=/etc/ubuntu-ultimate-tools/arranque-respaldo
-ESP=/boot/efi
+ESP="__ESP__"
 [ -d /sys/firmware/efi ] && [ -f "$MARK" ] && mountpoint -q "$ESP" || exit 0
-SRC=$(find "$ESP/EFI" -maxdepth 1 -iname ubuntu | head -n1)
+SRC=$(find "$ESP/EFI" -maxdepth 1 -iname "__ID__" | head -n1)
 DST=$(find "$ESP/EFI" -maxdepth 1 -iname boot | head -n1)
 [ -n "$SRC" ] || exit 0
 [ -n "$DST" ] || { DST="$ESP/EFI/BOOT"; mkdir -p "$DST"; }
@@ -4916,13 +5248,15 @@ if [ -n "$CUR" ] && [ "$(sha256sum < "$CUR" | cut -d' ' -f1)" != "$(cat "$MARK")
     [ "${1:-}" = "--forzar" ] || exit 0
 fi
 if [ -f "$SRC/shimx64.efi" ]; then
+    # Con Secure Boot: shim firmado, GRUB y MokManager
     cp "$SRC/shimx64.efi" "$DST/BOOTX64.EFI" || exit 0
     for f in grubx64.efi mmx64.efi; do [ -f "$SRC/$f" ] && cp "$SRC/$f" "$DST/$f"; done
-    # fbx64.efi vuelve a crear la entrada de Ubuntu en el firmware si se borró
+    # fbx64.efi vuelve a crear la entrada de la distro en el firmware si se borró
     for f in /usr/lib/shim/fbx64.efi.signed /usr/lib/shim/fbx64.efi; do
         [ -f "$f" ] && { cp "$f" "$DST/fbx64.efi"; break; }
     done
 elif [ -f "$SRC/grubx64.efi" ]; then
+    # Sin shim (Arch, Manjaro): GRUB solo, que sabe dónde está su menú
     cp "$SRC/grubx64.efi" "$DST/BOOTX64.EFI" || exit 0
 else
     exit 0
@@ -4932,17 +5266,41 @@ sha256sum < "$DST/BOOTX64.EFI" | cut -d' ' -f1 > "$MARK"
 exit 0
 TOOL
     sudo chmod 755 "$UEFI_FALLBACK_TOOL"
-    echo "DPkg::Post-Invoke { \"$UEFI_FALLBACK_TOOL || true\"; };" | sudo tee "$UEFI_FALLBACK_HOOK" > /dev/null
+    case $BOOT_FAMILY in
+        debian)
+            echo "DPkg::Post-Invoke { \"$UEFI_FALLBACK_TOOL || true\"; };" | sudo tee "$UEFI_FALLBACK_HOOK" > /dev/null ;;
+        arch)
+            sudo install -d -m 755 "$(dirname "$UEFI_FALLBACK_HOOK_PACMAN")"
+            sudo tee "$UEFI_FALLBACK_HOOK_PACMAN" > /dev/null << HOOK
+# Ubuntu Ultimate Tools: actualiza el arranque de respaldo UEFI cuando cambia GRUB
+[Trigger]
+Operation = Install
+Operation = Upgrade
+Type = Package
+Target = grub
+Target = shim*
+
+[Action]
+Description = Actualizando el arranque de respaldo UEFI...
+When = PostTransaction
+Exec = $UEFI_FALLBACK_TOOL
+HOOK
+            ;;
+    esac
 }
 
-# Estado de \EFI\BOOT\BOOTX64.EFI: vacio | nuestro | windows | otro
+# Estado de \EFI\BOOT\BOOTX64.EFI: vacio | nuestro | sistema | windows | otro
+# "sistema": lo puso la propia distro (Fedora y openSUSE lo instalan y mantienen con shim)
 uefi_fallback_state() {
-    local cur
-    cur=$(sudo find /boot/efi/EFI -maxdepth 2 -ipath '*/boot/bootx64.efi' 2>/dev/null | head -n1)
+    local cur own
+    cur=$(sudo find "$ESP_DIR/EFI" -maxdepth 2 -ipath '*/boot/bootx64.efi' 2>/dev/null | head -n1)
+    own=$(sudo find "$ESP_DIR/EFI" -maxdepth 2 -ipath "*/$EFI_ID/shimx64.efi" 2>/dev/null | head -n1)
     if [ -z "$cur" ]; then
         echo vacio
     elif [ -f "$UEFI_FALLBACK_MARK" ] && [ "$(sudo sha256sum < "$cur" | cut -d' ' -f1)" = "$(cat "$UEFI_FALLBACK_MARK")" ]; then
         echo nuestro
+    elif [ -n "$own" ] && sudo cmp -s "$cur" "$own"; then
+        echo sistema
     elif sudo grep -qa 'Microsoft Corporation' "$cur" && ! sudo grep -qa -i 'shim' "$cur"; then
         echo windows
     else
@@ -4953,23 +5311,41 @@ uefi_fallback_state() {
 install_uefi_fallback() {
     local state
     state=$(uefi_fallback_state)
+    # Fedora y openSUSE: el paquete shim pone y actualiza la ruta de respaldo por su cuenta
+    if [ "$BOOT_FAMILY" = fedora ] || [ "$BOOT_FAMILY" = suse ]; then
+        if [ "$state" = sistema ]; then
+            log_success "${BOOT_DISTRO} ya instala y mantiene su arranque de respaldo: no hace falta nada"
+            return 0
+        fi
+        if [ "$state" = vacio ]; then
+            local shim=shim-x64
+            [ "$BOOT_FAMILY" = suse ] && shim=shim
+            run_visible "No se pudo reinstalar $shim" boot_pkg_reinstall "$shim" || return 1
+            [ "$(uefi_fallback_state)" = sistema ] && log_success "Arranque de respaldo repuesto por ${BOOT_DISTRO}" \
+                || log_warning "El paquete $shim no puso la ruta de respaldo: revisa la partición EFI (opción 5)"
+            return 0
+        fi
+    fi
     case $state in
         nuestro)
             write_uefi_fallback_tool
             sudo "$UEFI_FALLBACK_TOOL" --forzar
             log_success "El arranque de respaldo ya estaba puesto: se actualizó"
             return 0 ;;
+        sistema)
+            log_success "${BOOT_DISTRO} ya puso su arranque de respaldo: no hace falta nada"
+            return 0 ;;
         windows)
             log_warning "La ruta de respaldo la usa Windows: no se toca (Windows dejaría de arrancar por esa vía)"
             echo -e "${YELLOW}  Si algún día la PC va directo a Windows sin mostrar GRUB: entra al menú de arranque${NC}"
-            echo -e "${YELLOW}  del BIOS (F12, F11, F8 o Esc al encender, según la marca), elige ubuntu y luego${NC}"
+            echo -e "${YELLOW}  del BIOS (F12, F11, F8 o Esc al encender, según la marca), elige $EFI_ID y luego${NC}"
             echo -e "${YELLOW}  usa este script → 18 → 8 para ponerlo primero.${NC}"
             return 0 ;;
         otro)
             echo -e "${YELLOW}⚠ La ruta de respaldo ya tiene el arranque de otro sistema (otra distro o un programa).${NC}"
-            confirm "${PURPLE}¿Reemplazarlo por el de ${FLAVOR_NAME}? (se guarda una copia para volver atrás)${NC}" || return 0
+            confirm "${PURPLE}¿Reemplazarlo por el de ${BOOT_DISTRO}? (se guarda una copia para volver atrás)${NC}" || return 0
             sudo rm -rf "$UEFI_FALLBACK_BACKUP"
-            sudo cp -r "$(sudo find /boot/efi/EFI -maxdepth 1 -iname boot | head -n1)" "$UEFI_FALLBACK_BACKUP" \
+            sudo cp -r "$(sudo find "$ESP_DIR/EFI" -maxdepth 1 -iname boot | head -n1)" "$UEFI_FALLBACK_BACKUP" \
                 || { log_error "No se pudo guardar la copia: no se cambió nada"; return 1; } ;;
     esac
     write_uefi_fallback_tool
@@ -4977,9 +5353,11 @@ install_uefi_fallback() {
     sudo "$UEFI_FALLBACK_TOOL" --forzar
     if [ "$(uefi_fallback_state)" = nuestro ]; then
         log_success "Arranque de respaldo instalado en la ruta de respaldo EFI/BOOT (se actualiza solo con cada actualización de GRUB)"
+        [ "$BOOT_FAMILY" = debian ] || [ "$BOOT_FAMILY" = arch ] \
+            || log_info "En ${BOOT_DISTRO} no se actualiza solo: vuelve a usar esta opción después de actualizar GRUB"
     else
-        log_error "No se pudo instalar el arranque de respaldo (¿falta la carpeta EFI/ubuntu? Prueba la reparación completa)"
-        sudo rm -f "$UEFI_FALLBACK_MARK" "$UEFI_FALLBACK_HOOK"
+        log_error "No se pudo instalar el arranque de respaldo (¿falta la carpeta EFI/$EFI_ID? Prueba la reparación completa)"
+        sudo rm -f "$UEFI_FALLBACK_MARK" "$UEFI_FALLBACK_HOOK" "$UEFI_FALLBACK_HOOK_PACMAN"
         return 1
     fi
 }
@@ -4989,11 +5367,11 @@ remove_uefi_fallback() {
     state=$(uefi_fallback_state)
     if [ "$state" != nuestro ]; then
         echo -e "${GREEN}✓ El arranque de respaldo no lo puso este script: no se toca${NC}"
-        sudo rm -f "$UEFI_FALLBACK_MARK" "$UEFI_FALLBACK_HOOK" "$UEFI_FALLBACK_TOOL"
+        sudo rm -f "$UEFI_FALLBACK_MARK" "$UEFI_FALLBACK_HOOK" "$UEFI_FALLBACK_HOOK_PACMAN" "$UEFI_FALLBACK_TOOL"
         return 0
     fi
     confirm "${PURPLE}¿Quitar el arranque de respaldo?${NC}" || return 0
-    dir=$(sudo find /boot/efi/EFI -maxdepth 1 -iname boot | head -n1)
+    dir=$(sudo find "$ESP_DIR/EFI" -maxdepth 1 -iname boot | head -n1)
     # Solo los archivos que copia el script; si había otros, se quedan
     sudo find "$dir" -maxdepth 1 -type f \( -iname bootx64.efi -o -iname grubx64.efi -o -iname mmx64.efi \
         -o -iname fbx64.efi -o -iname grub.cfg \) -delete
@@ -5002,7 +5380,7 @@ remove_uefi_fallback() {
             && log_success "Se restauró el arranque de respaldo que había antes"
     fi
     sudo rmdir "$dir" 2>/dev/null
-    sudo rm -f "$UEFI_FALLBACK_MARK" "$UEFI_FALLBACK_HOOK" "$UEFI_FALLBACK_TOOL"
+    sudo rm -f "$UEFI_FALLBACK_MARK" "$UEFI_FALLBACK_HOOK" "$UEFI_FALLBACK_HOOK_PACMAN" "$UEFI_FALLBACK_TOOL"
     log_success "Arranque de respaldo quitado"
 }
 
@@ -5014,8 +5392,8 @@ uefi_fallback_menu() {
         echo -e "\n${YELLOW}📌 Presiona Enter para volver...${NC}"; read -r
         return 0
     fi
-    if ! findmnt /boot/efi > /dev/null 2>&1; then
-        log_error "La partición EFI no está montada en /boot/efi (revisa la opción 5)"
+    if [ "$(findmnt -no FSTYPE "$ESP_DIR" 2>/dev/null)" != vfat ]; then
+        log_error "La partición EFI no está montada (revisa la opción 5)"
         echo -e "\n${YELLOW}📌 Presiona Enter para volver...${NC}"; read -r
         return 1
     fi
@@ -5023,16 +5401,17 @@ uefi_fallback_menu() {
 El firmware (la BIOS UEFI) guarda una lista de sistemas para arrancar. A veces
 esa lista se borra: al actualizar la BIOS, al quitar la pila, al cambiar el disco
 de PC o por un reseteo. Entonces la PC dice "no hay sistema" o va directo a
-Windows, aunque Ubuntu y GRUB estén perfectos.
+Windows, aunque tu sistema y GRUB estén perfectos.
 
-El arranque de respaldo es una copia del arranque de Ubuntu en la "ruta de
+El arranque de respaldo es una copia del arranque de tu sistema en la "ruta de
 emergencia" (\EFI\BOOT\BOOTX64.EFI), la que el firmware prueba cuando no
-encuentra nada en su lista. Si la entrada se borra:
-  1. La PC arranca igual por esa ruta.
-  2. Ubuntu vuelve a crear su entrada solo, sin que hagas nada.
+encuentra nada en su lista. Si la entrada se borra, la PC arranca igual por esa
+ruta (y en Ubuntu, Debian y Fedora la entrada se vuelve a crear sola).
 
-  • Funciona con Secure Boot (usa los mismos archivos firmados de Ubuntu).
-  • Se actualiza solo cada vez que se actualiza GRUB.
+  • Con Secure Boot usa los mismos archivos firmados de tu distribución.
+    (En Arch y Manjaro GRUB no viene firmado: con Secure Boot no arranca.)
+  • Se actualiza solo con cada actualización de GRUB (apt o pacman).
+  • Fedora y openSUSE ya lo traen: el script solo lo comprueba.
   • Si esa ruta la usa Windows, no se toca.
 EXPL
     local state
@@ -5040,10 +5419,12 @@ EXPL
     echo ""
     case $state in
         nuestro) echo -e "${GREEN}✓ Estado: INSTALADO (lo puso este script)${NC}" ;;
+        sistema) echo -e "${GREEN}✓ Estado: INSTALADO por ${BOOT_DISTRO}${NC}" ;;
         vacio) echo -e "${YELLOW}○ Estado: no hay arranque de respaldo${NC}" ;;
         windows) echo -e "${CYAN}ℹ Estado: la ruta de respaldo es de Windows${NC}" ;;
         *) echo -e "${YELLOW}ℹ Estado: la ruta de respaldo tiene el arranque de otro sistema${NC}" ;;
     esac
+    echo -e "${CYAN}  Partición EFI: $ESP_DIR · carpeta de ${BOOT_DISTRO}: EFI/$EFI_ID${NC}"
     echo ""
     echo -e "  ${PURPLE}1)${NC} $([ "$state" = nuestro ] && echo "Actualizarlo ahora" || echo "Instalarlo")"
     echo -e "  ${PURPLE}2)${NC} Quitarlo (vuelve a como estaba)"
@@ -6987,7 +7368,43 @@ migrate_from_kubuntu_lite() {
 # MENÚ PRINCIPAL (COLOR: CIAN)
 # ============================================================
 
+# Ubuntu y sus derivadas (Kubuntu, Mint, Pop!_OS...) usan todo el script; en las demás
+# distribuciones solo está el menú de arranque, que funciona en cualquier Linux con GRUB
+ubuntu_based() {
+    [[ " $(os_release_value ID) $(os_release_value ID_LIKE) " == *" ubuntu "* ]]
+}
+
+BOOT_ONLY=false
+
+boot_only_menu() {
+    while true; do
+        print_header
+        echo -e "${CYAN}ℹ En ${BOOT_DISTRO} está disponible el menú de arranque (GRUB y EFI), que sirve en${NC}"
+        echo -e "${CYAN}  Ubuntu, Debian, Arch, Manjaro, Fedora y openSUSE. El resto del script es para Ubuntu.${NC}\n"
+        echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
+        echo -e "  ${CYAN}18)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
+        echo ""
+        echo -e "  ${CYAN}19)${NC} 🔌 Apagar / Reiniciar sistema"
+        echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
+        echo ""
+        read -r -p "🔢 Opción (18, 19 o 0): " option
+        case $option in
+            18|1) grub_repair_menu ;;
+            19|2) shutdown_menu ;;
+            0)
+                echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}❌ Opción inválida${NC}"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 main_menu() {
+    $BOOT_ONLY && boot_only_menu
     while true; do
         print_header
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
@@ -7115,8 +7532,19 @@ fi
 while kill -0 "$$" 2>/dev/null; do sudo -n true; sleep 60; done 2>/dev/null &
 
 migrate_from_kubuntu_lite
-detect_flavor
-cleanup_pending_kernels
+boot_detect
+if ubuntu_based; then
+    detect_flavor
+    boot_detect   # otra vez, ahora con el nombre del sabor
+    cleanup_pending_kernels
+else
+    BOOT_ONLY=true
+    FLAVOR_NAME="$BOOT_DISTRO" DESKTOP_NAME="modo arranque"
+    if [ -n "$PROFILE" ]; then
+        echo -e "${RED}❌ Los perfiles son solo para Ubuntu y sus sabores (este sistema es $BOOT_DISTRO)${NC}"
+        exit 1
+    fi
+fi
 
 if [ -n "$PROFILE" ]; then
     run_profile "$PROFILE"
