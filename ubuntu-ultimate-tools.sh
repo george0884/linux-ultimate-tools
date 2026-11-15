@@ -3474,9 +3474,61 @@ is_live_session() {
 }
 
 
+# ¿La opción N del menú de arranque sirve en este equipo? (usa BOOT_LIVE, BOOT_UEFI y BOOT_GRUB)
+# Los números no cambian aunque se oculten opciones: la tarjeta de rescate y las guías los usan.
+boot_option_ok() {
+    case $1 in
+        1|10|11|12|13) return 0 ;;
+        5) $BOOT_UEFI && ! $BOOT_LIVE ;;
+        8) $BOOT_UEFI ;;
+        4) $BOOT_GRUB && ! $BOOT_LIVE && ! $BOOT_UEFI ;;
+        15) $BOOT_GRUB && ! $BOOT_LIVE && $BOOT_UEFI ;;
+        2|3|6|7|9|14) $BOOT_GRUB && ! $BOOT_LIVE ;;
+        *) return 1 ;;
+    esac
+}
+
+# Por qué una opción no aparece (para quien escribe su número igual)
+boot_option_reason() {
+    if $BOOT_LIVE; then
+        echo "en un Live USB se repara con la opción 10 (las demás son para el sistema ya arrancado)"
+    elif [ "$1" = 4 ]; then
+        echo "este equipo arranca en modo UEFI: GRUB va en la partición EFI (usa la 2 o la 3)"
+    elif [ "$1" = 5 ] || [ "$1" = 8 ] || [ "$1" = 15 ] && ! $BOOT_UEFI; then
+        echo "este equipo arranca en modo BIOS (Legacy): no tiene partición EFI ni entradas UEFI"
+    else
+        echo "$BOOT_DISTRO no usa GRUB (¿systemd-boot?)"
+    fi
+}
+
+# Imprime una opción solo si sirve en este equipo
+boot_option() {
+    boot_option_ok "$1" || return 0
+    printf "  ${PURPLE}%2s)${NC} %s\n" "$1" "$2"
+    [ -n "${3:-}" ] && echo -e "         $3"
+    return 0
+}
+
+# Imprime el título de una sección solo si alguna de sus opciones se muestra
+boot_section() {
+    local title="$1" n
+    shift
+    for n in "$@"; do
+        if boot_option_ok "$n"; then
+            echo -e "\n${PURPLE}$title${NC}"
+            return 0
+        fi
+    done
+}
+
 grub_repair_menu() {
     boot_detect
     while true; do
+        BOOT_LIVE=false BOOT_UEFI=false BOOT_GRUB=false
+        is_live_session && BOOT_LIVE=true
+        [ -d /sys/firmware/efi ] && BOOT_UEFI=true
+        grub_available && BOOT_GRUB=true
+
         clear
         echo -e "${PURPLE}${BOLD}"
         echo "╔══════════════════════════════════════════════════════════════════╗"
@@ -3484,55 +3536,76 @@ grub_repair_menu() {
         echo "╚══════════════════════════════════════════════════════════════════╝"
         echo -e "${NC}"
 
-        if is_live_session; then
-            echo -e "${GREEN}💿 Sesión Live USB detectada: usa la opción 10${NC}"
+        # Qué se detectó: así se entiende por qué hay opciones que no aparecen
+        if $BOOT_LIVE; then
+            echo -e "${GREEN}💿 Live USB · modo $($BOOT_UEFI && echo UEFI || echo "BIOS (Legacy)")${NC}"
+            echo -e "${GREEN}   Para reparar el sistema instalado en el disco, usa la opción 10.${NC}"
         else
-            echo -e "${CYAN}🐧 $BOOT_DISTRO · menú en $GRUB_CFG$([ -d /sys/firmware/efi ] && echo " · EFI en $ESP_DIR")${NC}"
-            grub_available || echo -e "${YELLOW}⚠ GRUB no está instalado (¿usas systemd-boot?): solo sirven 1, 5, 8 y las guías${NC}"
-            echo ""
+            echo -e "${CYAN}🐧 $BOOT_DISTRO · modo $($BOOT_UEFI && echo "UEFI (EFI en $ESP_DIR)" || echo "BIOS (Legacy)")${NC}"
+            if $BOOT_GRUB; then
+                echo -e "${CYAN}   GRUB: menú en $GRUB_CFG · se regenera con ${GRUB_REGEN[0]}${NC}"
+            else
+                echo -e "${YELLOW}⚠ GRUB no está instalado (¿usas systemd-boot?): solo se muestra lo que sirve igual${NC}"
+            fi
         fi
-        echo -e "${PURPLE}🔍 Diagnóstico:${NC}"
-        echo -e "  ${PURPLE} 1)${NC} 📊 DIAGNÓSTICO - Estado del arranque (y guardar un informe)"
-        echo -e "\n${PURPLE}🔧 Reparar (con el sistema arrancado):${NC}"
-        echo -e "  ${PURPLE} 2)${NC} 🔧 REPARACIÓN RÁPIDA - Reinstalar GRUB y regenerar el menú"
-        echo -e "  ${PURPLE} 3)${NC} 🧰 REPARACIÓN COMPLETA - EFI + paquetes de GRUB + reinstalación + orden UEFI"
-        echo -e "  ${PURPLE} 4)${NC} 💿 INSTALAR GRUB EN OTRO DISCO - Solo modo BIOS"
-        echo -e "  ${PURPLE} 5)${NC} 🩺 PARTICIÓN EFI - Verificar, reparar y ver espacio libre"
-        echo -e "\n${PURPLE}🎨 Configurar el menú de arranque:${NC}"
-        echo -e "  ${PURPLE} 6)${NC} 📂 SISTEMA POR DEFECTO - Qué arranca solo y cuánto espera el menú"
-        echo -e "  ${PURPLE} 7)${NC} 🪟 OTROS SISTEMAS - Detectar Windows y otras distros"
-        echo -e "  ${PURPLE} 8)${NC} 🔢 ORDEN DE ARRANQUE UEFI - Qué arranca primero / solo la próxima vez"
-        echo -e "  ${PURPLE} 9)${NC} 🎨 PERSONALIZAR MENÚ - Ocultar entradas, orden, colores, fondo, parámetros"
-        echo -e "\n${PURPLE}🚑 Cuando el sistema NO arranca:${NC}"
-        echo -e "  ${PURPLE}10)${NC} 🚑 REPARAR DESDE LIVE USB - Automático (chroot)"
-        echo -e "  ${PURPLE}11)${NC} 📖 GUÍA 'grub>' - Arrancar a mano desde el prompt de GRUB"
-        echo -e "  ${PURPLE}12)${NC} 📖 GUÍA 'grub rescue>' - Recuperar el menú de GRUB"
-        echo -e "  ${PURPLE}13)${NC} 📖 GUÍA LIVE USB - Reparación manual con comandos"
-        echo -e "\n${PURPLE}🛟 Prepárate ANTES de que falle (con el sistema funcionando):${NC}"
-        echo -e "  ${PURPLE}14)${NC} 🪪 TARJETA DE RESCATE - Los comandos exactos de TU PC para 'grub>' y"
-        echo -e "         'grub rescue>', para fotografiar y copiar al pendrive junto con el script"
-        echo -e "  ${PURPLE}15)${NC} 🛟 ARRANQUE DE RESPALDO UEFI - Que la PC arranque aunque la BIOS"
-        echo -e "         pierda la entrada de tu sistema (actualización de BIOS, reseteo...)"
+        echo -e "${CYAN}ℹ Solo aparecen las opciones que sirven en este equipo${NC}"
+
+        boot_section "🔍 Diagnóstico:" 1
+        boot_option 1 "📊 DIAGNÓSTICO - Estado del arranque (y guardar un informe)"
+        boot_section "🔧 Reparar (con el sistema arrancado):" 2 3 4 5
+        boot_option 2 "🔧 REPARACIÓN RÁPIDA - Reinstalar GRUB y regenerar el menú"
+        if $BOOT_UEFI; then
+            boot_option 3 "🧰 REPARACIÓN COMPLETA - EFI + paquetes de GRUB + reinstalación + orden UEFI"
+        else
+            boot_option 3 "🧰 REPARACIÓN COMPLETA - Paquetes de GRUB + reinstalación en el disco + menú"
+        fi
+        boot_option 4 "💿 INSTALAR GRUB EN OTRO DISCO - Elegir en qué disco va el arranque"
+        boot_option 5 "🩺 PARTICIÓN EFI - Verificar, reparar y ver espacio libre"
+        boot_section "🎨 Configurar el menú de arranque:" 6 7 8 9
+        boot_option 6 "📂 SISTEMA POR DEFECTO - Qué arranca solo y cuánto espera el menú"
+        boot_option 7 "🪟 OTROS SISTEMAS - Detectar Windows y otras distros"
+        boot_option 8 "🔢 ORDEN DE ARRANQUE UEFI - Qué arranca primero / solo la próxima vez"
+        boot_option 9 "🎨 PERSONALIZAR MENÚ - Ocultar entradas, orden, colores, fondo, parámetros"
+        boot_section "🚑 Cuando el sistema NO arranca:" 10 11 12 13
+        if $BOOT_LIVE; then
+            boot_option 10 "🚑 REPARAR EL SISTEMA DEL DISCO - Automático (chroot)"
+        else
+            boot_option 10 "🚑 REPARAR DESDE LIVE USB - Automático (chroot): se usa desde el USB"
+        fi
+        boot_option 11 "📖 GUÍA 'grub>' - Arrancar a mano desde el prompt de GRUB"
+        boot_option 12 "📖 GUÍA 'grub rescue>' - Recuperar el menú de GRUB"
+        boot_option 13 "📖 GUÍA LIVE USB - Reparación manual con comandos"
+        boot_section "🛟 Prepárate ANTES de que falle (con el sistema funcionando):" 14 15
+        boot_option 14 "🪪 TARJETA DE RESCATE - Los comandos exactos de TU PC para 'grub>' y" \
+            "'grub rescue>', para fotografiar y copiar al pendrive junto con el script"
+        boot_option 15 "🛟 ARRANQUE DE RESPALDO UEFI - Que la PC arranque aunque la BIOS" \
+            "pierda la entrada de tu sistema (actualización de BIOS, reseteo...)"
         echo -e "\n  ${PURPLE} 0)${NC} 🔙 Volver al menú principal"
         echo ""
-        read -r -p "📌 Opción (0-15): " grub_option
+        read -r -p "📌 Opción: " grub_option
 
+        if [[ "$grub_option" =~ ^[0-9]+$ ]] && [ "$grub_option" -ge 1 ] && [ "$grub_option" -le 15 ] \
+            && ! boot_option_ok "$grub_option"; then
+            echo -e "${YELLOW}ℹ La opción $grub_option no aplica: $(boot_option_reason "$grub_option")${NC}"
+            sleep 3
+            continue
+        fi
         case $grub_option in
             1) grub_diagnostic ;;
-            2) grub_required && grub_normal_repair || pause ;;
-            3) grub_required && grub_full_repair; pause ;;
-            4) grub_required && grub_reinstall_to_disk || pause ;;
+            2) grub_normal_repair ;;
+            3) grub_full_repair; pause ;;
+            4) grub_reinstall_to_disk ;;
             5) esp_check_repair; pause ;;
-            6) grub_required && grub_default_entry_menu; pause ;;
-            7) grub_required && grub_os_prober_toggle; pause ;;
+            6) grub_default_entry_menu; pause ;;
+            7) grub_os_prober_toggle; pause ;;
             8) uefi_boot_order_menu; pause ;;
-            9) grub_required && grub_customize_menu || pause ;;
+            9) grub_customize_menu ;;
             10) grub_live_repair ;;
             11) grub_prompt_guide ;;
             12) grub_rescue_guide ;;
             13) grub_live_guide ;;
-            14) grub_required && rescue_card_menu || pause ;;
-            15) grub_required && uefi_fallback_menu || pause ;;
+            14) rescue_card_menu ;;
+            15) uefi_fallback_menu ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
         esac

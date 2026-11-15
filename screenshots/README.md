@@ -118,3 +118,9 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 ## Menú de arranque en Arch Linux (opción 18)
 
 ![Menú de arranque en Arch Linux (opción 18)](19-arranque-arch.png)
+
+---
+
+## Menú de arranque desde un Live USB (opción 18)
+
+![Menú de arranque desde un Live USB (opción 18)](20-arranque-live-usb.png)
