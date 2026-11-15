@@ -167,21 +167,44 @@ Shift derecho + F12 oculta el panel · Shift izquierdo + F2 pausa/reanuda la gra
 
 Todo lo hace el propio script, sin instalar programas externos.
 
+**Funciona en cualquier Linux con GRUB**, no solo en Ubuntu:
+
+| Distribución | Cómo regenera el menú | Paquetes | Partición EFI |
+|---|---|---|---|
+| Ubuntu y sabores, Debian, Mint | `update-grub` | apt (con shim firmado) | `/boot/efi` |
+| Arch, Manjaro, EndeavourOS | `grub-mkconfig` (Manjaro: `update-grub`) | pacman | `/boot/efi`, `/efi` o `/boot` |
+| Fedora | `grub2-mkconfig` (entradas BLS con `grubby`) | dnf (con shim firmado) | `/boot/efi` |
+| openSUSE | `grub2-mkconfig` y `shim-install` | zypper | `/boot/efi` |
+
+- El script detecta la distribución, la carpeta de GRUB (`/boot/grub` o `/boot/grub2`), dónde está montada la
+  partición EFI y cómo se llama su carpeta (`ubuntu`, `debian`, `GRUB`, `manjaro`, `fedora`...).
+- **En Ubuntu y sus derivadas** (Kubuntu, Mint, Pop!_OS...) está todo el script. **En las demás distribuciones**
+  el menú principal muestra solo **18) Arranque** y **19) Apagar**, con los mismos números, así la tarjeta de
+  rescate y las guías sirven igual.
+- Desde el USB de cualquiera de estas distribuciones, la **reparación desde Live USB (18 → 10)** detecta qué
+  sistema hay en el disco y usa sus comandos (también con btrfs, `/boot` aparte y discos cifrados).
+- Si el sistema usa **systemd-boot** en lugar de GRUB (algunos Arch y EndeavourOS), el script lo detecta y lo
+  avisa: siguen sirviendo el diagnóstico, la partición EFI, el orden UEFI y las guías.
+- En **Fedora** los kernels van en formato BLS: el sistema por defecto se elige con `grubby` y los kernels no se
+  pueden ocultar uno por uno (Windows, memtest y la configuración UEFI sí).
+- En **Arch y Manjaro** GRUB no viene firmado: con Secure Boot activo el script avisa que hay que desactivarlo o
+  firmarlo.
+
 | | Opción | Qué hace |
 |---|---|---|
 | 🔍 | **1** Diagnóstico | Estado del arranque: modo UEFI/BIOS, Secure Boot, discos, kernels, configuración de GRUB, menú, entradas UEFI y partición EFI. Lo guarda en `~/diagnostico-arranque.txt` para compartirlo |
 | 🔧 | **2** Reparación rápida | Reinstala GRUB y regenera el menú |
-| | **3** Reparación completa | Verifica la partición EFI, reinstala los paquetes de GRUB (y shim), reinstala GRUB, regenera el menú, pone Kubuntu primero en UEFI y comprueba el resultado |
+| | **3** Reparación completa | Verifica la partición EFI, reinstala los paquetes de GRUB (y shim), reinstala GRUB, regenera el menú, pone tu sistema primero en UEFI y comprueba el resultado |
 | | **4** Instalar GRUB en otro disco | Solo en modo BIOS |
 | | **5** Partición EFI | Espacio libre, sistemas registrados y verificación/reparación con `fsck.vfat` |
 | 🎨 | **6** Sistema por defecto | Qué entrada arranca sola y cuántos segundos espera el menú |
-| | **7** Otros sistemas | Detectar Windows y otras distros (`os-prober`, que Ubuntu trae desactivado) |
+| | **7** Otros sistemas | Detectar Windows y otras distros (`os-prober`, que Ubuntu, Debian y Arch traen desactivado) |
 | | **8** Orden de arranque UEFI | Poner una entrada primera, o arrancarla solo la próxima vez |
 | | **9** Personalizar menú | **Ocultar cualquier entrada** marcándola con la barra espaciadora (cada kernel, Windows, cada memtest, UEFI...), mostrar otros sistemas antes que Kubuntu, recordar el último elegido, colores, imagen de fondo, resolución, parámetros del kernel, **restaurar el menú original** y **deshacer los cambios de Grub Customizer** |
 | 🚑 | **10** Reparar desde Live USB | Reparación automática con chroot cuando el sistema no arranca |
 | | **11–13** Guías | Prompt `grub>`, `grub rescue>` y reparación manual desde Live USB. Las de `grub>` y `grub rescue>` muestran primero **los comandos exactos de tu PC** y luego cómo hacer que GRUB busque solo dónde está Ubuntu |
 | 🛟 | **14** Tarjeta de rescate | Los comandos exactos de **tu** PC para `grub>` y `grub rescue>`, para fotografiar y copiar al pendrive junto con el script |
-| | **15** Arranque de respaldo UEFI | Que la PC arranque aunque la BIOS pierda la entrada de Ubuntu |
+| | **15** Arranque de respaldo UEFI | Que la PC arranque aunque la BIOS pierda la entrada de tu sistema (en Fedora y openSUSE ya viene: solo se comprueba) |
 
 Antes del primer cambio, el script guarda una copia de `/etc/default/grub`
 (`/etc/default/grub.ubuntu-ultimate-tools.orig`) para poder volver al menú original.
@@ -492,6 +515,11 @@ GPU, kernel, revertir, arranque y GRUB, red, energía, perfiles, deshacer e info
 Sí: Ubuntu, Kubuntu, Xubuntu, Lubuntu, MATE, Budgie, Cinnamon, Unity, Studio, Edubuntu, Kylin y Server.
 El banner muestra qué sabor y escritorio detectó. En distribuciones basadas en Ubuntu (Mint, Pop!_OS...)
 no está probado.
+
+**¿Y en Debian, Arch, Manjaro o Fedora?**
+
+Por ahora solo el menú de **arranque** (opción 18): reparar y personalizar GRUB, la tarjeta de rescate, el
+arranque de respaldo UEFI y la reparación desde Live USB. El resto del script es para Ubuntu.
 
 **¿Qué pasa si elimino Snap?**
 
