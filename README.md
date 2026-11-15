@@ -176,6 +176,13 @@ Todo lo hace el propio script, sin instalar programas externos.
 | Fedora | `grub2-mkconfig` (entradas BLS con `grubby`) | dnf (con shim firmado) | `/boot/efi` |
 | openSUSE | `grub2-mkconfig` y `shim-install` | zypper | `/boot/efi` |
 
+- **El menú muestra solo lo que sirve en tu equipo** (los números no cambian, así la tarjeta de rescate y las
+  guías siguen valiendo):
+  - **UEFI:** partición EFI, orden de arranque UEFI y arranque de respaldo; se oculta "Instalar en otro disco".
+  - **BIOS (Legacy):** "Instalar en otro disco"; se ocultan las opciones de EFI y UEFI.
+  - **Desde un Live USB:** la reparación del sistema del disco (10), las guías, el diagnóstico y el orden UEFI.
+  - **Sin GRUB (systemd-boot):** diagnóstico, partición EFI, orden UEFI y guías.
+  - Si escribes el número de una opción oculta, el script explica por qué no aplica.
 - El script detecta la distribución, la carpeta de GRUB (`/boot/grub` o `/boot/grub2`), dónde está montada la
   partición EFI y cómo se llama su carpeta (`ubuntu`, `debian`, `GRUB`, `manjaro`, `fedora`...).
 - **En Ubuntu y sus derivadas** (Kubuntu, Mint, Pop!_OS...) está todo el script. **En las demás distribuciones**
