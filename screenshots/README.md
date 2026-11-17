@@ -124,3 +124,15 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 ## Menú de arranque desde un Live USB (opción 18)
 
 ![Menú de arranque desde un Live USB (opción 18)](20-arranque-live-usb.png)
+
+---
+
+## Debian Ultimate Tools (beta): menú principal
+
+![Debian Ultimate Tools (beta): menú principal](21-debian-menu-principal.png)
+
+---
+
+## Arch Ultimate Tools (beta): menú principal
+
+![Arch Ultimate Tools (beta): menú principal](22-arch-menu-principal.png)

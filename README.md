@@ -54,6 +54,59 @@ opción 11, se reconoce por su escritorio. Las opciones que no aplican a tu escr
 
 ---
 
+## 🧪 Versiones BETA para Debian y Arch
+
+Además del script de Ubuntu hay dos hermanos, en **versión beta** (probados con sistemas simulados, todavía no
+en equipos reales: úsalos con cuidado y reporta lo que falle). Mismo menú y **mismos números** que en Ubuntu.
+
+| Script | Para | Ejecutar |
+|---|---|---|
+| `ubuntu-ultimate-tools.sh` | Ubuntu y sus sabores, Mint, Pop!_OS | `./ubuntu-ultimate-tools.sh` |
+| `debian-ultimate-tools.sh` (beta) | Debian 12/13 y derivadas (MX Linux, LMDE...) | `./debian-ultimate-tools.sh` |
+| `arch-ultimate-tools.sh` (beta) | Arch, Manjaro, EndeavourOS (y CachyOS, Garuda...) | `./arch-ultimate-tools.sh` |
+
+Si abres un script en una distribución que no es la suya, solo muestra el menú de arranque (18), que sirve en
+todas, y te dice cuál usar.
+
+**Qué traen las betas:** actualizar, información del sistema, eliminar apps y accesos directos, software
+opcional, Alacritty y temas, deshacer, revertir, configuración, GPU y drivers, kernel, RAM/ZRAM, red y DNS,
+energía (incluidos Steam, Proton y herramientas de juego) y el menú de arranque completo.
+**Todavía no:** los perfiles automáticos (17). Snap (4 y 8) no aplica en Debian ni en Arch.
+
+### Debian (beta)
+
+- **Repositorios (11):** activa `contrib`, `non-free` y `non-free-firmware` (drivers de NVIDIA, firmware de Wi-Fi,
+  Steam) en el formato clásico y en el nuevo (`*.sources`). Desactiva el DVD/USB de instalación como fuente.
+  Activa **backports**. Antes guarda una copia y, si `apt update` falla, vuelve atrás solo.
+- **GPU (12):** NVIDIA con `nvidia-detect` (elige el driver correcto; avisa del paso de Secure Boot/MOK); AMD e
+  Intel con su firmware y los drivers de vídeo.
+- **Kernel (13):** oficial, **backports** (más nuevo y firmado), Liquorix y XanMod.
+- **Eliminar apps (3):** en Debian los metapaquetes del escritorio dependen de las apps; antes de quitar una, se
+  protege lo que quedaría huérfano para que `apt autoremove` no se lleve medio escritorio.
+- **Si falta `sudo`** (instalaste con contraseña de root) explica cómo agregarlo.
+
+### Arch (beta)
+
+- **Paquetes:** nunca hace actualizaciones parciales. Si la base de paquetes está vieja (error 404) ofrece
+  actualizar todo y reintentar; si fallan las firmas, actualiza el llavero; si `pacman` quedó bloqueado por un
+  corte (y no hay nada instalándose), ofrece desbloquearlo.
+- **Software opcional (6):** primero los repositorios oficiales; si un programa no está, el **AUR** (si tienes
+  `yay` o `paru`, siempre preguntando) y si no, **Flathub**. Chrome, Spotify y VS Code oficial salen de ahí.
+- **Configurar (11):** multilib (con vuelta atrás si falla), descargas en paralelo, servidores más rápidos
+  (`reflector`; en Manjaro, `pacman-mirrors`) y limpieza automática de la caché.
+- **GPU (12):** NVIDIA según la tarjeta (`nvidia-open`, o DKMS si tienes otros kernels; las anteriores a la
+  serie 16/RTX necesitan un driver del AUR, y se avisa); en Manjaro usa `mhwd`. AMD e Intel con lib32 si hay
+  multilib. Regenera la imagen de arranque con `mkinitcpio` o `dracut` (EndeavourOS).
+- **Kernel (13):** `linux`, `linux-lts` y `linux-zen` (con sus headers); en Manjaro, `mhwd-kernel`. Nunca quita
+  el kernel en uso. Microcódigo del procesador.
+- **ZRAM** con `zram-generator`; **TLP** quita antes `power-profiles-daemon` (en Arch chocan); **Steam** desde
+  multilib (o Flathub si no lo quieres activar).
+
+**Las dos:** si no está `systemd-resolved` (lo normal en Debian y Arch), el DNS se cambia con NetworkManager.
+Si faltan `wget` o `lspci`, se instalan solos cuando hacen falta.
+
+---
+
 ## 📋 Requisitos
 
 - **Ubuntu 22.04 LTS o superior**, cualquier sabor
