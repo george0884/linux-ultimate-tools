@@ -297,28 +297,11 @@ pacman_full_upgrade() {
 }
 
 # ------------------------------------------------------------
-# AUR (con yay o paru, si están) y Flathub, como alternativas a los repositorios oficiales
+# Flathub como alternativa a los repositorios oficiales. El AUR NO se usa: cualquiera
+# puede subir paquetes y ya hubo casos con malware. Solo repositorios oficiales y Flathub.
 # ------------------------------------------------------------
 
 FLATPAK_APPS_LIST="$STATE_DIR/flatpak-apps.txt"
-
-aur_helper() {
-    local h
-    for h in paru yay; do command -v "$h" &> /dev/null && { echo "$h"; return 0; }; done
-    return 1
-}
-
-# Instala desde el AUR como tu usuario (los ayudantes no se usan con sudo)
-aur_install() {
-    local helper
-    helper=$(aur_helper) || return 1
-    echo -e "${YELLOW}ℹ $* viene del AUR (lo mantiene la comunidad, no Arch): $helper lo compila o descarga${NC}"
-    confirm "${YELLOW}¿Instalar $* desde el AUR?${NC}" || return 1
-    run_visible "No se pudo instalar desde el AUR: $*" "$helper" -S --needed --noconfirm "$@" || return 1
-    mkdir -p "$STATE_DIR"
-    printf '%s\n' "$@" >> "$INSTALLED_LIST"
-    sort -u -o "$INSTALLED_LIST" "$INSTALLED_LIST"
-}
 
 # Instala una app de Flathub (instala Flatpak si hace falta)
 flathub_install() {
@@ -1018,9 +1001,9 @@ optimize_nvidia() {
     echo -e "${YELLOW}⚠ Reinicia el sistema para aplicar todos los cambios${NC}"
 }
 
-# Driver de NVIDIA. Manjaro: su herramienta mhwd elige el correcto. Arch y derivadas:
-# las tarjetas desde la serie 16/RTX usan los módulos abiertos (nvidia-open); las más
-# viejas necesitan un driver anterior que solo está en el AUR.
+# Driver de NVIDIA. Manjaro: su herramienta mhwd elige el correcto (de sus repositorios
+# oficiales). Arch y derivadas: las tarjetas desde la serie 16/RTX usan los módulos abiertos
+# (nvidia-open); las más viejas necesitan un driver que solo está en el AUR (no se usa).
 install_nvidia_driver() {
     if is_manjaro && command -v mhwd &> /dev/null; then
         echo -e "${PURPLE}🔧 Manjaro: mhwd instala el driver recomendado para tu tarjeta...${NC}"
@@ -1034,15 +1017,9 @@ install_nvidia_driver() {
     echo -e "${PURPLE}🎮 $gpu${NC}"
     if ! grep -Eqi 'RTX|GTX 16|TU1[0-9]{2}|GA1[0-9]{2}|AD1[0-9]{2}|GB2[0-9]{2}|\bA[0-9]{3,4}\b|L40|H100' <<< "$gpu"; then
         log_warning "Parece una tarjeta anterior a la serie GTX 16/RTX: el driver actual de Arch ya no la soporta"
-        echo -e "${YELLOW}  Necesita un driver anterior del AUR (por ejemplo nvidia-580xx-dkms), o el libre (nouveau).${NC}"
-        if aur_helper > /dev/null; then
-            confirm "${PURPLE}¿Instalar nvidia-580xx-dkms desde el AUR?${NC}" || return 1
-            mapfile -t kernels < <(arch_kernel_pkgs)
-            for k in "${kernels[@]}"; do pkgs+=("$k-headers"); done
-            pkg_install_recorded "${pkgs[@]}" && aur_install nvidia-580xx-dkms nvidia-580xx-utils
-            return
-        fi
-        echo -e "${YELLOW}  Instala yay o paru para poder usar el AUR. Mientras tanto, nouveau sigue funcionando.${NC}"
+        echo -e "${YELLOW}  El driver para esa tarjeta solo está en el AUR, que el script no usa por seguridad. Sigue funcionando${NC}"
+        echo -e "${YELLOW}  el driver libre (nouveau), que ya viene instalado. Si necesitas el de NVIDIA, puedes${NC}"
+        echo -e "${YELLOW}  instalarlo a mano revisando antes el PKGBUILD, bajo tu responsabilidad.${NC}"
         return 1
     fi
     mapfile -t kernels < <(arch_kernel_pkgs)
@@ -1708,15 +1685,12 @@ do_system_update() {
         echo -e "  ${YELLOW}ℹ Sin pacman-contrib: se omite (actívalo en la opción 11)${NC}"
     fi
 
-    echo -e "${GREEN}[4/4] AUR y Flatpak...${NC}"
-    local helper
-    if helper=$(aur_helper); then
-        run_visible "No se pudieron actualizar los paquetes del AUR" "$helper" -Sua --noconfirm
-    fi
+    echo -e "${GREEN}[4/4] Apps Flatpak...${NC}"
     if command -v flatpak &> /dev/null; then
         run_visible "No se pudieron actualizar las apps Flatpak" flatpak update -y --noninteractive
+    else
+        echo -e "  ${GREEN}✓ Flatpak no está instalado${NC}"
     fi
-    [ -z "$helper" ] && ! command -v flatpak &> /dev/null && echo -e "  ${GREEN}✓ No hay AUR ni Flatpak que actualizar${NC}"
     log_success "Sistema actualizado"
     # Si se actualizó el kernel en uso, sus módulos ya no están: conviene reiniciar
     [ -d "/usr/lib/modules/$(uname -r)" ] || echo -e "${YELLOW}⚠ Se actualizó el kernel: reinicia antes de instalar drivers o conectar USB${NC}"
@@ -1734,7 +1708,7 @@ system_update() {
     echo -e "  • sudo pacman -Syu (si fallan las firmas, se actualiza el llavero y se reintenta)"
     echo -e "  • Quitar paquetes huérfanos"
     echo -e "  • paccache -rk2 (limpia la caché, si está pacman-contrib)"
-    echo -e "  • Actualizar el AUR (yay/paru) y Flatpak, si están"
+    echo -e "  • Actualizar las apps Flatpak, si está instalado"
     if is_manjaro; then
         echo -e "\n${YELLOW}ℹ Manjaro: antes de actualizar conviene leer el anuncio de la versión en forum.manjaro.org${NC}"
     else
@@ -2193,15 +2167,9 @@ DESKTOP
 }
 
 install_android_studio_snap() {
-    # En Arch no hay Snap: la alternativa es el paquete android-studio del AUR
-    if ! aur_helper > /dev/null; then
-        log_error "Para el AUR hace falta yay o paru: usa la versión de Google (opción 1)"
-        return 1
-    fi
-    aur_install android-studio || return 1
-    mkdir -p "$STATE_DIR"
-    echo aur > "$ANDROID_STUDIO_STATE"
-    log_success "Android Studio instalado desde el AUR (se actualiza con yay/paru)"
+    # En Arch no hay Snap y el AUR no se usa (seguridad): solo la versión oficial de Google
+    log_error "En Arch se instala la versión oficial de Google (opción 1)"
+    return 1
 }
 
 install_android_studio() {
@@ -2219,7 +2187,7 @@ install_android_studio() {
     echo -e "${CYAN}  (si ya instalaste las herramientas para compilar APK, las usa).${NC}\n"
     echo -e "  ${BLUE}1)${NC} Versión oficial de Google (recomendado): en $ANDROID_STUDIO_DIR, se actualiza"
     echo -e "     desde el propio Android Studio (Ayuda → Buscar actualizaciones)"
-    echo -e "  ${BLUE}2)${NC} AUR (paquete android-studio; se actualiza con yay/paru, necesita uno de ellos)"
+    echo -e "  ${BLUE}2)${NC} (Snap/AUR: no se usan en Arch; elige la 1)"
     echo -e "  ${BLUE}0)${NC} 🔙 No instalar"
     local choice
     read -r -p "📌 Opción (0-2): " choice
@@ -2547,13 +2515,15 @@ dev_nuclear() {
 # OPCIÓN 6: SOFTWARE OPCIONAL (COLOR: AZUL)
 # ============================================================
 
-# Programa|descripción|paquetes oficiales (separados por coma)|paquete del AUR|app de Flathub
+# Programa|descripción|paquetes oficiales (separados por coma)|(sin uso)|app de Flathub
+# Solo repositorios oficiales y Flathub: el AUR no se usa por seguridad
 # "@nombre" = se instala con su propia función (Steam, Docker, Android...)
 ARCH_SOFTWARE=(
     "filezilla|📁 Cliente FTP/SFTP|filezilla||org.filezillaproject.Filezilla"
-    "code|📝 Visual Studio Code (versión libre Code - OSS)|code|visual-studio-code-bin|com.visualstudio.code"
+    "code|📝 Visual Studio Code (versión libre Code - OSS)|code||com.visualstudio.code"
+    "vscode-microsoft|📝 Visual Studio Code de Microsoft (Flathub)|||com.visualstudio.code"
     "virtualbox|🖥️ VirtualBox (máquinas virtuales)|@virtualbox||"
-    "google-chrome|🌐 Google Chrome||google-chrome|com.google.Chrome"
+    "google-chrome|🌐 Google Chrome (Flathub)|||com.google.Chrome"
     "chromium|🌐 Chromium (Chrome libre, en los repositorios oficiales)|chromium||"
     "telegram-desktop|📱 Telegram|telegram-desktop||org.telegram.desktop"
     "python|🐍 Python 3 + PIP|python,python-pip||"
@@ -2562,13 +2532,13 @@ ARCH_SOFTWARE=(
     "wget|⬇️ Wget|wget||"
     "htop|📊 HTOP|htop||"
     "fastfetch|🖥️ Fastfetch|fastfetch||"
-    "timeshift|⏰ Timeshift|timeshift|timeshift|"
+    "timeshift|⏰ Timeshift|timeshift||"
     "gparted|💾 GParted|gparted||"
     "vim|⌨️ Vim|vim||"
     "discord|🎮 Discord|discord||com.discordapp.Discord"
     "steam|🎮 Steam (con Proton para juegos de Windows)|@steam||"
     "proton-ge|🍷 Proton-GE (Proton de la comunidad, más compatible)|@proton-ge||"
-    "spotify|🎵 Spotify||spotify|com.spotify.Client"
+    "spotify|🎵 Spotify (Flathub)|||com.spotify.Client"
     "obs-studio|🎥 OBS Studio|obs-studio||com.obsproject.Studio"
     "android-tools|🤖 Compilar APK: Java + SDK Android + adb (~3 GB)|@android-tools||"
     "android-studio|🤖 Android Studio con emulador (de Google, ~10 GB)|@android-studio||"
@@ -2586,9 +2556,9 @@ arch_software_field() {
 
 flatpak_app_installed() { command -v flatpak &> /dev/null && flatpak list --app --columns=application 2>/dev/null | grep -qx -- "$1"; }
 
-# ¿Ya está instalado? (por paquete oficial, del AUR o de Flathub)
+# ¿Ya está instalado? (por paquete oficial o de Flathub)
 arch_software_installed() {
-    local key="$1" repo aur fp
+    local key="$1" repo fp
     case $key in
         steam) steam_installed; return ;;
         proton-ge) [ -n "$(ls -d "$(steam_dir)"/compatibilitytools.d/GE-Proton* 2>/dev/null)" ]; return ;;
@@ -2599,9 +2569,8 @@ arch_software_installed() {
         flatpak) command -v flatpak &> /dev/null; return ;;
         flatpak-builder) command -v flatpak-builder &> /dev/null; return ;;
     esac
-    repo=$(arch_software_field "$key" 3); aur=$(arch_software_field "$key" 4); fp=$(arch_software_field "$key" 5)
+    repo=$(arch_software_field "$key" 3); fp=$(arch_software_field "$key" 5)
     [ -n "$repo" ] && [ -n "$(pkg_installed "${repo%%,*}")" ] && return 0
-    [ -n "$aur" ] && [ -n "$(pkg_installed "$aur")" ] && return 0
     [ -n "$fp" ] && flatpak_app_installed "$fp" && return 0
     return 1
 }
@@ -2635,8 +2604,8 @@ select_optional_software() {
     fi
     echo -e "${BLUE}📋 Se instalarán:${NC}"
     printf "  ${BLUE}•${NC} %s\n" "${SELECTED_OPTIONAL[@]}"
-    echo -e "\n${CYAN}ℹ Primero desde los repositorios oficiales; si un programa no está, desde el AUR${NC}"
-    echo -e "${CYAN}  (si tienes yay o paru) o desde Flathub. Siempre se pregunta antes.${NC}\n"
+    echo -e "\n${CYAN}ℹ Primero desde los repositorios oficiales de Arch; si un programa no está, desde Flathub${NC}"
+    echo -e "${CYAN}  (se pregunta antes). El AUR no se usa: ya tuvo paquetes con malware.${NC}\n"
     if confirm "${BLUE}¿Instalar los ${#SELECTED_OPTIONAL[@]} programas seleccionados?${NC}"; then
         install_optional_with_progress "${SELECTED_OPTIONAL[@]}"
     fi
@@ -2644,9 +2613,9 @@ select_optional_software() {
 }
 
 # Instala lo elegido: todo lo de los repositorios oficiales en una sola operación de pacman;
-# después lo del AUR, Flathub y los que tienen pasos propios.
+# después lo de Flathub y los que tienen pasos propios.
 install_optional_with_progress() {
-    local key repo aur fp batch=() later=() failed=() p
+    local key repo fp batch=() later=() failed=() p
     for key in "$@"; do
         repo=$(arch_software_field "$key" 3)
         if [[ "$repo" == @* ]]; then
@@ -2672,7 +2641,7 @@ install_optional_with_progress() {
 
     for key in "${later[@]}"; do
         echo ""
-        repo=$(arch_software_field "$key" 3); aur=$(arch_software_field "$key" 4); fp=$(arch_software_field "$key" 5)
+        repo=$(arch_software_field "$key" 3); fp=$(arch_software_field "$key" 5)
         case $repo in
             @steam) install_steam || failed+=(steam); continue ;;
             @proton-ge) install_proton_ge || failed+=(proton-ge); continue ;;
@@ -2683,19 +2652,14 @@ install_optional_with_progress() {
             @docker) install_docker || failed+=(docker); continue ;;
             @virtualbox) install_virtualbox || failed+=(virtualbox); continue ;;
         esac
-        # No está en los repositorios oficiales: AUR (si hay ayudante) o Flathub
-        if [ -n "$aur" ] && aur_helper > /dev/null && aur_install "$aur"; then
-            continue
-        fi
+        # No está en los repositorios oficiales: Flathub, si la app está ahí
         if [ -n "$fp" ]; then
             echo -e "${CYAN}ℹ $key se instala desde Flathub ($fp)${NC}"
             if confirm "${BLUE}¿Instalarlo con Flatpak?${NC}" && flathub_install "$fp"; then
                 continue
             fi
-        fi
-        if [ -n "$aur" ] && ! aur_helper > /dev/null; then
-            log_error "$key no está en los repositorios oficiales y no hay ayudante del AUR (yay o paru)"
-            echo -e "${YELLOW}  Instala yay o paru, o elige la versión de Flathub si la tiene.${NC}"
+        else
+            log_error "$key no está en los repositorios oficiales de tu sistema ni en Flathub"
         fi
         failed+=("$key")
     done
@@ -6706,7 +6670,7 @@ main_menu() {
     while true; do
         print_header
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
-        echo -e "  ${CYAN} 1)${NC} 🔄 ACTUALIZAR SISTEMA (pacman -Syu, AUR, Flatpak)"
+        echo -e "  ${CYAN} 1)${NC} 🔄 ACTUALIZAR SISTEMA (pacman -Syu y Flatpak)"
         echo -e "  ${CYAN} 2)${NC} 📊 Información del sistema y hardware"
         echo ""
         echo -e "  ${CYAN} 3)${NC} 🚮 Eliminar aplicaciones preinstaladas"

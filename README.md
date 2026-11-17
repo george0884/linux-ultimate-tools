@@ -90,12 +90,15 @@ energía (incluidos Steam, Proton y herramientas de juego) y el menú de arranqu
 - **Paquetes:** nunca hace actualizaciones parciales. Si la base de paquetes está vieja (error 404) ofrece
   actualizar todo y reintentar; si fallan las firmas, actualiza el llavero; si `pacman` quedó bloqueado por un
   corte (y no hay nada instalándose), ofrece desbloquearlo.
-- **Software opcional (6):** primero los repositorios oficiales; si un programa no está, el **AUR** (si tienes
-  `yay` o `paru`, siempre preguntando) y si no, **Flathub**. Chrome, Spotify y VS Code oficial salen de ahí.
+- **Software opcional (6):** solo **repositorios oficiales** y **Flathub** (preguntando antes). Chrome, Spotify y el
+  VS Code de Microsoft salen de Flathub; Chromium y la versión libre de VS Code, de los oficiales.
+- **Sin AUR:** el script no lo usa (cualquiera puede subir paquetes y ya hubo casos con malware). Tampoco
+  actualiza paquetes del AUR que tengas instalados por tu cuenta.
 - **Configurar (11):** multilib (con vuelta atrás si falla), descargas en paralelo, servidores más rápidos
   (`reflector`; en Manjaro, `pacman-mirrors`) y limpieza automática de la caché.
-- **GPU (12):** NVIDIA según la tarjeta (`nvidia-open`, o DKMS si tienes otros kernels; las anteriores a la
-  serie 16/RTX necesitan un driver del AUR, y se avisa); en Manjaro usa `mhwd`. AMD e Intel con lib32 si hay
+- **GPU (12):** NVIDIA según la tarjeta (`nvidia-open`, o DKMS si tienes otros kernels); en Manjaro usa `mhwd`.
+  Las anteriores a la serie 16/RTX necesitan un driver que solo está en el AUR: el script lo explica y deja el
+  driver libre (nouveau). AMD e Intel con lib32 si hay
   multilib. Regenera la imagen de arranque con `mkinitcpio` o `dracut` (EndeavourOS).
 - **Kernel (13):** `linux`, `linux-lts` y `linux-zen` (con sus headers); en Manjaro, `mhwd-kernel`. Nunca quita
   el kernel en uso. Microcódigo del procesador.
