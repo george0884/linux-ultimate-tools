@@ -2511,6 +2511,11 @@ dev_nuclear() {
     [ -d "$BACKUP_DIR" ] && echo -e "${CYAN}💾 Respaldos en: $BACKUP_DIR${NC}"
 }
 
+# ------------------------------------------------------------
+# Navegadores: Firefox (repositorios oficiales) y Brave (Flathub), desde Software opcional
+# ------------------------------------------------------------
+
+
 # ============================================================
 # OPCIÓN 6: SOFTWARE OPCIONAL (COLOR: AZUL)
 # ============================================================
@@ -2525,6 +2530,8 @@ ARCH_SOFTWARE=(
     "virtualbox|🖥️ VirtualBox (máquinas virtuales)|@virtualbox||"
     "google-chrome|🌐 Google Chrome (Flathub)|||com.google.Chrome"
     "chromium|🌐 Chromium (Chrome libre, en los repositorios oficiales)|chromium||"
+    "firefox|🦊 Firefox (de los repositorios oficiales, sin Snap)|firefox||org.mozilla.firefox"
+    "brave|🦁 Brave, con bloqueo de anuncios (Flathub)|||com.brave.Browser"
     "telegram-desktop|📱 Telegram|telegram-desktop||org.telegram.desktop"
     "python|🐍 Python 3 + PIP|python,python-pip||"
     "git|📚 Git|git||"
@@ -2544,7 +2551,7 @@ ARCH_SOFTWARE=(
     "android-studio|🤖 Android Studio con emulador (de Google, ~10 GB)|@android-studio||"
     "flatpak|📦 Flatpak + Flathub: instalar apps Flatpak|@flatpak||"
     "flatpak-builder|🛠️ Compilar Flatpaks: flatpak-builder + el SDK que elijas|@flatpak-builder||"
-    "docker|🐳 Docker + Compose: compilar con el Dockerfile de un proyecto|@docker||"
+    "docker|🐳 Docker + Compose (compilar con el Dockerfile)|@docker||"
 )
 
 arch_software_field() {
