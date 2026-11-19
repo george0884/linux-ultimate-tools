@@ -90,8 +90,8 @@ energía (incluidos Steam, Proton y herramientas de juego) y el menú de arranqu
 - **Paquetes:** nunca hace actualizaciones parciales. Si la base de paquetes está vieja (error 404) ofrece
   actualizar todo y reintentar; si fallan las firmas, actualiza el llavero; si `pacman` quedó bloqueado por un
   corte (y no hay nada instalándose), ofrece desbloquearlo.
-- **Software opcional (6):** solo **repositorios oficiales** y **Flathub** (preguntando antes). Chrome, Spotify y el
-  VS Code de Microsoft salen de Flathub; Chromium y la versión libre de VS Code, de los oficiales.
+- **Software opcional (6):** solo **repositorios oficiales** y **Flathub** (preguntando antes). Chrome, Brave, Spotify y
+  el VS Code de Microsoft salen de Flathub; Firefox, Chromium y la versión libre de VS Code, de los oficiales.
 - **Sin AUR:** el script no lo usa (cualquiera puede subir paquetes y ya hubo casos con malware). Tampoco
   actualiza paquetes del AUR que tengas instalados por tu cuenta.
 - **Configurar (11):** multilib (con vuelta atrás si falla), descargas en paralelo, servidores más rápidos
@@ -457,6 +457,8 @@ desde la opción 9.
 | Visual Studio Code | Editor de código | `.deb` oficial de Microsoft |
 | VirtualBox | Máquinas virtuales | Ubuntu |
 | Google Chrome | Navegador web | `.deb` oficial de Google |
+| Firefox (sin Snap) | Navegador web: el de Mozilla, se actualiza con el sistema. Si tenías el snap, copia tus marcadores y contraseñas y ofrece quitarlo | Repositorio oficial de Mozilla |
+| Brave | Navegador basado en Chromium con bloqueo de anuncios y rastreadores | Repositorio oficial de Brave (si falla, Flathub) |
 | Telegram | Mensajería | Ubuntu |
 | Discord | Chat de voz y texto | `.deb` oficial |
 | Steam | Juegos; incluye **Proton** para jugar juegos de Windows | `.deb` oficial de Valve (o el de Ubuntu) |

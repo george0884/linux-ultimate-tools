@@ -2487,6 +2487,129 @@ dev_nuclear() {
     [ -d "$BACKUP_DIR" ] && echo -e "${CYAN}💾 Respaldos en: $BACKUP_DIR${NC}"
 }
 
+# ------------------------------------------------------------
+# Navegadores sin Snap: Firefox (.deb oficial de Mozilla) y Brave (repositorio oficial de Brave)
+# ------------------------------------------------------------
+
+# Copia los perfiles de Firefox/Thunderbird del snap a la ubicación de la versión .deb
+migrate_snap_profiles() {
+    local pair app dir
+    for pair in firefox:.mozilla thunderbird:.thunderbird; do
+        app=${pair%%:*}
+        dir=${pair#*:}
+        if [ -d "$HOME/snap/$app/common/$dir" ] && [ ! -e "$HOME/$dir" ]; then
+            cp -a "$HOME/snap/$app/common/$dir" "$HOME/$dir" \
+                && log_success "Perfil de $app copiado a ~/$dir (marcadores y contraseñas)"
+        fi
+    done
+}
+
+# Firefox .deb desde el repositorio oficial de Mozilla (el de Ubuntu instala el snap)
+install_firefox_deb() {
+    local status
+    status=$(dpkg-query -W -f='${db:Status-Abbrev}|${Version}' firefox 2>/dev/null)
+    # El paquete de Ubuntu es un "puente" al snap (versión 1:1snap1-...)
+    if [[ "$status" == ?i* ]] && [[ "$status" != *snap* ]]; then
+        echo -e "  ${GREEN}✓ Firefox .deb ya está instalado${NC}"
+        return 0
+    fi
+    command -v wget &> /dev/null || { apt_update; apt_install wget; } || return 1
+    sudo install -d -m 0755 /etc/apt/keyrings
+    run "No se pudo descargar la clave de Mozilla" \
+        sudo wget -qO /etc/apt/keyrings/packages.mozilla.org.asc https://packages.mozilla.org/apt/repo-signing-key.gpg || return 1
+    echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" \
+        | sudo tee /etc/apt/sources.list.d/mozilla.list > /dev/null
+    # Prioridad alta para que no se use el paquete de Ubuntu que instala el snap
+    printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' \
+        | sudo tee /etc/apt/preferences.d/mozilla > /dev/null
+    if ! apt_update force; then
+        log_error "No se pudo leer el repositorio de Mozilla: se quita"
+        sudo rm -f /etc/apt/sources.list.d/mozilla.list /etc/apt/preferences.d/mozilla /etc/apt/keyrings/packages.mozilla.org.asc
+        apt_update force
+        return 1
+    fi
+    apt_install --allow-downgrades firefox && log_success "Firefox .deb instalado"
+}
+
+# ¿Está el Firefox sin Snap? (el .deb de Mozilla o el de la distribución, no el puente al snap)
+firefox_nosnap_installed() {
+    local status
+    status=$(dpkg-query -W -f='${db:Status-Abbrev}|${Version}' firefox 2>/dev/null)
+    [[ "$status" == ?i* && "$status" != *snap* ]]
+}
+
+install_firefox() {
+    echo -e "${BLUE}🦊 Firefox sin Snap (el .deb oficial de Mozilla, se actualiza con el sistema)${NC}"
+    local had_snap=false
+    command -v snap &> /dev/null && snap list firefox &> /dev/null && had_snap=true
+    # Antes de nada se copian los marcadores y contraseñas del snap
+    $had_snap && migrate_snap_profiles
+    install_firefox_deb || return 1
+    if $had_snap; then
+        echo -e "${YELLOW}ℹ También sigue instalado el Firefox snap (tus datos ya se copiaron al nuevo)${NC}"
+        if confirm "${BLUE}¿Quitar el Firefox snap para no tener dos?${NC}"; then
+            run "No se pudo quitar el snap de Firefox" sudo snap remove firefox && log_success "Firefox snap quitado"
+        fi
+    fi
+    if [ -n "$(installed_pkgs firefox-esr)" ]; then
+        echo -e "${CYAN}ℹ Firefox ESR (el que trae Debian) queda instalado; puedes usar los dos o quitarlo después${NC}"
+    fi
+    echo -e "${CYAN}ℹ Si no lo ves en el menú, cierra sesión y vuelve a entrar${NC}"
+}
+
+BRAVE_KEYRING="/usr/share/keyrings/brave-browser-archive-keyring.gpg"
+BRAVE_LIST="/etc/apt/sources.list.d/brave-browser-release.list"
+
+brave_installed() {
+    [ -n "$(installed_pkgs brave-browser)" ] \
+        || { command -v flatpak &> /dev/null && flatpak info com.brave.Browser &> /dev/null; }
+}
+
+# Brave desde su repositorio oficial. Si no se puede (sin conexión, arquitectura), Flathub.
+install_brave() {
+    echo -e "${BLUE}🦁 Brave (navegador basado en Chromium, con bloqueo de anuncios y rastreadores)${NC}"
+    if brave_installed; then
+        echo -e "  ${GREEN}✓ Brave ya está instalado${NC}"
+        return 0
+    fi
+    local arch tmp ok=false
+    arch=$(dpkg --print-architecture)
+    if [ "$arch" = amd64 ] || [ "$arch" = arm64 ]; then
+        command -v wget &> /dev/null || { apt_update; apt_install wget; }
+        tmp=$(mktemp)
+        if run "No se pudo descargar la clave de Brave" \
+            wget -qO "$tmp" https://brave-browser-apt-release.s3.brave.com/brave-browser-archive-keyring.gpg \
+            && [ -s "$tmp" ]; then
+            sudo install -m 0644 "$tmp" "$BRAVE_KEYRING"
+            echo "deb [arch=$arch signed-by=$BRAVE_KEYRING] https://brave-browser-apt-release.s3.brave.com/ stable main" \
+                | sudo tee "$BRAVE_LIST" > /dev/null
+            if apt_update force && apt_install_recorded brave-browser; then
+                ok=true
+            else
+                # Se deja todo como estaba: sin un repositorio que hace fallar apt update
+                log_warning "No se pudo instalar Brave desde su repositorio: se quita"
+                sudo rm -f "$BRAVE_LIST" "$BRAVE_KEYRING"
+                apt_update force
+            fi
+        fi
+        rm -f "$tmp"
+    else
+        log_warning "Brave no tiene paquete para tu procesador ($arch)"
+    fi
+    if $ok; then
+        log_success "Brave instalado (se actualiza con el sistema)"
+        return 0
+    fi
+    # Alternativa: Flathub
+    if confirm "${BLUE}¿Instalar Brave desde Flathub?${NC}"; then
+        command -v flatpak &> /dev/null && flatpak remotes 2>/dev/null | grep -qw flathub || install_flatpak || return 1
+        run_visible "No se pudo instalar Brave desde Flathub" sudo flatpak install -y --noninteractive flathub com.brave.Browser \
+            && log_success "Brave instalado desde Flathub"
+        return
+    fi
+    return 1
+}
+
 # ============================================================
 # OPCIÓN 6: SOFTWARE OPCIONAL (COLOR: AZUL)
 # ============================================================
@@ -2504,6 +2627,8 @@ select_optional_software() {
         "code|📝 Visual Studio Code"
         "virtualbox|🖥️ VirtualBox"
         "google-chrome-stable|🌐 Google Chrome"
+        "firefox|🦊 Firefox (el de Mozilla, sin Snap)"
+        "brave|🦁 Brave (con bloqueo de anuncios)"
         "telegram-desktop|📱 Telegram"
         "python3|🐍 Python 3"
         "python3-pip|📦 PIP"
@@ -2527,7 +2652,7 @@ select_optional_software() {
         "android-studio|🤖 Android Studio con emulador (Google o Snap, ~10 GB)"
         "flatpak|📦 Flatpak + Flathub: instalar apps Flatpak"
         "flatpak-builder|🛠️ Compilar Flatpaks: flatpak-builder + el SDK que elijas"
-        "docker|🐳 Docker + Compose: compilar con el Dockerfile de un proyecto"
+        "docker|🐳 Docker + Compose (compilar con el Dockerfile)"
     )
 
     # Se marca lo que ya está instalado para no reinstalarlo por error
@@ -2538,6 +2663,8 @@ select_optional_software() {
     android_tools_installed && installed+=(android-tools)
     android_studio_installed && installed+=(android-studio)
     docker_installed && installed+=(docker)
+    firefox_nosnap_installed && installed+=(firefox)
+    brave_installed && installed+=(brave)
     for app in "${software[@]}"; do
         pkg=${app%%|*}
         case $pkg in
@@ -2694,7 +2821,7 @@ install_optional_with_progress() {
             "steam") want_steam=true ;;
             "proton-ge") want_ge=true ;;
             # Descargas grandes con pasos propios: van al final, en este orden
-            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker") want_extra+=("$app") ;;
+            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave") want_extra+=("$app") ;;
             *) repo+=("$app") ;;
         esac
     done
@@ -2756,7 +2883,7 @@ install_optional_with_progress() {
 
     if $want_steam; then install_steam || failed+=(steam); fi
     if $want_ge; then install_proton_ge || failed+=(proton-ge); fi
-    for app in android-tools android-studio flatpak flatpak-builder docker; do
+    for app in firefox brave android-tools android-studio flatpak flatpak-builder docker; do
         [[ " ${want_extra[*]} " == *" $app "* ]] || continue
         # flatpak-builder ya instala Flatpak si hace falta
         [ "$app" = flatpak ] && [[ " ${want_extra[*]} " == *" flatpak-builder "* ]] && continue
@@ -2977,19 +3104,6 @@ revert_changes() {
 # OPCIÓN 4: ELIMINACIÓN NUCLEAR DE SNAP (COLOR: ROJO)
 # ============================================================
 
-# Copia los perfiles de Firefox/Thunderbird del snap a la ubicación de la versión .deb
-migrate_snap_profiles() {
-    local pair app dir
-    for pair in firefox:.mozilla thunderbird:.thunderbird; do
-        app=${pair%%:*}
-        dir=${pair#*:}
-        if [ -d "$HOME/snap/$app/common/$dir" ] && [ ! -e "$HOME/$dir" ]; then
-            cp -a "$HOME/snap/$app/common/$dir" "$HOME/$dir" \
-                && log_success "Perfil de $app copiado a ~/$dir (marcadores y contraseñas)"
-        fi
-    done
-}
-
 REMOVED_SNAPS="$STATE_DIR/snaps-eliminados.txt"
 
 # Anota las apps snap instaladas ("nombre" o "nombre classic") para poder reinstalarlas
@@ -3103,27 +3217,6 @@ Pin-Priority: -1' | sudo tee /etc/apt/preferences.d/nosnap.pref > /dev/null
     echo -e "${RED}[11/11] Limpieza final...${NC}"
     run "Falló autoclean" sudo apt-get autoclean -y
 
-}
-
-# Firefox .deb desde el repositorio oficial de Mozilla (el de Ubuntu instala el snap)
-install_firefox_deb() {
-    local status
-    status=$(dpkg-query -W -f='${db:Status-Abbrev}|${Version}' firefox 2>/dev/null)
-    # El paquete de Ubuntu es un "puente" al snap (versión 1:1snap1-...)
-    if [[ "$status" == ?i* ]] && [[ "$status" != *snap* ]]; then
-        echo -e "  ${GREEN}✓ Firefox .deb ya está instalado${NC}"
-        return 0
-    fi
-    sudo install -d -m 0755 /etc/apt/keyrings
-    run "No se pudo descargar la clave de Mozilla" \
-        sudo wget -qO /etc/apt/keyrings/packages.mozilla.org.asc https://packages.mozilla.org/apt/repo-signing-key.gpg || return 1
-    echo "deb [signed-by=/etc/apt/keyrings/packages.mozilla.org.asc] https://packages.mozilla.org/apt mozilla main" \
-        | sudo tee /etc/apt/sources.list.d/mozilla.list > /dev/null
-    # Prioridad alta para que no se use el paquete de Ubuntu que instala el snap
-    printf 'Package: *\nPin: origin packages.mozilla.org\nPin-Priority: 1000\n' \
-        | sudo tee /etc/apt/preferences.d/mozilla > /dev/null
-    apt_update force || return 1
-    apt_install --allow-downgrades firefox && log_success "Firefox .deb instalado"
 }
 
 nuclear_snap_removal() {
@@ -6719,7 +6812,7 @@ profiles_menu() {
 SCRIPT_PROGRAMS=(filezilla code virtualbox google-chrome-stable telegram-desktop python3-pip
     python3-venv git htop fastfetch timeshift gparted vim discord spotify-client obs-studio
     qrca build-essential alacritty gamemode mangohud steam-launcher steam-installer flatpak flatpak-builder
-    openjdk-21-jdk-headless openjdk-17-jdk-headless android-sdk-platform-tools-common docker.io docker-buildx docker-compose-v2 tlp tlp-rdw zram-tools corectrl
+    openjdk-21-jdk-headless openjdk-17-jdk-headless android-sdk-platform-tools-common docker.io docker-buildx docker-compose-v2 brave-browser tlp tlp-rdw zram-tools corectrl
     nvidia-cuda-toolkit grub-customizer boot-repair refind)
 
 remove_installed_programs() {
@@ -6766,6 +6859,10 @@ remove_installed_programs() {
     fi
 
     apt_purge "${CHOSEN[@]}" || return 1
+    # Sin Brave, su repositorio ya no hace falta
+    if printf '%s\n' "${CHOSEN[@]}" | grep -qx brave-browser; then
+        sudo rm -f "$BRAVE_LIST" "$BRAVE_KEYRING"
+    fi
     forget_installed "${CHOSEN[@]}" "${extra[@]}"
     log_success "Desinstalado: ${CHOSEN[*]}"
     run "Falló la limpieza de dependencias" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" autoremove --purge
