@@ -361,6 +361,7 @@ disponible, se vuelve a la selección escribiendo números.
 - ☢️ **Eliminación nuclear de desarrollo**: Android Studio, SDK, SDK de Flatpak, Docker, JDK y
   flatpak-builder de una vez, con doble confirmación y respaldos antes. Tus proyectos, tus claves de firma y
   tus apps Flatpak no se tocan.
+- **Quitar el escritorio instalado por el script** (11): solo sus paquetes; el arranque y la red vuelven a como estaban.
 - **Restaurar todos los ajustes** de una vez, sin desinstalar programas. "Revertir a
   distribución original" (opción 10) también lo hace.
 
@@ -482,6 +483,29 @@ desde la opción 9.
 | Docker + Compose | Compilar con el `Dockerfile` de un proyecto (SDK, NDK y versiones exactas ya listos adentro). Sirve en un VPS | Ubuntu (`docker.io`, `docker-buildx`, `docker-compose-v2`) |
 
 Lo que ya tienes instalado aparece marcado "(ya instalado)".
+
+### 🖥️ Instalar un escritorio (Ubuntu Server o agregar otro)
+
+Primera opción de la lista de software opcional. Instala el escritorio que elijas encima de Ubuntu Server
+(o al lado del que ya tengas), como hace `tasksel`, pero con protecciones:
+
+| Escritorio | Paquete |
+|---|---|
+| KDE Plasma completo | `kubuntu-desktop` |
+| KDE Plasma mínimo (liviano) | `plasma-desktop` + Dolphin, Konsole y red, sin recomendados |
+| GNOME | `ubuntu-desktop-minimal` |
+| Xfce | `xubuntu-desktop-minimal` (o `xubuntu-core`) |
+| LXQt | `lubuntu-desktop` |
+| MATE, Budgie, Cinnamon | sus metapaquetes de Ubuntu |
+
+- **Solo Ubuntu**: en derivadas (Mint, Pop!_OS, Zorin...) el escritorio es parte de la distro y no se toca.
+- **Se simula antes**: si apt fuera a **quitar un solo paquete**, no se instala nada. También revisa
+  que el sistema de paquetes esté sano, el espacio libre y la RAM.
+- **Si ya tienes escritorio**, se conserva tu pantalla de inicio de sesión (GDM, SDDM, LightDM).
+- **Red**: en Server pasa la red a NetworkManager con `netplan try` (si en 60 s no confirmas, vuelve
+  sola a como estaba). Por SSH no se cambia, para no dejarte sin conexión.
+- **Se puede quitar**: opción 9 → 11 quita solo los paquetes que trajo, y vuelve el arranque y la red
+  a como estaban (si quitarlo arrastrara algo que ya tenías, no se quita).
 
 ### 🤖 Compilar APK
 

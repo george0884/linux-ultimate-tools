@@ -2524,6 +2524,283 @@ dev_nuclear() {
 }
 
 # ------------------------------------------------------------
+# Instalar un escritorio (como tasksel), a prueba de errores:
+# - solo en Ubuntu (no en derivadas como Mint, Pop!_OS o Zorin, cuyo escritorio es parte de la distro)
+# - se simula antes con apt: si fuera a QUITAR un solo paquete, no se instala nada
+# - si ya hay un escritorio, se conserva su gestor de inicio de sesión
+# - queda anotado lo que se instaló para poder quitarlo (opción 9)
+# ------------------------------------------------------------
+DESKTOP_STATE="$STATE_DIR/escritorio-instalado.txt"
+DESKTOP_PKGS_LIST="$STATE_DIR/escritorio-paquetes.txt"
+NETPLAN_NM_FILE="/etc/netplan/90-ultimate-tools-networkmanager.yaml"
+
+# clave|nombre|paquetes (alternativas con /)|sin recomendados|gestor de sesión|sesión que instala|RAM mínima (MB)
+DESKTOP_CHOICES=(
+    "kde|KDE Plasma completo (como Kubuntu)|kubuntu-desktop||sddm|plasma|2048"
+    "kde-min|KDE Plasma mínimo (liviano: Plasma, Dolphin, Konsole y red)|plasma-desktop sddm sddm-theme-breeze konsole dolphin plasma-nm plasma-pa kscreen network-manager|norec|sddm|plasma|1536"
+    "gnome|GNOME (como Ubuntu)|ubuntu-desktop-minimal||gdm3|ubuntu|2048"
+    "xfce|Xfce (como Xubuntu, liviano)|xubuntu-desktop-minimal/xubuntu-core||lightdm|xfce|1024"
+    "lxqt|LXQt (como Lubuntu, el más liviano)|lubuntu-desktop||sddm|lxqt|1024"
+    "mate|MATE (clásico)|ubuntu-mate-core/ubuntu-mate-desktop||lightdm|mate|1024"
+    "budgie|Budgie|ubuntu-budgie-desktop-minimal/ubuntu-budgie-desktop||lightdm|budgie-desktop|1536"
+    "cinnamon|Cinnamon (estilo Windows)|ubuntucinnamon-desktop-minimal/ubuntucinnamon-desktop||lightdm|cinnamon|1536"
+)
+
+# Sesiones gráficas ya instaladas (nombres de archivo sin .desktop)
+installed_sessions() {
+    local f
+    for f in /usr/share/xsessions/*.desktop /usr/share/wayland-sessions/*.desktop; do
+        [ -e "$f" ] && basename "$f" .desktop
+    done | sort -u
+}
+
+# Gestor de inicio de sesión configurado (gdm3, sddm, lightdm...), vacío si no hay
+current_display_manager() {
+    local dm
+    [ -s /etc/X11/default-display-manager ] && dm=$(basename "$(cat /etc/X11/default-display-manager)")
+    if [ -z "$dm" ] && [ -e /etc/systemd/system/display-manager.service ]; then
+        dm=$(basename "$(readlink -f /etc/systemd/system/display-manager.service)" .service)
+    fi
+    echo "$dm"
+}
+
+# Convierte "1.234 kB", "567 MB" o "2,5 GB" (salida de apt) a MB
+apt_size_to_mb() {
+    awk '{n = $1; gsub(/,/, "", n); u = $2
+          if (u == "kB") n /= 1024; else if (u == "GB") n *= 1024; else if (u == "B") n /= 1048576
+          printf "%d\n", n + 0.5}' <<< "$1"
+}
+
+# Red: en Server la maneja systemd-networkd y el escritorio la ve "no administrada"
+netplan_uses_networkd() {
+    command -v netplan &> /dev/null || return 1
+    [ -e "$NETPLAN_NM_FILE" ] && return 1
+    ! sudo grep -rqs 'renderer: *NetworkManager' /etc/netplan/
+}
+
+switch_netplan_to_nm() {
+    echo -e "\n${BLUE}🌐 Red: Ubuntu Server usa systemd-networkd; el escritorio necesita NetworkManager${NC}"
+    echo -e "${CYAN}   Sin el cambio internet sigue andando, pero el ícono de red y el Wi-Fi no se pueden manejar.${NC}"
+    if [ -n "$SSH_CONNECTION" ]; then
+        echo -e "${YELLOW}⚠ Estás conectado por SSH: no se cambia la red desde aquí (podrías perder la conexión).${NC}"
+        echo -e "${YELLOW}  Hazlo desde el equipo mismo: opción 6 → Instalar un ESCRITORIO de nuevo, o en la terminal:${NC}"
+        echo -e "${YELLOW}  sudo netplan try   (tras crear $NETPLAN_NM_FILE con 'renderer: NetworkManager')${NC}"
+        return 0
+    fi
+    confirm "${BLUE}¿Pasar la red a NetworkManager? (se prueba 60 s y vuelve atrás sola si algo falla)${NC}" || return 0
+    local backup
+    backup="/etc/netplan.antes-escritorio-$(date +%Y%m%d-%H%M%S)"
+    sudo cp -a /etc/netplan "$backup" && log_info "Copia de la red en $backup"
+    printf 'network:\n  version: 2\n  renderer: NetworkManager\n' | sudo tee "$NETPLAN_NM_FILE" > /dev/null
+    sudo chmod 600 "$NETPLAN_NM_FILE"
+    if ! sudo netplan generate >> "$LOG_FILE" 2>&1; then
+        sudo rm -f "$NETPLAN_NM_FILE"
+        log_error "La configuración de red no es válida: no se cambió nada"
+        return 1
+    fi
+    echo -e "${YELLOW}👉 Si sigues teniendo internet, pulsa ENTER antes de 60 s para confirmar.${NC}"
+    echo -e "${YELLOW}   Si no pulsas nada, la red vuelve sola a como estaba.${NC}"
+    if sudo netplan try --timeout 60; then
+        echo "netplan=$NETPLAN_NM_FILE" >> "$DESKTOP_STATE"
+        log_success "La red ahora la maneja NetworkManager"
+    else
+        sudo rm -f "$NETPLAN_NM_FILE"
+        sudo netplan apply >> "$LOG_FILE" 2>&1
+        log_warning "No se confirmó el cambio: la red sigue como estaba"
+    fi
+}
+
+install_escritorio() { install_desktop; }
+
+install_desktop() {
+    clear
+    echo -e "${BLUE}${BOLD}🖥️ INSTALAR UN ESCRITORIO${NC}\n"
+
+    # 1. Solo Ubuntu de verdad: en las derivadas el escritorio es parte de la distro
+    if [ "$(os_release_value ID)" != ubuntu ]; then
+        log_warning "$(os_release_value NAME) es una distro derivada: su escritorio es parte de ella."
+        echo -e "${YELLOW}  Instalar otro podría romperla, así que el script no lo hace.${NC}"
+        return 1
+    fi
+    if is_live_session; then
+        log_warning "Esto es un Live USB: el escritorio se instala en el sistema ya instalado"
+        return 1
+    fi
+    if [ -s "$DESKTOP_STATE" ]; then
+        echo -e "${YELLOW}ℹ Ya instalaste un escritorio con el script: $(grep '^nombre=' "$DESKTOP_STATE" | cut -d= -f2-)${NC}"
+        echo -e "${YELLOW}  Para cambiarlo, primero quítalo en la opción 9 → Quitar el escritorio.${NC}"
+        netplan_uses_networkd && switch_netplan_to_nm
+        return 0
+    fi
+
+    # 2. El sistema de paquetes tiene que estar sano antes de tocar nada
+    if [ -n "$(sudo dpkg --audit 2>/dev/null)" ] || ! sudo apt-get check >> "$LOG_FILE" 2>&1; then
+        log_error "Hay paquetes a medio instalar o rotos: arréglalo antes con la opción 1 (Actualizar)"
+        return 1
+    fi
+
+    # 3. ¿Ya hay escritorio?
+    local sessions old_dm
+    sessions=$(installed_sessions | tr '\n' ' ')
+    old_dm=$(current_display_manager)
+    if [ -n "$sessions" ]; then
+        echo -e "${YELLOW}⚠ Este sistema YA tiene escritorio (sesiones: ${sessions% }).${NC}"
+        echo -e "${YELLOW}  Se puede agregar otro al lado, pero no se quita ni se cambia nada del actual:${NC}"
+        echo -e "${YELLOW}  si apt quisiera quitar algo, se cancela.${NC}"
+        [ -n "$old_dm" ] && echo -e "${YELLOW}  Se mantiene tu pantalla de inicio de sesión ($old_dm).${NC}"
+        confirm "${YELLOW}¿Agregar otro escritorio igualmente?${NC}" || return 0
+    fi
+
+    # 4. Elegir
+    local entry key name pkgs norec dm session minram entries=() ram
+    ram=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo)
+    for entry in "${DESKTOP_CHOICES[@]}"; do
+        IFS='|' read -r key name _ _ _ session _ <<< "$entry"
+        if [[ " $sessions " == *" $session "* ]]; then
+            entries+=("$key|$name (ya instalado)")
+        else
+            entries+=("$key|$name")
+        fi
+    done
+    echo -e "${CYAN}Tu equipo tiene ${ram} MB de RAM.${NC}"
+    local i=1 choice
+    for entry in "${entries[@]}"; do
+        printf "  ${CYAN}%d)${NC} %s\n" "$i" "${entry#*|}"
+        i=$((i + 1))
+    done
+    echo -e "  ${CYAN}0)${NC} Volver"
+    read -r -p "🔢 Escritorio (0-${#entries[@]}): " choice
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#entries[@]} ] || return 0
+    entry=${DESKTOP_CHOICES[$((choice - 1))]}
+    IFS='|' read -r key name pkgs norec dm session minram <<< "$entry"
+    if [[ " $sessions " == *" $session "* ]]; then
+        echo -e "${GREEN}✓ $name ya está instalado${NC}"
+        return 0
+    fi
+    if [ "$ram" -lt "$minram" ]; then
+        log_warning "$name pide al menos $minram MB de RAM y tienes $ram MB: irá lento (mejor Xfce o LXQt)"
+        confirm "${YELLOW}¿Seguir igualmente?${NC}" || return 0
+    fi
+
+    # 5. Paquetes: se usa la primera alternativa que existe en esta versión de Ubuntu
+    apt_update
+    local list=() p alt
+    for p in $pkgs; do
+        if [[ "$p" == */* ]]; then
+            alt=""
+            for alt in ${p//\// }; do [ -n "$(available_pkgs "$alt")" ] && break; alt=""; done
+            [ -n "$alt" ] || { log_error "Esta versión de Ubuntu no tiene ${p//\// ni }"; return 1; }
+            list+=("$alt")
+        else
+            [ -n "$(available_pkgs "$p")" ] || { log_error "Esta versión de Ubuntu no tiene $p"; return 1; }
+            list+=("$p")
+        fi
+    done
+    local opts=()
+    [ "$norec" = norec ] && opts+=(--no-install-recommends)
+
+    # 6. Simulación: nada de quitar paquetes, y tiene que entrar en el disco
+    local sim removed new size_mb free_mb
+    if ! sim=$(LC_ALL=C apt-get -s install "${opts[@]}" "${list[@]}" 2>&1); then
+        log_error "apt no puede instalar $name sin conflictos (detalles en $LOG_FILE)"
+        echo "$sim" >> "$LOG_FILE"
+        return 1
+    fi
+    removed=$(awk '/^Remv / {print $2}' <<< "$sim")
+    if [ -n "$removed" ]; then
+        log_error "Instalar $name quitaría estos paquetes, así que NO se instala nada:"
+        printf "  ${RED}•${NC} %s\n" $removed
+        return 1
+    fi
+    new=$(awk '/^Inst / {print $2}' <<< "$sim")
+    size_mb=$(LC_ALL=C sudo apt-get install --assume-no "${opts[@]}" "${list[@]}" 2>/dev/null \
+        | sed -n 's/^After this operation, \(.*\) of additional disk space.*/\1/p')
+    size_mb=$(apt_size_to_mb "${size_mb:-0 MB}")
+    free_mb=$(df -Pm / | awk 'NR == 2 {print $4}')
+    echo -e "\n${BLUE}📋 $name${NC}"
+    echo -e "   Paquetes nuevos: $(wc -w <<< "$new")   Espacio: ~${size_mb} MB   Libre en /: ${free_mb} MB"
+    echo -e "   ${GREEN}✓ No se quita ningún paquete del sistema${NC}"
+    if [ "$free_mb" -lt $((size_mb + 1024)) ]; then
+        log_error "No hay espacio suficiente (hace falta ~$((size_mb + 1024)) MB contando un margen de 1 GB)"
+        return 1
+    fi
+    [ -n "$SSH_CONNECTION" ] && echo -e "${YELLOW}ℹ Estás por SSH: si se corta, la instalación se interrumpe. Mejor usar tmux o screen.${NC}"
+    confirm "${BLUE}¿Instalar $name?${NC}" || return 0
+
+    # 7. Si ya había pantalla de inicio de sesión, se queda la misma
+    [ -n "$old_dm" ] && echo "$old_dm shared/default-x-display-manager select $old_dm" | sudo debconf-set-selections
+
+    mkdir -p "$STATE_DIR"
+    run_visible "No se pudo instalar $name" sudo env DEBIAN_FRONTEND=noninteractive \
+        apt-get install "${APT_OPTS[@]}" "${opts[@]}" "${list[@]}" || {
+        echo "$new" > "$DESKTOP_PKGS_LIST.parcial"
+        log_error "Quedó a medias: vuelve a intentarlo o usa la opción 1 para reparar"
+        return 1
+    }
+    echo "$new" > "$DESKTOP_PKGS_LIST"
+    {
+        echo "clave=$key"
+        echo "nombre=$name"
+        echo "fecha=$(date '+%Y-%m-%d %H:%M')"
+        echo "arranque_anterior=$(systemctl get-default 2>/dev/null)"
+        echo "gestor_anterior=$old_dm"
+    } > "$DESKTOP_STATE"
+
+    # 8. Inicio gráfico (solo si antes no había escritorio)
+    if [ -z "$old_dm" ]; then
+        run "No se pudo activar el inicio gráfico" sudo systemctl set-default graphical.target
+        [ -n "$dm" ] && sudo systemctl enable "$dm" >> "$LOG_FILE" 2>&1
+    fi
+    netplan_uses_networkd && switch_netplan_to_nm
+    log_success "$name instalado. Reinicia para entrar al escritorio (opción 19)."
+    echo -e "${CYAN}ℹ Al reiniciar, el script lo detecta y muestra las opciones de escritorio.${NC}"
+    echo -e "${CYAN}  Se quita en la opción 9 → Quitar el escritorio instalado por el script.${NC}"
+}
+
+# Quita solo los paquetes que trajo el escritorio, y vuelve el arranque y la red a como estaban
+remove_installed_desktop() {
+    if [ ! -s "$DESKTOP_STATE" ] || [ ! -s "$DESKTOP_PKGS_LIST" ]; then
+        echo -e "${YELLOW}ℹ El script no instaló ningún escritorio${NC}"
+        return 0
+    fi
+    local name prev_target netplan_file pkgs=() sim removed extra
+    name=$(grep '^nombre=' "$DESKTOP_STATE" | cut -d= -f2-)
+    prev_target=$(grep '^arranque_anterior=' "$DESKTOP_STATE" | cut -d= -f2-)
+    netplan_file=$(grep '^netplan=' "$DESKTOP_STATE" | cut -d= -f2-)
+    # shellcheck disable=SC2046  # lista de paquetes: se separa a propósito
+    mapfile -t pkgs < <(installed_pkgs $(cat "$DESKTOP_PKGS_LIST"))
+    echo -e "${RED}🖥️ Quitar $name ($(grep '^fecha=' "$DESKTOP_STATE" | cut -d= -f2-)): ${#pkgs[@]} paquetes que trajo el script${NC}"
+    if [ -n "$XDG_CURRENT_DESKTOP" ]; then
+        echo -e "${YELLOW}⚠ Estás dentro de un escritorio: lo más seguro es hacerlo desde una terminal de texto (Ctrl+Alt+F3)${NC}"
+    fi
+    if [ ${#pkgs[@]} -gt 0 ]; then
+        sim=$(LC_ALL=C apt-get -s purge "${pkgs[@]}" 2>/dev/null)
+        removed=$(awk '/^(Purg|Remv) / {print $2}' <<< "$sim")
+        extra=$(grep -vxF -f <(printf '%s\n' "${pkgs[@]}") <<< "$removed")
+        if [ -n "$extra" ]; then
+            log_error "Quitarlo arrastraría paquetes que ya tenías antes, así que no se quita:"
+            printf "  ${RED}•${NC} %s\n" $extra
+            return 1
+        fi
+    fi
+    confirm "${RED}¿Quitar $name? (tus archivos y configuraciones personales no se tocan)${NC}" || return 0
+    if [ ${#pkgs[@]} -gt 0 ]; then
+        apt_purge "${pkgs[@]}" || return 1
+    fi
+    [ -n "$prev_target" ] && run "No se pudo restaurar el modo de arranque" sudo systemctl set-default "$prev_target"
+    if [ -n "$netplan_file" ] && [ -e "$netplan_file" ]; then
+        sudo rm -f "$netplan_file"
+        if [ -n "$SSH_CONNECTION" ]; then
+            log_warning "La red vuelve a systemd-networkd al reiniciar (no se aplica ahora por estar en SSH)"
+        else
+            run "No se pudo aplicar la red" sudo netplan apply && log_success "La red vuelve a systemd-networkd"
+        fi
+    fi
+    rm -f "$DESKTOP_STATE" "$DESKTOP_PKGS_LIST"
+    log_success "$name quitado. Reinicia para terminar (opción 19)."
+}
+
+# ------------------------------------------------------------
 # Navegadores sin Snap: Firefox (.deb oficial de Mozilla) y Brave (repositorio oficial de Brave)
 # ------------------------------------------------------------
 
@@ -2705,6 +2982,7 @@ select_optional_software() {
     echo -e "${NC}"
 
     local software=(
+        "escritorio|🖥️ Instalar un ESCRITORIO (KDE Plasma, GNOME, Xfce, LXQt...)"
         "filezilla|📁 Cliente FTP/SFTP"
         "code|📝 Visual Studio Code"
         "virtualbox|🖥️ VirtualBox"
@@ -2749,6 +3027,7 @@ select_optional_software() {
     firefox_nosnap_installed && installed+=(firefox)
     brave_installed && installed+=(brave)
     chromium_installed && installed+=(chromium)
+    [ -s "$DESKTOP_STATE" ] && installed+=(escritorio)
     for app in "${software[@]}"; do
         pkg=${app%%|*}
         case $pkg in
@@ -2905,7 +3184,7 @@ install_optional_with_progress() {
             "steam") want_steam=true ;;
             "proton-ge") want_ge=true ;;
             # Descargas grandes con pasos propios: van al final, en este orden
-            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium") want_extra+=("$app") ;;
+            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium"|"escritorio") want_extra+=("$app") ;;
             *) repo+=("$app") ;;
         esac
     done
@@ -2967,7 +3246,7 @@ install_optional_with_progress() {
 
     if $want_steam; then install_steam || failed+=(steam); fi
     if $want_ge; then install_proton_ge || failed+=(proton-ge); fi
-    for app in firefox brave chromium android-tools android-studio flatpak flatpak-builder docker; do
+    for app in escritorio firefox brave chromium android-tools android-studio flatpak flatpak-builder docker; do
         [[ " ${want_extra[*]} " == *" $app "* ]] || continue
         # flatpak-builder ya instala Flatpak si hace falta
         [ "$app" = flatpak ] && [[ " ${want_extra[*]} " == *" flatpak-builder "* ]] && continue
@@ -7150,10 +7429,11 @@ undo_menu() {
         echo -e "  ${RED} 9)${NC} 🐳 Quitar Docker (conservando tus datos, o eliminación nuclear)"
         echo -e "  ${RED}10)${NC} 💥 ELIMINACIÓN NUCLEAR de todo lo de desarrollo (Android, Flatpak SDK, Docker)"
         echo -e "         con respaldos antes de borrar"
+        echo -e "  ${RED}11)${NC} 🖥️ Quitar el escritorio instalado por el script"
         echo -e "\n  ${RED} 0)${NC} 🔙 Volver"
         echo -e "\n${YELLOW}ℹ Otros cambios se deshacen en su menú: kernel (13), distribución original (10),${NC}"
         echo -e "${YELLOW}  Snap (8), accesos directos (5), DNS/BBR/Wi-Fi (15), energía e indexador (16)${NC}\n"
-        read -r -p "📌 Opción (0-10): " undo_option
+        read -r -p "📌 Opción (0-11): " undo_option
 
         case $undo_option in
             1) remove_installed_programs ;;
@@ -7165,6 +7445,7 @@ undo_menu() {
             8) remove_flatpak_sdks ;;
             9) remove_docker ;;
             10) dev_nuclear ;;
+            11) remove_installed_desktop ;;
             5)
                 if ! show_tweaks_status; then
                     echo -e "${GREEN}✓ No hay ajustes cambiados: todo está como de fábrica${NC}"
@@ -7718,7 +7999,11 @@ main_menu() {
         echo -e "  ${CYAN} 4)${NC} 💥 ELIMINACIÓN NUCLEAR DE SNAP"
         echo -e "  ${CYAN} 5)${NC} 🧹 Quitar accesos directos (escritorio y panel)"
         echo ""
-        echo -e "  ${CYAN} 6)${NC} 📦 Instalar software opcional"
+        if has_desktop; then
+            echo -e "  ${CYAN} 6)${NC} 📦 Instalar software opcional"
+        else
+            echo -e "  ${CYAN} 6)${NC} 📦 Instalar software opcional o un ESCRITORIO (KDE, GNOME, Xfce...)"
+        fi
         echo -e "  ${CYAN} 7)${NC} 💻 Instalar Alacritty (terminal GPU) y temas"
         echo -e "  ${CYAN} 8)${NC} 📥 Reinstalar Snap"
         echo -e "  ${CYAN} 9)${NC} 🩹 Deshacer optimizaciones / quitar programas"
