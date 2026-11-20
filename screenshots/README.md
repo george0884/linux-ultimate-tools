@@ -43,6 +43,18 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 
 ---
 
+## Ubuntu Server: menú principal (opción 6 instala un escritorio)
+
+![Ubuntu Server: menú principal](23-ubuntu-server-menu.png)
+
+---
+
+## Instalar un escritorio (opción 6 → Escritorio)
+
+![Instalar un escritorio: KDE Plasma, GNOME, Xfce, LXQt, MATE, Budgie o Cinnamon](24-instalar-escritorio.png)
+
+---
+
 ## Deshacer optimizaciones (opción 9)
 
 ![Deshacer optimizaciones (opción 9)](13-deshacer.png)
