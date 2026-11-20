@@ -47,7 +47,7 @@ sin importar el sabor. Al iniciar **detecta qué sabor y qué escritorio tienes*
 | **Ubuntu Studio** | KDE Plasma | Igual que Kubuntu, salvo Rolling Release |
 | **Edubuntu** | GNOME | Igual que Ubuntu |
 | **Ubuntu Kylin** | UKUI | Sin lista propia de apps: solo las comunes |
-| **Ubuntu Server** | sin escritorio | Kernel, GRUB, red, RAM, Snap y actualizaciones |
+| **Ubuntu Server** | sin escritorio | Kernel, GRUB, red, RAM, Snap y actualizaciones. **Opción 6: instalar un escritorio** |
 
 El sabor se detecta por su meta-paquete (`kubuntu-desktop`, `xubuntu-desktop`...). Si lo quitaste con la
 opción 11, se reconoce por su escritorio. Las opciones que no aplican a tu escritorio lo explican y no hacen nada.
@@ -486,6 +486,8 @@ Lo que ya tienes instalado aparece marcado "(ya instalado)".
 
 ### 🖥️ Instalar un escritorio (Ubuntu Server o agregar otro)
 
+![Instalar un escritorio](screenshots/24-instalar-escritorio.png)
+
 Primera opción de la lista de software opcional. Instala el escritorio que elijas encima de Ubuntu Server
 (o al lado del que ya tengas), como hace `tasksel`, pero con protecciones:
 
@@ -594,7 +596,8 @@ Si algo no te convence, la opción 9 deshace optimizaciones y quita programas, y
 ## 📸 Capturas
 
 En la carpeta [**screenshots**](screenshots/) están las capturas de todos los menús: eliminar apps,
-GPU, kernel, revertir, arranque y GRUB, red, energía, perfiles, deshacer e información del sistema.
+GPU, kernel, revertir, arranque y GRUB, red, energía, perfiles, deshacer, información del sistema,
+Ubuntu Server e instalar un escritorio.
 
 ---
 

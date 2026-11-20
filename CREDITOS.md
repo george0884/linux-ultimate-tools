@@ -43,6 +43,23 @@ reconocimiento a sus autores; la licencia que vale siempre es la que publica cad
 | [pacman-mirrors](https://gitlab.manjaro.org/applications/pacman-mirrors) y [mhwd](https://gitlab.manjaro.org/applications/mhwd) | GPL-3.0 | Sistema (Manjaro): espejos, drivers y kernels |
 | [nvidia-detect](https://packages.debian.org/nvidia-detect) | Proyecto Debian | Sistema (Debian): elige el driver de NVIDIA correcto |
 
+## 🖥️ Escritorios (opción 6 → Instalar un escritorio)
+
+El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y sus apps tienen su licencia.
+
+| Proyecto | Licencia | Uso |
+|---|---|---|
+| [KDE Plasma](https://kde.org/plasma-desktop/) (Kubuntu) | GPL-2.0-or-later / LGPL-2.1-or-later | Instala |
+| [GNOME](https://www.gnome.org/) (Ubuntu) | GPL-2.0-or-later / LGPL-2.1-or-later | Instala |
+| [Xfce](https://xfce.org/) (Xubuntu) | GPL-2.0-or-later / LGPL-2.0-or-later | Instala |
+| [LXQt](https://lxqt-project.org/) (Lubuntu) | LGPL-2.1-or-later / GPL-2.0-or-later | Instala |
+| [MATE](https://mate-desktop.org/) (Ubuntu MATE) | GPL-2.0-or-later / LGPL-2.0-or-later | Instala |
+| [Budgie](https://buddiesofbudgie.org/) (Ubuntu Budgie) | GPL-2.0 / LGPL-2.1 | Instala |
+| [Cinnamon](https://github.com/linuxmint/cinnamon) (Ubuntu Cinnamon) | GPL-2.0-or-later | Instala |
+| [SDDM](https://github.com/sddm/sddm), [GDM](https://gitlab.gnome.org/GNOME/gdm), [LightDM](https://github.com/canonical/lightdm) | GPL-2.0-or-later / GPL-3.0 | Instala: pantalla de inicio de sesión |
+| [Netplan](https://netplan.io/) | GPL-3.0 | Sistema: pasar la red a NetworkManager (`netplan try`) |
+| [tasksel](https://salsa.debian.org/debian/tasksel) | GPL-2.0-or-later | Inspiración: el script no lo usa, hace lo mismo con protecciones |
+
 ## 🐧 Kernels
 
 | Proyecto | Licencia | Uso |

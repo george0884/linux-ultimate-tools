@@ -2663,6 +2663,8 @@ install_desktop() {
         fi
     done
     echo -e "${CYAN}Tu equipo tiene ${ram} MB de RAM.${NC}"
+    echo -e "${GREEN}🛡 Antes de instalar se simula: si apt quisiera quitar algo, no se instala nada.${NC}"
+    echo -e "${GREEN}   Se quita en la opción 9 → 11 (solo lo que trajo).${NC}\n"
     local i=1 choice
     for entry in "${entries[@]}"; do
         printf "  ${CYAN}%d)${NC} %s\n" "$i" "${entry#*|}"
