@@ -2655,10 +2655,41 @@ install_brave() {
     if confirm "${BLUE}¿Instalar Brave desde Flathub?${NC}"; then
         command -v flatpak &> /dev/null && flatpak remotes 2>/dev/null | grep -qw flathub || install_flatpak || return 1
         run_visible "No se pudo instalar Brave desde Flathub" sudo flatpak install -y --noninteractive flathub com.brave.Browser \
+            && record_installed "flatpak:com.brave.Browser" "Flathub (com.brave.Browser)" \
             && log_success "Brave instalado desde Flathub"
         return
     fi
     return 1
+}
+
+# Chromium sin Snap
+CHROMIUM_FLATPAK=org.chromium.Chromium
+chromium_flatpak_installed() { command -v flatpak &> /dev/null && flatpak info "$CHROMIUM_FLATPAK" &> /dev/null; }
+# El paquete chromium de verdad (no el puente al snap de Ubuntu)
+chromium_deb_installed() {
+    local status
+    status=$(dpkg-query -W -f='${db:Status-Abbrev}|${Version}' chromium 2>/dev/null)
+    [[ "$status" == ?i* && "$status" != *snap* ]]
+}
+chromium_installed() { chromium_deb_installed || chromium_flatpak_installed; }
+
+install_chromium_flatpak() {
+    command -v flatpak &> /dev/null && flatpak remotes 2>/dev/null | grep -qw flathub || install_flatpak || return 1
+    run_visible "No se pudo instalar Chromium desde Flathub" \
+        sudo flatpak install -y --noninteractive flathub "$CHROMIUM_FLATPAK" || return 1
+    record_installed "flatpak:$CHROMIUM_FLATPAK" "Flathub ($CHROMIUM_FLATPAK)"
+    log_success "Chromium instalado desde Flathub (se actualiza con el sistema; se quita en 9 → Quitar programas)"
+}
+
+install_chromium() {
+    echo -e "${BLUE}🌐 Chromium (la base libre de Chrome, sin cuenta de Google ni Snap)${NC}"
+    if chromium_installed; then
+        echo -e "  ${GREEN}✓ Chromium ya está instalado${NC}"
+        return 0
+    fi
+    # En Ubuntu el paquete chromium de apt solo instala el snap: se usa Flathub
+    echo -e "${CYAN}ℹ En Ubuntu, apt solo trae Chromium como Snap: se instala desde Flathub${NC}"
+    install_chromium_flatpak
 }
 
 # ============================================================
@@ -2680,6 +2711,7 @@ select_optional_software() {
         "google-chrome-stable|🌐 Google Chrome"
         "firefox|🦊 Firefox (el de Mozilla, sin Snap)"
         "brave|🦁 Brave (con bloqueo de anuncios)"
+        "chromium|🌐 Chromium (Chrome libre, desde Flathub, sin Snap)"
         "telegram-desktop|📱 Telegram"
         "python3|🐍 Python 3"
         "python3-pip|📦 PIP"
@@ -2716,6 +2748,7 @@ select_optional_software() {
     docker_installed && installed+=(docker)
     firefox_nosnap_installed && installed+=(firefox)
     brave_installed && installed+=(brave)
+    chromium_installed && installed+=(chromium)
     for app in "${software[@]}"; do
         pkg=${app%%|*}
         case $pkg in
@@ -2872,7 +2905,7 @@ install_optional_with_progress() {
             "steam") want_steam=true ;;
             "proton-ge") want_ge=true ;;
             # Descargas grandes con pasos propios: van al final, en este orden
-            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave") want_extra+=("$app") ;;
+            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium") want_extra+=("$app") ;;
             *) repo+=("$app") ;;
         esac
     done
@@ -2934,7 +2967,7 @@ install_optional_with_progress() {
 
     if $want_steam; then install_steam || failed+=(steam); fi
     if $want_ge; then install_proton_ge || failed+=(proton-ge); fi
-    for app in firefox brave android-tools android-studio flatpak flatpak-builder docker; do
+    for app in firefox brave chromium android-tools android-studio flatpak flatpak-builder docker; do
         [[ " ${want_extra[*]} " == *" $app "* ]] || continue
         # flatpak-builder ya instala Flatpak si hace falta
         [ "$app" = flatpak ] && [[ " ${want_extra[*]} " == *" flatpak-builder "* ]] && continue
@@ -6883,7 +6916,15 @@ remove_installed_programs() {
             echo "firefox|$(date -r /etc/apt/sources.list.d/mozilla.list '+%Y-%m-%d %H:%M')|repositorio de Mozilla (packages.mozilla.org)" >> "$INSTALL_ORIGIN"
         }
     fi
+    # Apps de Flathub que instala el script (se quitan con flatpak, no con apt)
+    local fp flatpaks=()
+    for fp in "$CHROMIUM_FLATPAK|Chromium" "com.brave.Browser|Brave"; do
+        command -v flatpak &> /dev/null && flatpak info "${fp%%|*}" &> /dev/null || continue
+        origin=$(install_origin "flatpak:${fp%%|*}")
+        entries+=("flatpak:${fp%%|*}|${fp#*|} (Flathub) ${origin:+[$origin]}")
+    done
     for p in "${logged[@]}"; do
+        [[ "$p" == flatpak:* ]] && continue
         desc=$(dpkg-query -W -f='${binary:Summary}' "$p" 2>/dev/null)
         origin=$(install_origin "$p")
         entries+=("$p|${desc:-instalado por el script}${origin:+ [$origin]}")
@@ -6905,6 +6946,22 @@ remove_installed_programs() {
     fi
     clear
 
+    # Las apps de Flathub van aparte: el resto se quita con apt
+    local sel=()
+    for p in "${CHOSEN[@]}"; do
+        if [[ "$p" == flatpak:* ]]; then flatpaks+=("${p#flatpak:}"); else sel+=("$p"); fi
+    done
+    CHOSEN=("${sel[@]}")
+    for fp in "${flatpaks[@]}"; do
+        origin=$(install_origin "flatpak:$fp")
+        echo -e "${RED}📋 Se desinstalará de Flathub:${NC} $fp${origin:+ ${CYAN}($origin)${NC}}"
+        if confirm "${RED}¿Desinstalar $fp?${NC}"; then
+            run "No se pudo quitar $fp" sudo flatpak uninstall -y --noninteractive "$fp" \
+                && forget_installed "flatpak:$fp" && log_success "Desinstalado: $fp (tus datos en ~/.var/app/$fp no se borran)"
+        fi
+    done
+    [ ${#CHOSEN[@]} -gt 0 ] || return 0
+
     # Lo que apt quitaría de verdad: puede arrastrar otros paquetes que dependen de estos
     local extra=()
     mapfile -t extra < <(LC_ALL=C apt-get -s purge "${CHOSEN[@]}" 2>/dev/null \
@@ -6916,7 +6973,7 @@ remove_installed_programs() {
     done
     if printf '%s\n' "${CHOSEN[@]}" | grep -qx firefox; then
         echo -e "\n${YELLOW}ℹ Tus marcadores y contraseñas de ~/.mozilla no se borran${NC}"
-        [ -n "$(installed_pkgs firefox-esr chromium brave-browser google-chrome-stable)" ] || echo -e "${YELLOW}⚠ No tienes otro navegador instalado: te quedarás sin ninguno${NC}"
+        { [ -n "$(installed_pkgs firefox-esr brave-browser google-chrome-stable)" ] || chromium_installed || brave_installed; } || echo -e "${YELLOW}⚠ No tienes otro navegador instalado: te quedarás sin ninguno${NC}"
     fi
     if [ ${#extra[@]} -gt 0 ]; then
         echo -e "\n${YELLOW}⚠ También se quitarán porque dependen de ellos:${NC}"
