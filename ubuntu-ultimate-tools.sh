@@ -2803,6 +2803,126 @@ remove_installed_desktop() {
 }
 
 # ------------------------------------------------------------
+# Quitar escritorios EXTRA (los que no instaló el script), a prueba de errores:
+# - nunca el escritorio original del sabor ni el que está abierto
+# - solo se quita lo que ese escritorio dejó de usar (no lo que ya sobraba antes)
+# - si se llevara algo que usa otro escritorio, la red, el sonido o la pantalla de inicio, no se quita nada
+# ------------------------------------------------------------
+REMOVED_DESKTOPS_LIST="$STATE_DIR/escritorios-quitados.txt"
+
+# clave|nombre|proceso cuando está abierto|paquetes principales (el primero instalado lo identifica)
+EXTRA_DESKTOPS=(
+    "kde|KDE Plasma|plasmashell|plasma-workspace kubuntu-desktop plasma-desktop kwin-x11 kwin-wayland"
+    "gnome|GNOME|gnome-shell|gnome-shell ubuntu-desktop ubuntu-desktop-minimal gnome-session mutter"
+    "xfce|Xfce|xfce4-session|xfce4-session xubuntu-desktop xubuntu-desktop-minimal xubuntu-core xfce4-panel xfwm4 xfdesktop4"
+    "lxqt|LXQt|lxqt-session|lxqt-session lubuntu-desktop lxqt-panel"
+    "mate|MATE|mate-session|mate-session-manager ubuntu-mate-desktop ubuntu-mate-core mate-panel marco"
+    "budgie|Budgie|budgie-panel|budgie-desktop ubuntu-budgie-desktop ubuntu-budgie-desktop-minimal budgie-core"
+    "cinnamon|Cinnamon|cinnamon|cinnamon ubuntucinnamon-desktop ubuntucinnamon-desktop-minimal cinnamon-session cinnamon-core"
+)
+
+# Lo que nunca se quita al sacar un escritorio
+DESKTOP_KEEP_PKGS=(network-manager pipewire wireplumber pulseaudio xorg xserver-xorg-core xwayland
+    sudo systemd dbus policykit-1 polkitd ubuntu-minimal ubuntu-standard grub-common linux-generic)
+
+remove_extra_desktop() {
+    clear
+    echo -e "${RED}${BOLD}🖥️ QUITAR OTROS ESCRITORIOS${NC}\n"
+    echo -e "${CYAN}Solo se ofrecen escritorios extra: nunca el original de ${FLAVOR_NAME} ni el que está abierto.${NC}"
+    echo -e "${CYAN}Se simula antes: si se llevara algo que usa otro escritorio, no se quita nada.${NC}\n"
+
+    local entry key name proc pkgs main script_key offer=() kept=() p
+    script_key=$(grep '^clave=' "$DESKTOP_STATE" 2>/dev/null | cut -d= -f2-)
+    script_key=${script_key%-min}
+    for entry in "${EXTRA_DESKTOPS[@]}"; do
+        IFS='|' read -r key name proc pkgs <<< "$entry"
+        main=${pkgs%% *}
+        installed_pkgs "$main" | grep -qx -- "$main" || continue
+        if [ "$key" = "$DESKTOP" ]; then
+            echo -e "  ${GREEN}🔒 $name: es el escritorio original de ${FLAVOR_NAME}${NC}"
+            kept+=("$entry")
+        elif pgrep -x "$proc" &> /dev/null; then
+            echo -e "  ${GREEN}🔒 $name: está abierto ahora (ciérralo o entra en otro escritorio)${NC}"
+            kept+=("$entry")
+        elif [ "$key" = "$script_key" ]; then
+            echo -e "  ${YELLOW}ℹ $name: lo instaló el script, se quita con la opción 11${NC}"
+            kept+=("$entry")
+        else
+            offer+=("$entry")
+        fi
+    done
+    if [ ${#offer[@]} -eq 0 ]; then
+        echo -e "\n${YELLOW}ℹ No hay escritorios extra para quitar${NC}"
+        return 0
+    fi
+
+    echo ""
+    local i=1 choice
+    for entry in "${offer[@]}"; do
+        IFS='|' read -r _ name _ _ <<< "$entry"
+        printf "  ${RED}%d)${NC} %s\n" "$i" "$name"
+        i=$((i + 1))
+    done
+    echo -e "  ${RED}0)${NC} Volver"
+    read -r -p "🔢 Escritorio a quitar (0-${#offer[@]}): " choice
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#offer[@]} ] || return 0
+    IFS='|' read -r key name proc pkgs <<< "${offer[$((choice - 1))]}"
+
+    # Paquetes principales que están instalados
+    local targets=() before=() after=() rm_set=() dm protect=() hit=() extra=()
+    # shellcheck disable=SC2086  # lista de paquetes: se separa a propósito
+    mapfile -t targets < <(installed_pkgs $pkgs)
+    # Lo que ya sobraba antes no es de este escritorio: no se toca
+    mapfile -t before < <(LC_ALL=C apt-get -s autoremove 2>/dev/null | awk '/^(Purg|Remv) / {print $2}')
+    if ! mapfile -t after < <(LC_ALL=C apt-get -s purge --autoremove "${targets[@]}" 2>/dev/null \
+        | awk '/^(Purg|Remv) / {print $2}') || [ ${#after[@]} -eq 0 ]; then
+        log_error "apt no puede calcular cómo quitar $name: no se cambió nada"
+        return 1
+    fi
+    dm=$(current_display_manager)
+    for p in "${after[@]}"; do
+        printf '%s\n' "${before[@]}" | grep -qx -- "$p" && continue
+        [ -n "$dm" ] && [ "$p" = "$dm" ] && continue    # la pantalla de inicio en uso se queda
+        rm_set+=("$p")
+    done
+
+    # Lo que no se puede llevar: red, sonido, gráficos, sistema y los demás escritorios
+    protect=("${DESKTOP_KEEP_PKGS[@]}")
+    for entry in "${kept[@]}"; do
+        IFS='|' read -r _ _ _ p <<< "$entry"
+        # shellcheck disable=SC2206  # lista de paquetes: se separa a propósito
+        protect+=($p)
+    done
+    mapfile -t hit < <(printf '%s\n' "${rm_set[@]}" | grep -xF -f <(printf '%s\n' "${protect[@]}"))
+    if [ ${#hit[@]} -gt 0 ]; then
+        log_error "Quitar $name se llevaría piezas que usa el sistema u otro escritorio, así que no se quita nada:"
+        printf "  ${RED}•${NC} %s\n" "${hit[@]}"
+        return 1
+    fi
+    # Comprobación final: apt no puede quitar nada fuera de la lista
+    mapfile -t extra < <(LC_ALL=C apt-get -s purge "${rm_set[@]}" 2>/dev/null | awk '/^(Purg|Remv) / {print $2}' \
+        | grep -vxF -f <(printf '%s\n' "${rm_set[@]}"))
+    if [ ${#extra[@]} -gt 0 ]; then
+        log_error "Quitar $name arrastraría programas que ya tenías, así que no se quita nada:"
+        printf "  ${RED}•${NC} %s\n" "${extra[@]}"
+        return 1
+    fi
+
+    echo -e "\n${RED}📋 Se quitarán ${#rm_set[@]} paquetes de $name:${NC}"
+    printf '%s\n' "${rm_set[@]}" | head -40 | tr '\n' ' ' | fold -s -w 94 | sed 's/^/   /'; echo
+    [ ${#rm_set[@]} -gt 40 ] && echo -e "   ${YELLOW}... y $(( ${#rm_set[@]} - 40 )) más (lista completa en $LOG_FILE)${NC}"
+    printf '%s\n' "${rm_set[@]}" >> "$LOG_FILE"
+    [ -n "$dm" ] && echo -e "   ${GREEN}✓ Se mantiene tu pantalla de inicio de sesión ($dm)${NC}"
+    echo -e "   ${GREEN}✓ Tus archivos y configuraciones personales no se tocan${NC}"
+    confirm "${RED}¿Quitar $name?${NC}" || { echo -e "${YELLOW}ℹ Cancelado: no se quitó nada${NC}"; return 0; }
+
+    apt_purge "${rm_set[@]}" || return 1
+    mkdir -p "$STATE_DIR"
+    echo "$(date '+%Y-%m-%d %H:%M')|$name|${rm_set[*]}" >> "$REMOVED_DESKTOPS_LIST"
+    log_success "$name quitado (${#rm_set[@]} paquetes). Para volver a tenerlo: opción 6 → Instalar un ESCRITORIO."
+}
+
+# ------------------------------------------------------------
 # Navegadores sin Snap: Firefox (.deb oficial de Mozilla) y Brave (repositorio oficial de Brave)
 # ------------------------------------------------------------
 
@@ -7432,10 +7552,11 @@ undo_menu() {
         echo -e "  ${RED}10)${NC} 💥 ELIMINACIÓN NUCLEAR de todo lo de desarrollo (Android, Flatpak SDK, Docker)"
         echo -e "         con respaldos antes de borrar"
         echo -e "  ${RED}11)${NC} 🖥️ Quitar el escritorio instalado por el script"
+        echo -e "  ${RED}12)${NC} 🖥️ Quitar OTROS escritorios (no el original ni el que está abierto)"
         echo -e "\n  ${RED} 0)${NC} 🔙 Volver"
         echo -e "\n${YELLOW}ℹ Otros cambios se deshacen en su menú: kernel (13), distribución original (10),${NC}"
         echo -e "${YELLOW}  Snap (8), accesos directos (5), DNS/BBR/Wi-Fi (15), energía e indexador (16)${NC}\n"
-        read -r -p "📌 Opción (0-11): " undo_option
+        read -r -p "📌 Opción (0-12): " undo_option
 
         case $undo_option in
             1) remove_installed_programs ;;
@@ -7448,6 +7569,7 @@ undo_menu() {
             9) remove_docker ;;
             10) dev_nuclear ;;
             11) remove_installed_desktop ;;
+            12) remove_extra_desktop ;;
             5)
                 if ! show_tweaks_status; then
                     echo -e "${GREEN}✓ No hay ajustes cambiados: todo está como de fábrica${NC}"
