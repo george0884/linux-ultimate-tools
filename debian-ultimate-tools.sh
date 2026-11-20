@@ -6,8 +6,9 @@
 #              desde un solo menú. Hermano de ubuntu-ultimate-tools.sh.
 # Versión: 0.1 BETA — probado con sistemas simulados; úsalo con cuidado y reporta errores
 # Autor: Old The One Deluxe (@george0884)
-# Licencia: GNU GPL v3 o posterior (ver archivo LICENSE)
-# SPDX-License-Identifier: GPL-3.0-or-later
+# Licencia: GNU AGPL v3 o posterior (ver archivo LICENSE)
+# Créditos del software que instala o usa: ver CREDITOS.md
+# SPDX-License-Identifier: AGPL-3.0-or-later
 # ============================================================
 
 # ============================================================
@@ -1789,6 +1790,7 @@ system_update() {
 
 # ------------------------------------------------------------
 # Tema Tokyo Night (incluido en el script: no depende de descargas)
+# Colores del tema Tokyo Night de enkia (https://github.com/enkia/tokyo-night-vscode-theme), licencia MIT
 # ------------------------------------------------------------
 
 # Un grupo de colores de KDE: $1 nombre, $2 fondo, $3 fondo alterno, $4 texto
@@ -2105,8 +2107,23 @@ install_android_tools() {
 
     export JAVA_HOME="$JAVA_HOME_DIR"
     local sdkm="$ANDROID_SDK/cmdline-tools/latest/bin/sdkmanager" pkgs
-    echo -e "${BLUE}📜 Aceptando las licencias del SDK de Android...${NC}"
-    yes 2>/dev/null | "$sdkm" --sdk_root="$ANDROID_SDK" --licenses >> "$LOG_FILE" 2>&1
+    # Las licencias del SDK son de Google: las lee y las acepta el usuario, el script no lo hace por él
+    if [ ! -s "$ANDROID_SDK/licenses/android-sdk-license" ]; then
+        if $AUTO_MODE; then
+            log_error "Las licencias del SDK de Android deben aceptarse a mano: usa esta opción desde el menú"
+            return 1
+        fi
+        echo -e "${YELLOW}📜 Licencias del SDK de Android (de Google, no de este script)${NC}"
+        echo "   A continuación se muestra cada licencia. Léela y escribe 'y' para aceptarla"
+        echo "   o 'N' para rechazarla. Sin aceptarlas no se puede instalar el SDK."
+        echo "   Texto completo: https://developer.android.com/studio/terms"
+        "$sdkm" --sdk_root="$ANDROID_SDK" --licenses < /dev/tty
+        if [ ! -s "$ANDROID_SDK/licenses/android-sdk-license" ]; then
+            log_error "No se aceptaron las licencias del SDK de Android: no se instala nada"
+            return 1
+        fi
+        log_success "Licencias del SDK aceptadas por ti"
+    fi
     read -r -a pkgs <<< "$(android_sdk_packages)"
     if [ ${#pkgs[@]} -lt 3 ]; then
         log_error "No se pudo leer la lista de paquetes del SDK (detalles en $LOG_FILE)"
