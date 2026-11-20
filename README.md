@@ -459,6 +459,7 @@ desde la opción 9.
 | Google Chrome | Navegador web | `.deb` oficial de Google |
 | Firefox (sin Snap) | Navegador web: el de Mozilla, se actualiza con el sistema. Si tenías el snap, copia tus marcadores y contraseñas y ofrece quitarlo | Repositorio oficial de Mozilla |
 | Brave | Navegador basado en Chromium con bloqueo de anuncios y rastreadores | Repositorio oficial de Brave (si falla, Flathub) |
+| Chromium | La base libre de Chrome, sin cuenta de Google | Ubuntu: Flathub (el de apt es Snap) · Debian: repos oficiales · Arch: repos oficiales |
 | Telegram | Mensajería | Ubuntu |
 | Discord | Chat de voz y texto | `.deb` oficial |
 | Steam | Juegos; incluye **Proton** para jugar juegos de Windows | `.deb` oficial de Valve (o el de Ubuntu) |

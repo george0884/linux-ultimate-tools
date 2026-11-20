@@ -69,7 +69,7 @@ reconocimiento a sus autores; la licencia que vale siempre es la que publica cad
 | [Firefox](https://www.mozilla.org/firefox/) | MPL-2.0 | Externo: repositorio .deb oficial de Mozilla (en Arch, repos oficiales) |
 | [Brave](https://brave.com/) | MPL-2.0 | Externo: repositorio oficial de Brave o Flathub |
 | [Google Chrome](https://www.google.com/chrome/) | **Privativo** | Externo: paquete oficial de Google (en Arch, Flathub) |
-| [Chromium](https://www.chromium.org/) | BSD-3-Clause | Instala (Arch) |
+| [Chromium](https://www.chromium.org/) | BSD-3-Clause | Instala en Debian y Arch (repos oficiales); en Ubuntu, Externo desde Flathub (sin Snap) |
 
 ## 📦 Programas opcionales
 
