@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara cualquier sabor de Ubuntu desde un solo menú
 
-[![Licencia](https://img.shields.io/badge/Licencia-GPL%20v3-blue.svg)](LICENSE)
+[![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
 
@@ -493,7 +493,7 @@ cd mi-proyecto
 ```
 
 - **NDK y CMake** (proyectos con C/C++): Gradle baja solo la versión exacta que pide el proyecto,
-  porque el script ya aceptó las licencias del SDK.
+  porque ya aceptaste las licencias del SDK (el script te las muestra la primera vez).
 - **Actualizar**: vuelve a usar la opción 6 → Compilar APK y se actualiza el SDK.
 - **Quitar**: opción 9 → 7 (Android Studio y SDK; tus claves de firma en `~/.android` no se tocan)
   y 9 → 8 (SDK de Flatpak).
@@ -617,10 +617,23 @@ Las contribuciones son bienvenidas. Puedes:
 
 ## 📄 Licencia
 
-Este proyecto está bajo la licencia **GNU GPL v3** (o posterior). Ver el archivo [LICENSE](LICENSE).
+Este proyecto está bajo la licencia **GNU AGPL v3** (o posterior). Ver el archivo [LICENSE](LICENSE).
 
 En resumen: puedes usar, copiar, modificar y compartir el script libremente. Si distribuyes una
-versión modificada, debe publicarse con su código fuente y bajo la misma licencia GPL v3.
+versión modificada, o la ofreces como servicio por red, debes publicar su código fuente bajo la
+misma licencia AGPL v3.
+
+## 🙏 Créditos
+
+El script instala software de muchos proyectos, cada uno con su propia licencia (algunos son
+privativos, como Steam, Chrome, Discord, Spotify o los drivers de NVIDIA, y los instalas aceptando
+sus condiciones). La lista completa con autores y licencias está en [CREDITOS.md](CREDITOS.md).
+
+Las licencias del **SDK de Android** son de Google: el script te las muestra y las aceptas tú.
+
+**Marcas:** este proyecto no está afiliado a Canonical, Debian, Arch Linux, Manjaro, KDE, Mozilla,
+Brave, Google, Microsoft, Valve ni NVIDIA. Los nombres y logotipos son de sus dueños y se usan solo
+para indicar compatibilidad.
 
 ---
 
