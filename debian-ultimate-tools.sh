@@ -22,6 +22,8 @@ SCRIPT_PATH=$(readlink -f "${BASH_SOURCE[0]}")
 STATE_DIR="$HOME/.local/share/debian-ultimate-tools"
 REMOVED_LIST="$STATE_DIR/paquetes-eliminados.txt"
 INSTALLED_LIST="$STATE_DIR/paquetes-instalados.txt"
+# De dónde salió y cuándo se instaló cada programa externo: paquete|fecha|origen
+INSTALL_ORIGIN="$STATE_DIR/origen-instalados.txt"
 SHORTCUTS_BACKUP="$STATE_DIR/accesos-directos"
 
 # Colores base (uniformes por menú)
@@ -179,11 +181,28 @@ apt_install_recorded() {
 
 # Quita paquetes del registro de instalados
 forget_installed() {
-    [ -f "$INSTALLED_LIST" ] || return 0
     local p
     for p in "$@"; do
-        sed -i "/^${p//./\\.}\$/d" "$INSTALLED_LIST"
+        [ -f "$INSTALLED_LIST" ] && sed -i "/^${p//./\\.}\$/d" "$INSTALLED_LIST"
+        [ -f "$INSTALL_ORIGIN" ] && sed -i "/^${p//./\\.}|/d" "$INSTALL_ORIGIN"
     done
+    return 0
+}
+
+# Anota en el registro un programa instalado por el script, con la fecha y de dónde salió
+record_installed() {
+    local pkg="$1" origin="$2"
+    mkdir -p "$STATE_DIR"
+    echo "$pkg" >> "$INSTALLED_LIST"
+    sort -u -o "$INSTALLED_LIST" "$INSTALLED_LIST"
+    [ -f "$INSTALL_ORIGIN" ] && sed -i "/^${pkg//./\\.}|/d" "$INSTALL_ORIGIN"
+    echo "$pkg|$(date '+%Y-%m-%d %H:%M')|$origin" >> "$INSTALL_ORIGIN"
+}
+
+# "origen, fecha" de un programa del registro (vacío si no está anotado)
+install_origin() {
+    [ -f "$INSTALL_ORIGIN" ] || return 0
+    awk -F'|' -v p="$1" '$1 == p {o = $3 ", instalado el " $2} END {if (o) print o}' "$INSTALL_ORIGIN"
 }
 
 # Lista los paquetes instalados que coinciden con los patrones dados
@@ -2670,7 +2689,21 @@ install_firefox_deb() {
         apt_update force
         return 1
     fi
-    apt_install --allow-downgrades firefox && log_success "Firefox .deb instalado"
+    apt_install --allow-downgrades firefox || return 1
+    record_installed firefox "repositorio de Mozilla (packages.mozilla.org)"
+    log_success "Firefox .deb instalado (se puede quitar en la opción 9 → Quitar programas)"
+}
+
+# ¿Firefox viene del repositorio de Mozilla? (lo puso este script)
+firefox_mozilla_installed() {
+    firefox_nosnap_installed && [ -f /etc/apt/sources.list.d/mozilla.list ]
+}
+
+# Quita el repositorio de Mozilla cuando ya no hay Firefox que lo use
+remove_mozilla_repo() {
+    sudo rm -f /etc/apt/sources.list.d/mozilla.list /etc/apt/preferences.d/mozilla \
+        /etc/apt/keyrings/packages.mozilla.org.asc
+    log_success "Repositorio de Mozilla quitado"
 }
 
 # ¿Está el Firefox sin Snap? (el .deb de Mozilla o el de la distribución, no el puente al snap)
@@ -2726,6 +2759,7 @@ install_brave() {
             echo "deb [arch=$arch signed-by=$BRAVE_KEYRING] https://brave-browser-apt-release.s3.brave.com/ stable main" \
                 | sudo tee "$BRAVE_LIST" > /dev/null
             if apt_update force && apt_install_recorded brave-browser; then
+                record_installed brave-browser "repositorio oficial de Brave (brave-browser-apt-release.s3.brave.com)"
                 ok=true
             else
                 # Se deja todo como estaba: sin un repositorio que hace fallar apt update
@@ -6517,14 +6551,23 @@ SCRIPT_PROGRAMS=(filezilla code virtualbox google-chrome-stable telegram-desktop
     nvidia-cuda-toolkit grub-customizer boot-repair refind)
 
 remove_installed_programs() {
-    local logged=() known=() entries=() p desc
+    local logged=() known=() entries=() p desc origin
     # shellcheck disable=SC2046  # lista de paquetes: se separa a propósito
     [ -f "$INSTALLED_LIST" ] && mapfile -t logged < <(installed_pkgs $(cat "$INSTALLED_LIST"))
     mapfile -t known < <(installed_pkgs "${SCRIPT_PROGRAMS[@]}")
 
+    # Firefox del repositorio de Mozilla: se reconoce aunque se instalara antes del registro
+    if firefox_mozilla_installed && ! printf '%s\n' "${logged[@]}" | grep -qx firefox; then
+        logged+=(firefox)
+        [ -n "$(install_origin firefox)" ] || {
+            mkdir -p "$STATE_DIR"
+            echo "firefox|$(date -r /etc/apt/sources.list.d/mozilla.list '+%Y-%m-%d %H:%M')|repositorio de Mozilla (packages.mozilla.org)" >> "$INSTALL_ORIGIN"
+        }
+    fi
     for p in "${logged[@]}"; do
         desc=$(dpkg-query -W -f='${binary:Summary}' "$p" 2>/dev/null)
-        entries+=("$p|${desc:-instalado por el script}")
+        origin=$(install_origin "$p")
+        entries+=("$p|${desc:-instalado por el script}${origin:+ [$origin]}")
     done
     for p in "${known[@]}"; do
         printf '%s\n' "${logged[@]}" | grep -qx -- "$p" && continue
@@ -6548,7 +6591,14 @@ remove_installed_programs() {
     mapfile -t extra < <(LC_ALL=C apt-get -s purge "${CHOSEN[@]}" 2>/dev/null \
         | awk '/^(Purg|Remv) / {print $2}' | grep -vxF -f <(printf '%s\n' "${CHOSEN[@]}"))
     echo -e "${RED}📋 Se desinstalarán:${NC}"
-    printf "  ${RED}•${NC} %s\n" "${CHOSEN[@]}"
+    for p in "${CHOSEN[@]}"; do
+        origin=$(install_origin "$p")
+        echo -e "  ${RED}•${NC} $p${origin:+ ${CYAN}($origin)${NC}}"
+    done
+    if printf '%s\n' "${CHOSEN[@]}" | grep -qx firefox; then
+        echo -e "\n${YELLOW}ℹ Tus marcadores y contraseñas de ~/.mozilla no se borran${NC}"
+        [ -n "$(installed_pkgs firefox-esr chromium brave-browser google-chrome-stable)" ] || echo -e "${YELLOW}⚠ No tienes otro navegador instalado: te quedarás sin ninguno${NC}"
+    fi
     if [ ${#extra[@]} -gt 0 ]; then
         echo -e "\n${YELLOW}⚠ También se quitarán porque dependen de ellos:${NC}"
         printf "  ${YELLOW}•${NC} %s\n" "${extra[@]}"
@@ -6563,6 +6613,11 @@ remove_installed_programs() {
     # Sin Brave, su repositorio ya no hace falta
     if printf '%s\n' "${CHOSEN[@]}" | grep -qx brave-browser; then
         sudo rm -f "$BRAVE_LIST" "$BRAVE_KEYRING"
+    fi
+    # Sin Firefox, el repositorio de Mozilla tampoco
+    if printf '%s\n' "${CHOSEN[@]}" | grep -qx firefox; then
+        remove_mozilla_repo
+        apt_update force
     fi
     forget_installed "${CHOSEN[@]}" "${extra[@]}"
     log_success "Desinstalado: ${CHOSEN[*]}"
@@ -7001,6 +7056,7 @@ info_script_changes() {
     fi
     if [ -f "$INSTALLED_LIST" ]; then
         echo "  Programas instalados: $(tr '\n' ' ' < "$INSTALLED_LIST")"
+        [ -s "$INSTALL_ORIGIN" ] && awk -F'|' '{print "    • " $1 ": " $3 " (" $2 ")"}' "$INSTALL_ORIGIN"
     fi
     show_tweaks_status | sed 's/\x1b\[[0-9;]*m//g' | grep -v '^$' | grep -v 'Estado actual' | sed 's/^ */  /'
     return 0
