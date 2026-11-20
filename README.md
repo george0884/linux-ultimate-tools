@@ -362,6 +362,9 @@ disponible, se vuelve a la selección escribiendo números.
   flatpak-builder de una vez, con doble confirmación y respaldos antes. Tus proyectos, tus claves de firma y
   tus apps Flatpak no se tocan.
 - **Quitar el escritorio instalado por el script** (11): solo sus paquetes; el arranque y la red vuelven a como estaban.
+- **Quitar otros escritorios** (12): los que no instaló el script (por ejemplo uno puesto a mano). Nunca ofrece
+  el original del sabor ni el que está abierto, deja la pantalla de inicio de sesión en uso y solo quita lo que
+  ese escritorio dejó de usar. Si se llevara algo de otro escritorio, la red o el sonido, no quita nada.
 - **Restaurar todos los ajustes** de una vez, sin desinstalar programas. "Revertir a
   distribución original" (opción 10) también lo hace.
 
@@ -506,6 +509,7 @@ Primera opción de la lista de software opcional. Instala el escritorio que elij
 - **Si ya tienes escritorio**, se conserva tu pantalla de inicio de sesión (GDM, SDDM, LightDM).
 - **Red**: en Server pasa la red a NetworkManager con `netplan try` (si en 60 s no confirmas, vuelve
   sola a como estaba). Por SSH no se cambia, para no dejarte sin conexión.
+- **Otros escritorios** (instalados a mano o que ya venían): se quitan en la opción 9 → 12, con las mismas protecciones.
 - **Se puede quitar**: opción 9 → 11 quita solo los paquetes que trajo, y vuelve el arranque y la red
   a como estaban (si quitarlo arrastrara algo que ya tenías, no se quita).
 
