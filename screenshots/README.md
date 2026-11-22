@@ -151,12 +151,12 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 
 ---
 
-## Auditoría de seguridad con Lynis (opción 2 → 16)
+## Auditoría de seguridad con Lynis (opción 19 → 1)
 
 ![Auditoría de seguridad con Lynis: puntaje, advertencias y sugerencias](25-auditoria-lynis.png)
 
 ---
 
-## Registro de auditoría con auditd (opción 2 → 17)
+## Menú de auditoría de seguridad (opción 19)
 
-![Registro de auditoría (auditd)](26-registro-auditoria.png)
+![Auditoría de seguridad: Lynis y registro de auditoría (auditd)](26-registro-auditoria.png)

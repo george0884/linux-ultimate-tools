@@ -2754,7 +2754,7 @@ install_desktop() {
         [ -n "$dm" ] && sudo systemctl enable "$dm" >> "$LOG_FILE" 2>&1
     fi
     netplan_uses_networkd && switch_netplan_to_nm
-    log_success "$name instalado. Reinicia para entrar al escritorio (opción 19)."
+    log_success "$name instalado. Reinicia para entrar al escritorio (opción 20)."
     echo -e "${CYAN}ℹ Al reiniciar, el script lo detecta y muestra las opciones de escritorio.${NC}"
     echo -e "${CYAN}  Se quita en la opción 9 → Quitar el escritorio instalado por el script.${NC}"
 }
@@ -2799,7 +2799,7 @@ remove_installed_desktop() {
         fi
     fi
     rm -f "$DESKTOP_STATE" "$DESKTOP_PKGS_LIST"
-    log_success "$name quitado. Reinicia para terminar (opción 19)."
+    log_success "$name quitado. Reinicia para terminar (opción 20)."
 }
 
 # ------------------------------------------------------------
@@ -8060,14 +8060,14 @@ audit_rules_active() { [ -f "$AUDIT_RULES_FILE" ]; }
 # Reglas del script: solo vigila rutas que existen y llamadas que existen en este procesador
 build_audit_rules() {
     local p arch
-    echo "## Ubuntu Ultimate Tools: registro de auditoría (se quita desde el menú 2 → 17)"
+    echo "## Ubuntu Ultimate Tools: registro de auditoría (se quita desde el menú 19 → 4)"
     echo "## Reglas propias del script (AGPL-3.0-or-later). Sin -e 2: no se bloquean hasta reiniciar."
     for p in "/etc/passwd:identidad" "/etc/group:identidad" "/etc/shadow:identidad" "/etc/gshadow:identidad" \
         "/etc/security/opasswd:identidad" "/etc/sudoers:sudo" "/etc/sudoers.d:sudo" \
         "/etc/ssh/sshd_config:ssh" "/etc/ssh/sshd_config.d:ssh" "/etc/localtime:hora" \
         "/etc/hosts:red" "/etc/hostname:red" "/etc/netplan:red" "/etc/crontab:tareas" "/etc/cron.d:tareas" \
         "/var/spool/cron:tareas" "/etc/systemd/system:servicios" "/etc/apt/sources.list:repositorios" \
-        "/etc/apt/sources.list.d:repositorios" "/var/log/faillog:sesiones" "/var/log/lastlog:sesiones"; do
+        "/etc/apt/sources.list.d:repositorios" "/etc/pacman.conf:repositorios" "/etc/pacman.d:repositorios" "/var/log/faillog:sesiones" "/var/log/lastlog:sesiones"; do
         [ -e "${p%%:*}" ] && echo "-w ${p%%:*} -p wa -k ${p#*:}"
     done
     for p in /usr/bin/kmod /usr/sbin/insmod /usr/sbin/rmmod /usr/sbin/modprobe; do
@@ -8105,7 +8105,7 @@ enable_audit() {
     fi
     if sudo augenrules --load >> "$LOG_FILE" 2>&1 && sudo auditctl -l 2>/dev/null | grep -q -- '-k identidad'; then
         log_success "Registro de auditoría activo ($(sudo auditctl -l | grep -c -- ' -k ') reglas)"
-        echo -e "${CYAN}ℹ Para verlo: opción 2 → 17 → Ver qué se registró${NC}"
+        echo -e "${CYAN}ℹ Para verlo: opción 19 → 3 (Ver qué se registró)${NC}"
     else
         sudo rm -f "$AUDIT_RULES_FILE"
         sudo augenrules --load >> "$LOG_FILE" 2>&1
@@ -8156,25 +8156,33 @@ disable_audit() {
     fi
 }
 
-security_audit_menu() {
+security_menu() {
     local option
     while true; do
         clear
-        echo -e "${CYAN}${BOLD}📝 REGISTRO DE AUDITORÍA (auditd)${NC}\n"
+        echo -e "${CYAN}${BOLD}"
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        echo "║                    🔒 AUDITORÍA DE SEGURIDAD                     ║"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        echo -e "${CYAN}🔍 Revisar:${NC}"
+        echo -e "  ${CYAN}1)${NC} Revisar la seguridad con Lynis (puntaje y consejos; solo mira, no cambia nada)"
+        echo -e "\n${CYAN}📝 Registro de auditoría (auditd): quién y cuándo cambió usuarios, sudo, SSH...${NC}"
         if audit_rules_active; then
-            echo -e "  Estado: ${GREEN}activo${NC} (reglas del script en $AUDIT_RULES_FILE)\n"
+            echo -e "     Estado: ${GREEN}activo${NC} (reglas del script en $AUDIT_RULES_FILE)"
         else
-            echo -e "  Estado: ${YELLOW}no activado por el script${NC}\n"
+            echo -e "     Estado: ${YELLOW}no activado${NC}"
         fi
-        echo -e "  ${CYAN}1)${NC} Activar (o actualizar las reglas)"
-        echo -e "  ${CYAN}2)${NC} Ver qué se registró"
-        echo -e "  ${CYAN}3)${NC} Quitar (reglas y, si lo instaló el script, auditd)"
-        echo -e "  ${CYAN}0)${NC} 🔙 Volver\n"
-        read -r -p "📌 Opción (0-3): " option
+        echo -e "  ${CYAN}2)${NC} Activar (o actualizar las reglas)"
+        echo -e "  ${CYAN}3)${NC} Ver qué se registró"
+        echo -e "  ${CYAN}4)${NC} Quitar (reglas y, si lo instaló el script, auditd)"
+        echo -e "\n  ${CYAN}0)${NC} 🔙 Volver\n"
+        read -r -p "📌 Opción (0-4): " option
         case $option in
-            1) enable_audit ;;
-            2) show_audit_events ;;
-            3) disable_audit ;;
+            1) security_audit_lynis ;;
+            2) enable_audit ;;
+            3) show_audit_events ;;
+            4) disable_audit ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
@@ -8210,12 +8218,9 @@ sysinfo_menu() {
         echo -e "  ${CYAN}13)${NC} Buscar en toda la información"
         echo -e "  ${CYAN}14)${NC} Guardar informe completo para compartir (sin datos personales)"
         echo -e "  ${CYAN}15)${NC} Prueba de rendimiento (disco e internet)"
-        echo -e "\n${CYAN}🛡️ Seguridad:${NC}"
-        echo -e "  ${CYAN}16)${NC} Auditoría de seguridad con Lynis (puntaje y consejos, sin instalar)"
-        echo -e "  ${CYAN}17)${NC} Registro de auditoría (auditd): quién cambió usuarios, sudo, SSH..."
         echo -e "\n  ${CYAN} 0)${NC} 🔙 Volver"
         echo ""
-        read -r -p "📌 Opción (0-17): " option
+        read -r -p "📌 Opción (0-15): " option
         case $option in
             1) info_summary ;;
             2) info_fastfetch ;;
@@ -8234,8 +8239,6 @@ sysinfo_menu() {
             13) info_search ;;
             14) info_save_report ;;
             15) info_benchmark ;;
-            16) security_audit_lynis ;;
-            17) security_audit_menu; continue ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
@@ -8330,13 +8333,13 @@ boot_only_menu() {
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
         echo -e "  ${CYAN}18)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
-        echo -e "  ${CYAN}19)${NC} 🔌 Apagar / Reiniciar sistema"
+        echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (18, 19 o 0): " option
+        read -r -p "🔢 Opción (18, 20 o 0): " option
         case $option in
             18|1) grub_repair_menu ;;
-            19|2) shutdown_menu ;;
+            20|2) shutdown_menu ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
                 exit 0
@@ -8383,11 +8386,12 @@ main_menu() {
         echo -e "  ${CYAN}16)${NC} 🔋 Energía y rendimiento"
         echo -e "  ${CYAN}17)${NC} 🚀 PERFILES AUTOMÁTICOS (gaming, productividad...)"
         echo -e "  ${CYAN}18)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
+        echo -e "  ${CYAN}19)${NC} 🛡️ AUDITORÍA DE SEGURIDAD (Lynis y registro de auditoría)"
         echo ""
-        echo -e "  ${CYAN}19)${NC} 🔌 Apagar / Reiniciar sistema"
+        echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (0-19): " option
+        read -r -p "🔢 Opción (0-20): " option
 
         case $option in
             1) system_update ;;
@@ -8408,7 +8412,8 @@ main_menu() {
             16) power_menu ;;
             17) profiles_menu ;;
             18) grub_repair_menu ;;
-            19) shutdown_menu ;;
+            19) security_menu ;;
+            20) shutdown_menu ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
                 exit 0
