@@ -6237,10 +6237,11 @@ undo_menu() {
         echo -e "  ${RED} 9)${NC} 🐳 Quitar Docker (conservando tus datos, o eliminación nuclear)"
         echo -e "  ${RED}10)${NC} 💥 ELIMINACIÓN NUCLEAR de todo lo de desarrollo (Android, Flatpak SDK, Docker)"
         echo -e "         con respaldos antes de borrar"
+        echo -e "  ${RED}11)${NC} 📝 Quitar el registro de auditoría (auditd)"
         echo -e "\n  ${RED} 0)${NC} 🔙 Volver"
         echo -e "\n${YELLOW}ℹ Otros cambios se deshacen en su menú: kernel (13), distribución original (10),${NC}"
         echo -e "${YELLOW}  accesos directos (5), DNS/BBR/Wi-Fi (15), energía e indexador (16)${NC}\n"
-        read -r -p "📌 Opción (0-10): " undo_option
+        read -r -p "📌 Opción (0-11): " undo_option
 
         case $undo_option in
             1) remove_installed_programs ;;
@@ -6252,6 +6253,7 @@ undo_menu() {
             8) remove_flatpak_sdks ;;
             9) remove_docker ;;
             10) dev_nuclear ;;
+            11) disable_audit ;;
             5)
                 if ! show_tweaks_status; then
                     echo -e "${GREEN}✓ No hay ajustes cambiados: todo está como de fábrica${NC}"
@@ -6585,6 +6587,221 @@ info_benchmark() {
     echo "  (Valores aproximados: repítela si el equipo estaba ocupado)"
 }
 
+# ------------------------------------------------------------
+# Auditoría de seguridad
+# - Lynis (CISOfy, GPL-3.0): revisa la seguridad del sistema y da un puntaje con sugerencias.
+#   En Arch se instala desde los repositorios oficiales (se quita en 9 → 1).
+# - auditd (Linux Audit, GPL-2.0): registra cambios en usuarios, sudo, SSH, hora, módulos...
+#   Las reglas son propias de este script, sin "-e 2" (no se bloquean) y se quitan cuando quieras.
+# Idea inspirada en Linux-Security-Policy de Jeff Starke (Starke427): no se usa su código
+# porque su repositorio no tiene licencia.
+# ------------------------------------------------------------
+AUDIT_RULES_FILE="/etc/audit/rules.d/60-ultimate-tools.rules"
+SECURITY_DIR="$HOME/auditoria-seguridad"
+
+# Resumen en castellano del informe de Lynis
+lynis_summary() {
+    local report="$1" index warnings suggestions
+    index=$(sed -n 's/^hardening_index=//p' "$report")
+    warnings=$(grep -c '^warning\[\]=' "$report")
+    suggestions=$(grep -c '^suggestion\[\]=' "$report")
+    echo -e "\n${CYAN}══════════════════ 🛡️ RESUMEN DE LA AUDITORÍA ══════════════════${NC}"
+    if [ -n "$index" ]; then
+        if [ "$index" -ge 75 ]; then
+            echo -e "  Puntaje de seguridad: ${GREEN}${BOLD}$index/100${NC} (bueno)"
+        elif [ "$index" -ge 60 ]; then
+            echo -e "  Puntaje de seguridad: ${YELLOW}${BOLD}$index/100${NC} (aceptable)"
+        else
+            echo -e "  Puntaje de seguridad: ${RED}${BOLD}$index/100${NC} (mejorable)"
+        fi
+    fi
+    echo -e "  ${RED}⚠ Advertencias: $warnings${NC}   ${YELLOW}💡 Sugerencias: $suggestions${NC}"
+    if [ "$warnings" -gt 0 ]; then
+        echo -e "\n${RED}Advertencias (lo más importante):${NC}"
+        grep '^warning\[\]=' "$report" | cut -d'|' -f1,2 | sed 's/^warning\[\]=/  • [/; s/|/] /'
+    fi
+    if [ "$suggestions" -gt 0 ]; then
+        echo -e "\n${YELLOW}Primeras sugerencias (en inglés, como las da Lynis):${NC}"
+        grep '^suggestion\[\]=' "$report" | grep -v '^suggestion\[\]=LYNIS|' | head -12 \
+            | cut -d'|' -f1,2 | sed 's/^suggestion\[\]=/  • [/; s/|/] /' | cut -c1-96
+    fi
+    echo -e "\n${CYAN}ℹ Cada código (por ejemplo SSH-7408) se explica en https://cisofy.com/lynis/controls/${NC}"
+    echo -e "${CYAN}  Lynis solo revisa: no cambia nada del sistema.${NC}"
+}
+
+security_audit_lynis() {
+    clear
+    echo -e "${CYAN}${BOLD}🛡️ AUDITORÍA DE SEGURIDAD CON LYNIS${NC}\n"
+    echo -e "Lynis (de CISOfy, licencia GPL-3.0) revisa cientos de puntos de seguridad: usuarios,"
+    echo -e "contraseñas, SSH, cortafuegos, servicios, permisos, kernel... y da un puntaje con consejos."
+    echo -e "${GREEN}Solo mira: no cambia nada. Tarda unos minutos.${NC}\n"
+
+    local stamp out lynis_cmd=() tmp="" choice
+    stamp=$(date +%Y%m%d-%H%M)
+    out="$SECURITY_DIR/$stamp"
+
+    if command -v lynis &> /dev/null; then
+        lynis_cmd=(lynis)
+    else
+        echo -e "${CYAN}ℹ Lynis no está instalado. Se instala desde los repositorios oficiales de Arch${NC}"
+        echo -e "${CYAN}  (~1 MB, se quita en 9 → 1).${NC}"
+        confirm "${CYAN}¿Instalar Lynis?${NC}" || return 0
+        pkg_install_recorded lynis || return 1
+        lynis_cmd=(lynis)
+    fi
+
+    mkdir -p "$out"
+    chmod 700 "$SECURITY_DIR" "$out"
+    echo -e "\n${BLUE}🔍 Revisando el sistema (puede tardar unos minutos)...${NC}\n"
+    sudo "${lynis_cmd[@]}" audit system --quick --logfile "$out/lynis.log" --report-file "$out/lynis-informe.dat"
+    [ -n "$tmp" ] && sudo rm -rf "$tmp"
+    if [ ! -s "$out/lynis-informe.dat" ]; then
+        log_error "Lynis no generó el informe (detalles en $out)"
+        return 1
+    fi
+    sudo chown -R "$(id -u):$(id -g)" "$out"
+    lynis_summary "$out/lynis-informe.dat" | tee "$out/resumen.txt"
+    echo -e "\n${GREEN}📁 Informe completo en $out${NC}"
+    echo -e "${YELLOW}  Contiene datos de tu sistema: no lo compartas en público.${NC}"
+    [ -n "$tmp" ] && echo -e "${GREEN}✓ Lynis se borró: no quedó nada instalado${NC}"
+}
+
+# ------------------------------------------------------------
+# auditd con reglas propias
+# ------------------------------------------------------------
+audit_rules_active() { [ -f "$AUDIT_RULES_FILE" ]; }
+
+# Reglas del script: solo vigila rutas que existen y llamadas que existen en este procesador
+build_audit_rules() {
+    local p arch
+    echo "## Arch Ultimate Tools: registro de auditoría (se quita desde el menú 19 → 4)"
+    echo "## Reglas propias del script (AGPL-3.0-or-later). Sin -e 2: no se bloquean hasta reiniciar."
+    for p in "/etc/passwd:identidad" "/etc/group:identidad" "/etc/shadow:identidad" "/etc/gshadow:identidad" \
+        "/etc/security/opasswd:identidad" "/etc/sudoers:sudo" "/etc/sudoers.d:sudo" \
+        "/etc/ssh/sshd_config:ssh" "/etc/ssh/sshd_config.d:ssh" "/etc/localtime:hora" \
+        "/etc/hosts:red" "/etc/hostname:red" "/etc/netplan:red" "/etc/crontab:tareas" "/etc/cron.d:tareas" \
+        "/var/spool/cron:tareas" "/etc/systemd/system:servicios" "/etc/apt/sources.list:repositorios" \
+        "/etc/apt/sources.list.d:repositorios" "/etc/pacman.conf:repositorios" "/etc/pacman.d:repositorios" "/var/log/faillog:sesiones" "/var/log/lastlog:sesiones"; do
+        [ -e "${p%%:*}" ] && echo "-w ${p%%:*} -p wa -k ${p#*:}"
+    done
+    for p in /usr/bin/kmod /usr/sbin/insmod /usr/sbin/rmmod /usr/sbin/modprobe; do
+        [ -e "$p" ] && [ ! -L "$p" ] && echo "-w $p -p x -k modulos"
+    done
+    arch=$(uname -m)
+    if [ "$arch" = x86_64 ] || [ "$arch" = aarch64 ]; then
+        echo "-a always,exit -F arch=b64 -S init_module -S finit_module -S delete_module -k modulos"
+        echo "-a always,exit -F arch=b64 -S mount -S umount2 -F auid>=1000 -F auid!=4294967295 -k montajes"
+        echo "-a always,exit -F arch=b64 -S adjtimex -S settimeofday -S clock_settime -k hora"
+    fi
+}
+
+enable_audit() {
+    echo -e "${CYAN}📝 Registro de auditoría (auditd, Linux Audit, GPL-2.0)${NC}"
+    echo -e "   Anota quién y cuándo cambia usuarios, contraseñas, sudo, SSH, la hora, la red,"
+    echo -e "   tareas programadas, servicios, repositorios y módulos del kernel."
+    echo -e "   ${GREEN}No protege por sí solo: sirve para saber qué pasó si algo cambia.${NC}"
+    echo -e "   Los registros van a /var/log/audit (auditd los rota solo, ~40 MB como máximo).\n"
+    if ! command -v auditctl &> /dev/null; then
+        confirm "${CYAN}¿Instalar auditd (paquete audit, ~1 MB, se quita desde aquí mismo)?${NC}" || return 0
+        pkg_install_recorded audit || return 1
+    fi
+    local tmp
+    tmp=$(mktemp)
+    build_audit_rules > "$tmp"
+    sudo install -D -m 0640 "$tmp" "$AUDIT_RULES_FILE"
+    rm -f "$tmp"
+    run "No se pudo activar auditd" sudo systemctl enable --now auditd
+    if sudo auditctl -s 2>/dev/null | grep -q '^enabled 2'; then
+        log_warning "Las reglas de auditoría están bloqueadas hasta reiniciar (las puso otro programa): se aplican al reiniciar"
+        return 0
+    fi
+    if sudo augenrules --load >> "$LOG_FILE" 2>&1 && sudo auditctl -l 2>/dev/null | grep -q -- '-k identidad'; then
+        log_success "Registro de auditoría activo ($(sudo auditctl -l | grep -c -- ' -k ') reglas)"
+        echo -e "${CYAN}ℹ Para verlo: opción 19 → 3 (Ver qué se registró)${NC}"
+    else
+        sudo rm -f "$AUDIT_RULES_FILE"
+        sudo augenrules --load >> "$LOG_FILE" 2>&1
+        log_error "auditd no aceptó las reglas en este sistema (¿contenedor o WSL?): se quitaron, todo queda como estaba"
+        return 1
+    fi
+}
+
+show_audit_events() {
+    if ! command -v aureport &> /dev/null; then
+        echo -e "${YELLOW}ℹ El registro de auditoría no está activo${NC}"
+        return 0
+    fi
+    echo -e "${CYAN}📝 Cambios registrados por categoría (desde que se activó):${NC}\n"
+    sudo aureport -k --summary -i 2>/dev/null | sed 's/^/  /'
+    echo -e "\n${CYAN}Últimos cambios en usuarios, sudo y SSH:${NC}"
+    local k
+    for k in identidad sudo ssh; do sudo ausearch -k "$k" -i 2>/dev/null; done \
+        | awk '/^type=SYSCALL/ {
+            t = $0; sub(/.*msg=audit\(/, "", t); sub(/\).*/, "", t); c = ""; a = ""; key = ""
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^comm=/) c = substr($i, 6)
+                if ($i ~ /^auid=/) a = substr($i, 6)
+                if ($i ~ /^key=/) key = substr($i, 5)
+            }
+            print "  " t "  " key "  " c " (usuario " a ")" }' | tail -10
+    echo -e "\n${CYAN}ℹ Detalle completo: sudo ausearch -k identidad -i   (categorías: identidad, sudo, ssh,${NC}"
+    echo -e "${CYAN}  hora, red, tareas, servicios, repositorios, modulos, montajes, sesiones)${NC}"
+}
+
+disable_audit() {
+    if ! audit_rules_active && ! grep -qx audit "$INSTALLED_LIST" 2>/dev/null; then
+        echo -e "${YELLOW}ℹ El script no activó el registro de auditoría${NC}"
+        return 0
+    fi
+    confirm "${RED}¿Quitar el registro de auditoría del script?${NC}" || return 0
+    if audit_rules_active; then
+        sudo rm -f "$AUDIT_RULES_FILE"
+        command -v augenrules &> /dev/null && sudo augenrules --load >> "$LOG_FILE" 2>&1
+        log_success "Reglas de auditoría del script quitadas"
+    fi
+    if grep -qx audit "$INSTALLED_LIST" 2>/dev/null \
+        && confirm "${RED}¿Desinstalar también auditd (paquete audit, lo instaló el script)?${NC}"; then
+        pkg_remove audit && forget_installed audit && log_success "auditd desinstalado"
+        if [ -d /var/log/audit ] && confirm "${RED}¿Borrar también los registros guardados en /var/log/audit?${NC}"; then
+            sudo rm -rf /var/log/audit && log_success "Registros borrados"
+        fi
+    fi
+}
+
+security_menu() {
+    local option
+    while true; do
+        clear
+        echo -e "${CYAN}${BOLD}"
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        echo "║                    🔒 AUDITORÍA DE SEGURIDAD                     ║"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        echo -e "${CYAN}🔍 Revisar:${NC}"
+        echo -e "  ${CYAN}1)${NC} Revisar la seguridad con Lynis (puntaje y consejos; solo mira, no cambia nada)"
+        echo -e "\n${CYAN}📝 Registro de auditoría (auditd): quién y cuándo cambió usuarios, sudo, SSH...${NC}"
+        if audit_rules_active; then
+            echo -e "     Estado: ${GREEN}activo${NC} (reglas del script en $AUDIT_RULES_FILE)"
+        else
+            echo -e "     Estado: ${YELLOW}no activado${NC}"
+        fi
+        echo -e "  ${CYAN}2)${NC} Activar (o actualizar las reglas)"
+        echo -e "  ${CYAN}3)${NC} Ver qué se registró"
+        echo -e "  ${CYAN}4)${NC} Quitar (reglas y, si lo instaló el script, auditd)"
+        echo -e "\n  ${CYAN}0)${NC} 🔙 Volver\n"
+        read -r -p "📌 Opción (0-4): " option
+        case $option in
+            1) security_audit_lynis ;;
+            2) enable_audit ;;
+            3) show_audit_events ;;
+            4) disable_audit ;;
+            0) return 0 ;;
+            *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
+        esac
+        pause
+    done
+}
+
 sysinfo_menu() {
     $INFO_QUIET || ensure_lspci > /dev/null 2>&1
     local option level
@@ -6676,13 +6893,13 @@ boot_only_menu() {
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
         echo -e "  ${CYAN}18)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
-        echo -e "  ${CYAN}19)${NC} 🔌 Apagar / Reiniciar sistema"
+        echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (18, 19 o 0): " option
+        read -r -p "🔢 Opción (18, 20 o 0): " option
         case $option in
             18|1) grub_repair_menu ;;
-            19|2) shutdown_menu ;;
+            20|2) shutdown_menu ;;
             0) echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"; exit 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
         esac
@@ -6712,8 +6929,9 @@ main_menu() {
         echo -e "  ${CYAN}15)${NC} 🌐 Red, DNS y firmware"
         echo -e "  ${CYAN}16)${NC} 🔋 Energía y rendimiento"
         echo -e "  ${CYAN}18)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
+        echo -e "  ${CYAN}19)${NC} 🛡️ AUDITORÍA DE SEGURIDAD (Lynis y registro de auditoría)"
         echo ""
-        echo -e "  ${CYAN}19)${NC} 🔌 Apagar / Reiniciar sistema"
+        echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo -e "\n${YELLOW}ℹ Versión beta: los números son los mismos que en Ubuntu. Snap (4 y 8) no aplica en${NC}"
         echo -e "${YELLOW}  Arch y los perfiles automáticos (17) llegan en una próxima versión.${NC}"
@@ -6736,7 +6954,8 @@ main_menu() {
             15) network_menu ;;
             16) power_menu ;;
             18) grub_repair_menu ;;
-            19) shutdown_menu ;;
+            19) security_menu ;;
+            20) shutdown_menu ;;
             4|8) echo -e "${YELLOW}ℹ Snap no se usa en Arch${NC}"; sleep 2 ;;
             17) echo -e "${YELLOW}ℹ Los perfiles automáticos llegan en una próxima versión${NC}"; sleep 2 ;;
             0)

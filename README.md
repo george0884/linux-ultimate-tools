@@ -242,7 +242,7 @@ Todo lo hace el propio script, sin instalar programas externos.
 - El script detecta la distribución, la carpeta de GRUB (`/boot/grub` o `/boot/grub2`), dónde está montada la
   partición EFI y cómo se llama su carpeta (`ubuntu`, `debian`, `GRUB`, `manjaro`, `fedora`...).
 - **En Ubuntu y sus derivadas** (Kubuntu, Mint, Pop!_OS...) está todo el script. **En las demás distribuciones**
-  el menú principal muestra solo **18) Arranque** y **19) Apagar**, con los mismos números, así la tarjeta de
+  el menú principal muestra solo **18) Arranque** y **20) Apagar**, con los mismos números, así la tarjeta de
   rescate y las guías sirven igual.
 - Desde el USB de cualquiera de estas distribuciones, la **reparación desde Live USB (18 → 10)** detecta qué
   sistema hay en el disco y usa sus comandos (también con btrfs, `/boot` aparte y discos cifrados).
@@ -394,23 +394,30 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 | 🧰 | **13** Buscar | Escribe una palabra (nvidia, temp, wifi, error...) y la busca en **toda** la información |
 | | **14** Guardar informe | Todo en `~/informe-sistema-<fecha>.txt`, **sin datos personales** (números de serie, MAC, IP, UUID, usuario, equipo y Wi-Fi) |
 | | **15** Rendimiento | Velocidad de lectura y escritura del disco, latencia y velocidad de descarga |
-| 🛡️ | **16** Auditoría con Lynis | Revisa la seguridad (usuarios, SSH, cortafuegos, servicios, permisos, kernel...) y da un **puntaje** con advertencias y consejos. **Sin instalar** (paquete oficial de la distro en una carpeta temporal) o instalado |
-| | **17** Registro de auditoría | Activa **auditd** con reglas propias: quién y cuándo cambió usuarios, contraseñas, sudo, SSH, hora, red, tareas, servicios, repositorios y módulos del kernel |
 
-### 🛡️ Auditoría de seguridad (opción 2 → 16 y 17)
+---
+
+## 🛡️ Auditoría de seguridad (opción 19)
 
 ![Auditoría de seguridad con Lynis](screenshots/25-auditoria-lynis.png)
+
+| Opción | Qué hace |
+|---|---|
+| **1** Revisar con Lynis | Revisa la seguridad (usuarios, SSH, cortafuegos, servicios, permisos, kernel...) y da un **puntaje** con advertencias y consejos. **Sin instalar** (Ubuntu y Debian) o instalado |
+| **2** Activar registro | **auditd** con reglas propias: quién y cuándo cambió usuarios, contraseñas, sudo, SSH, hora, red, tareas, servicios, repositorios y módulos del kernel |
+| **3** Ver qué se registró | Resumen por categoría y últimos cambios en usuarios, sudo y SSH |
+| **4** Quitar | Borra las reglas y, si lo instaló el script, auditd y sus registros |
 
 - **Lynis** ([CISOfy](https://cisofy.com/lynis/), GPL-3.0) solo **revisa**: no cambia nada. El resumen sale en castellano
   (puntaje, advertencias y sugerencias) y el informe completo queda en `~/auditoria-seguridad/<fecha>/`
   (solo lo puede leer tu usuario: contiene datos del sistema, no lo compartas en público). Usado sin instalar,
-  se borra al terminar y no deja nada; instalado, se quita en 9 → 1.
+  se borra al terminar y no deja nada; instalado (en Arch siempre, desde sus repositorios oficiales), se quita en 9 → 1.
 - **auditd** usa reglas **propias del script** en `/etc/audit/rules.d/60-ultimate-tools.rules`:
   - solo vigila archivos que existen y llamadas que existen en tu procesador;
   - **sin `-e 2`**: las reglas nunca quedan bloqueadas hasta reiniciar, y nunca provoca un *kernel panic*;
   - si el sistema no las acepta (por ejemplo en un contenedor o WSL), se quitan solas y todo queda como estaba.
   - **Ver qué se registró**: resumen por categoría y los últimos cambios en usuarios, sudo y SSH.
-  - **Quitar**: 2 → 17 → 3 o 9 → 13 borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
+  - **Quitar**: 19 → 4 (o Deshacer: Ubuntu 9 → 13, Debian y Arch 9 → 11) borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
     borrar sus registros.
 - Idea inspirada en [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) de Jeff Starke
   (Starke427). No se usa su código porque su repositorio no tiene licencia (ver [CREDITOS.md](CREDITOS.md)).
