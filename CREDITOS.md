@@ -43,7 +43,7 @@ reconocimiento a sus autores; la licencia que vale siempre es la que publica cad
 | [pacman-mirrors](https://gitlab.manjaro.org/applications/pacman-mirrors) y [mhwd](https://gitlab.manjaro.org/applications/mhwd) | GPL-3.0 | Sistema (Manjaro): espejos, drivers y kernels |
 | [nvidia-detect](https://packages.debian.org/nvidia-detect) | Proyecto Debian | Sistema (Debian): elige el driver de NVIDIA correcto |
 
-## 🖥️ Escritorios (opción 6 → Instalar un escritorio)
+## 🖥️ Escritorios (opción 7 → Instalar un escritorio)
 
 El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y sus apps tienen su licencia.
 
@@ -128,7 +128,7 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [inxi](https://github.com/smxi/inxi) | GPL-3.0-or-later | Instala |
 | [smartmontools](https://www.smartmontools.org/) | GPL-2.0-or-later | Instala: salud de los discos |
 
-## 🛡️ Auditoría de seguridad (opción 19)
+## 🛡️ Auditoría de seguridad (opción 2)
 
 | Proyecto | Autor | Licencia | Uso |
 |---|---|---|---|
