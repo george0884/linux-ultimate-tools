@@ -148,3 +148,15 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 ## Arch Ultimate Tools (beta): menú principal
 
 ![Arch Ultimate Tools (beta): menú principal](22-arch-menu-principal.png)
+
+---
+
+## Auditoría de seguridad con Lynis (opción 2 → 16)
+
+![Auditoría de seguridad con Lynis: puntaje, advertencias y sugerencias](25-auditoria-lynis.png)
+
+---
+
+## Registro de auditoría con auditd (opción 2 → 17)
+
+![Registro de auditoría (auditd)](26-registro-auditoria.png)

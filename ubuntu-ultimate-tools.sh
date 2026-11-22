@@ -7553,10 +7553,11 @@ undo_menu() {
         echo -e "         con respaldos antes de borrar"
         echo -e "  ${RED}11)${NC} 🖥️ Quitar el escritorio instalado por el script"
         echo -e "  ${RED}12)${NC} 🖥️ Quitar OTROS escritorios (no el original ni el que está abierto)"
+        echo -e "  ${RED}13)${NC} 📝 Quitar el registro de auditoría (auditd)"
         echo -e "\n  ${RED} 0)${NC} 🔙 Volver"
         echo -e "\n${YELLOW}ℹ Otros cambios se deshacen en su menú: kernel (13), distribución original (10),${NC}"
         echo -e "${YELLOW}  Snap (8), accesos directos (5), DNS/BBR/Wi-Fi (15), energía e indexador (16)${NC}\n"
-        read -r -p "📌 Opción (0-12): " undo_option
+        read -r -p "📌 Opción (0-13): " undo_option
 
         case $undo_option in
             1) remove_installed_programs ;;
@@ -7570,6 +7571,7 @@ undo_menu() {
             10) dev_nuclear ;;
             11) remove_installed_desktop ;;
             12) remove_extra_desktop ;;
+            13) disable_audit ;;
             5)
                 if ! show_tweaks_status; then
                     echo -e "${GREEN}✓ No hay ajustes cambiados: todo está como de fábrica${NC}"
@@ -7949,6 +7951,237 @@ info_benchmark() {
     echo "  (Valores aproximados: repítela si el equipo estaba ocupado)"
 }
 
+# ------------------------------------------------------------
+# Auditoría de seguridad
+# - Lynis (CISOfy, GPL-3.0): revisa la seguridad del sistema y da un puntaje con sugerencias.
+#   Se puede usar sin instalar: se baja el paquete oficial de la distro (firmado) a una carpeta
+#   temporal y se borra al terminar.
+# - auditd (Linux Audit, GPL-2.0): registra cambios en usuarios, sudo, SSH, hora, módulos...
+#   Las reglas son propias de este script, sin "-e 2" (no se bloquean) y se quitan cuando quieras.
+# Idea inspirada en Linux-Security-Policy de Jeff Starke (Starke427): no se usa su código
+# porque su repositorio no tiene licencia.
+# ------------------------------------------------------------
+AUDIT_RULES_FILE="/etc/audit/rules.d/60-ultimate-tools.rules"
+SECURITY_DIR="$HOME/auditoria-seguridad"
+
+# Resumen en castellano del informe de Lynis
+lynis_summary() {
+    local report="$1" index warnings suggestions
+    index=$(sed -n 's/^hardening_index=//p' "$report")
+    warnings=$(grep -c '^warning\[\]=' "$report")
+    suggestions=$(grep -c '^suggestion\[\]=' "$report")
+    echo -e "\n${CYAN}══════════════════ 🛡️ RESUMEN DE LA AUDITORÍA ══════════════════${NC}"
+    if [ -n "$index" ]; then
+        if [ "$index" -ge 75 ]; then
+            echo -e "  Puntaje de seguridad: ${GREEN}${BOLD}$index/100${NC} (bueno)"
+        elif [ "$index" -ge 60 ]; then
+            echo -e "  Puntaje de seguridad: ${YELLOW}${BOLD}$index/100${NC} (aceptable)"
+        else
+            echo -e "  Puntaje de seguridad: ${RED}${BOLD}$index/100${NC} (mejorable)"
+        fi
+    fi
+    echo -e "  ${RED}⚠ Advertencias: $warnings${NC}   ${YELLOW}💡 Sugerencias: $suggestions${NC}"
+    if [ "$warnings" -gt 0 ]; then
+        echo -e "\n${RED}Advertencias (lo más importante):${NC}"
+        grep '^warning\[\]=' "$report" | cut -d'|' -f1,2 | sed 's/^warning\[\]=/  • [/; s/|/] /'
+    fi
+    if [ "$suggestions" -gt 0 ]; then
+        echo -e "\n${YELLOW}Primeras sugerencias (en inglés, como las da Lynis):${NC}"
+        grep '^suggestion\[\]=' "$report" | grep -v '^suggestion\[\]=LYNIS|' | head -12 \
+            | cut -d'|' -f1,2 | sed 's/^suggestion\[\]=/  • [/; s/|/] /' | cut -c1-96
+    fi
+    echo -e "\n${CYAN}ℹ Cada código (por ejemplo SSH-7408) se explica en https://cisofy.com/lynis/controls/${NC}"
+    echo -e "${CYAN}  Lynis solo revisa: no cambia nada del sistema.${NC}"
+}
+
+security_audit_lynis() {
+    clear
+    echo -e "${CYAN}${BOLD}🛡️ AUDITORÍA DE SEGURIDAD CON LYNIS${NC}\n"
+    echo -e "Lynis (de CISOfy, licencia GPL-3.0) revisa cientos de puntos de seguridad: usuarios,"
+    echo -e "contraseñas, SSH, cortafuegos, servicios, permisos, kernel... y da un puntaje con consejos."
+    echo -e "${GREEN}Solo mira: no cambia nada. Tarda unos minutos.${NC}\n"
+
+    local stamp out lynis_cmd=() tmp="" choice
+    stamp=$(date +%Y%m%d-%H%M)
+    out="$SECURITY_DIR/$stamp"
+
+    if command -v lynis &> /dev/null; then
+        lynis_cmd=(lynis)
+    else
+        echo -e "  ${CYAN}1)${NC} Usarlo SIN INSTALAR (se baja el paquete oficial, ~230 KB, y se borra al terminar)"
+        echo -e "  ${CYAN}2)${NC} Instalarlo (para usarlo cuando quieras; se quita en 9 → 1)"
+        echo -e "  ${CYAN}0)${NC} Volver"
+        read -r -p "🔢 Opción: " choice
+        case $choice in
+            1)
+                tmp=$(mktemp -d)
+                apt_update
+                if ! (cd "$tmp" && run "No se pudo descargar Lynis" apt-get download lynis); then
+                    rm -rf "$tmp"
+                    return 1
+                fi
+                # Lynis exige que sus archivos sean de root cuando corre con sudo
+                sudo dpkg-deb -x "$tmp"/lynis_*.deb "$tmp/x" || { rm -rf "$tmp"; return 1; }
+                sudo cp -a "$tmp/x/etc/lynis/." "$tmp/x/usr/share/lynis/"
+                sudo cp "$tmp/x/usr/sbin/lynis" "$tmp/x/usr/share/lynis/lynis"
+                lynis_cmd=(env -C "$tmp/x/usr/share/lynis" sh ./lynis)
+                ;;
+            2)
+                apt_update
+                apt_install_recorded lynis || return 1
+                record_installed lynis "repositorios oficiales de la distro"
+                lynis_cmd=(lynis)
+                ;;
+            *) return 0 ;;
+        esac
+    fi
+
+    mkdir -p "$out"
+    chmod 700 "$SECURITY_DIR" "$out"
+    echo -e "\n${BLUE}🔍 Revisando el sistema (puede tardar unos minutos)...${NC}\n"
+    sudo "${lynis_cmd[@]}" audit system --quick --logfile "$out/lynis.log" --report-file "$out/lynis-informe.dat"
+    [ -n "$tmp" ] && sudo rm -rf "$tmp"
+    if [ ! -s "$out/lynis-informe.dat" ]; then
+        log_error "Lynis no generó el informe (detalles en $out)"
+        return 1
+    fi
+    sudo chown -R "$(id -u):$(id -g)" "$out"
+    lynis_summary "$out/lynis-informe.dat" | tee "$out/resumen.txt"
+    echo -e "\n${GREEN}📁 Informe completo en $out${NC}"
+    echo -e "${YELLOW}  Contiene datos de tu sistema: no lo compartas en público.${NC}"
+    [ -n "$tmp" ] && echo -e "${GREEN}✓ Lynis se borró: no quedó nada instalado${NC}"
+}
+
+# ------------------------------------------------------------
+# auditd con reglas propias
+# ------------------------------------------------------------
+audit_rules_active() { [ -f "$AUDIT_RULES_FILE" ]; }
+
+# Reglas del script: solo vigila rutas que existen y llamadas que existen en este procesador
+build_audit_rules() {
+    local p arch
+    echo "## Ubuntu Ultimate Tools: registro de auditoría (se quita desde el menú 2 → 17)"
+    echo "## Reglas propias del script (AGPL-3.0-or-later). Sin -e 2: no se bloquean hasta reiniciar."
+    for p in "/etc/passwd:identidad" "/etc/group:identidad" "/etc/shadow:identidad" "/etc/gshadow:identidad" \
+        "/etc/security/opasswd:identidad" "/etc/sudoers:sudo" "/etc/sudoers.d:sudo" \
+        "/etc/ssh/sshd_config:ssh" "/etc/ssh/sshd_config.d:ssh" "/etc/localtime:hora" \
+        "/etc/hosts:red" "/etc/hostname:red" "/etc/netplan:red" "/etc/crontab:tareas" "/etc/cron.d:tareas" \
+        "/var/spool/cron:tareas" "/etc/systemd/system:servicios" "/etc/apt/sources.list:repositorios" \
+        "/etc/apt/sources.list.d:repositorios" "/var/log/faillog:sesiones" "/var/log/lastlog:sesiones"; do
+        [ -e "${p%%:*}" ] && echo "-w ${p%%:*} -p wa -k ${p#*:}"
+    done
+    for p in /usr/bin/kmod /usr/sbin/insmod /usr/sbin/rmmod /usr/sbin/modprobe; do
+        [ -e "$p" ] && [ ! -L "$p" ] && echo "-w $p -p x -k modulos"
+    done
+    arch=$(uname -m)
+    if [ "$arch" = x86_64 ] || [ "$arch" = aarch64 ]; then
+        echo "-a always,exit -F arch=b64 -S init_module -S finit_module -S delete_module -k modulos"
+        echo "-a always,exit -F arch=b64 -S mount -S umount2 -F auid>=1000 -F auid!=4294967295 -k montajes"
+        echo "-a always,exit -F arch=b64 -S adjtimex -S settimeofday -S clock_settime -k hora"
+    fi
+}
+
+enable_audit() {
+    echo -e "${CYAN}📝 Registro de auditoría (auditd, Linux Audit, GPL-2.0)${NC}"
+    echo -e "   Anota quién y cuándo cambia usuarios, contraseñas, sudo, SSH, la hora, la red,"
+    echo -e "   tareas programadas, servicios, repositorios y módulos del kernel."
+    echo -e "   ${GREEN}No protege por sí solo: sirve para saber qué pasó si algo cambia.${NC}"
+    echo -e "   Los registros van a /var/log/audit (auditd los rota solo, ~40 MB como máximo).\n"
+    if ! command -v auditctl &> /dev/null; then
+        confirm "${CYAN}¿Instalar auditd (~1 MB, se quita desde aquí mismo)?${NC}" || return 0
+        apt_update
+        apt_install_recorded auditd || return 1
+        record_installed auditd "repositorios oficiales de la distro"
+    fi
+    local tmp
+    tmp=$(mktemp)
+    build_audit_rules > "$tmp"
+    sudo install -D -m 0640 "$tmp" "$AUDIT_RULES_FILE"
+    rm -f "$tmp"
+    run "No se pudo activar auditd" sudo systemctl enable --now auditd
+    if sudo auditctl -s 2>/dev/null | grep -q '^enabled 2'; then
+        log_warning "Las reglas de auditoría están bloqueadas hasta reiniciar (las puso otro programa): se aplican al reiniciar"
+        return 0
+    fi
+    if sudo augenrules --load >> "$LOG_FILE" 2>&1 && sudo auditctl -l 2>/dev/null | grep -q -- '-k identidad'; then
+        log_success "Registro de auditoría activo ($(sudo auditctl -l | grep -c -- ' -k ') reglas)"
+        echo -e "${CYAN}ℹ Para verlo: opción 2 → 17 → Ver qué se registró${NC}"
+    else
+        sudo rm -f "$AUDIT_RULES_FILE"
+        sudo augenrules --load >> "$LOG_FILE" 2>&1
+        log_error "auditd no aceptó las reglas en este sistema (¿contenedor o WSL?): se quitaron, todo queda como estaba"
+        return 1
+    fi
+}
+
+show_audit_events() {
+    if ! command -v aureport &> /dev/null; then
+        echo -e "${YELLOW}ℹ El registro de auditoría no está activo${NC}"
+        return 0
+    fi
+    echo -e "${CYAN}📝 Cambios registrados por categoría (desde que se activó):${NC}\n"
+    sudo aureport -k --summary -i 2>/dev/null | sed 's/^/  /'
+    echo -e "\n${CYAN}Últimos cambios en usuarios, sudo y SSH:${NC}"
+    local k
+    for k in identidad sudo ssh; do sudo ausearch -k "$k" -i 2>/dev/null; done \
+        | awk '/^type=SYSCALL/ {
+            t = $0; sub(/.*msg=audit\(/, "", t); sub(/\).*/, "", t); c = ""; a = ""; key = ""
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^comm=/) c = substr($i, 6)
+                if ($i ~ /^auid=/) a = substr($i, 6)
+                if ($i ~ /^key=/) key = substr($i, 5)
+            }
+            print "  " t "  " key "  " c " (usuario " a ")" }' | tail -10
+    echo -e "\n${CYAN}ℹ Detalle completo: sudo ausearch -k identidad -i   (categorías: identidad, sudo, ssh,${NC}"
+    echo -e "${CYAN}  hora, red, tareas, servicios, repositorios, modulos, montajes, sesiones)${NC}"
+}
+
+disable_audit() {
+    if ! audit_rules_active && ! grep -qx auditd "$INSTALLED_LIST" 2>/dev/null; then
+        echo -e "${YELLOW}ℹ El script no activó el registro de auditoría${NC}"
+        return 0
+    fi
+    confirm "${RED}¿Quitar el registro de auditoría del script?${NC}" || return 0
+    if audit_rules_active; then
+        sudo rm -f "$AUDIT_RULES_FILE"
+        command -v augenrules &> /dev/null && sudo augenrules --load >> "$LOG_FILE" 2>&1
+        log_success "Reglas de auditoría del script quitadas"
+    fi
+    if grep -qx auditd "$INSTALLED_LIST" 2>/dev/null \
+        && confirm "${RED}¿Desinstalar también auditd (lo instaló el script)?${NC}"; then
+        apt_purge auditd && forget_installed auditd && log_success "auditd desinstalado"
+        if [ -d /var/log/audit ] && confirm "${RED}¿Borrar también los registros guardados en /var/log/audit?${NC}"; then
+            sudo rm -rf /var/log/audit && log_success "Registros borrados"
+        fi
+    fi
+}
+
+security_audit_menu() {
+    local option
+    while true; do
+        clear
+        echo -e "${CYAN}${BOLD}📝 REGISTRO DE AUDITORÍA (auditd)${NC}\n"
+        if audit_rules_active; then
+            echo -e "  Estado: ${GREEN}activo${NC} (reglas del script en $AUDIT_RULES_FILE)\n"
+        else
+            echo -e "  Estado: ${YELLOW}no activado por el script${NC}\n"
+        fi
+        echo -e "  ${CYAN}1)${NC} Activar (o actualizar las reglas)"
+        echo -e "  ${CYAN}2)${NC} Ver qué se registró"
+        echo -e "  ${CYAN}3)${NC} Quitar (reglas y, si lo instaló el script, auditd)"
+        echo -e "  ${CYAN}0)${NC} 🔙 Volver\n"
+        read -r -p "📌 Opción (0-3): " option
+        case $option in
+            1) enable_audit ;;
+            2) show_audit_events ;;
+            3) disable_audit ;;
+            0) return 0 ;;
+            *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
+        esac
+        pause
+    done
+}
+
 sysinfo_menu() {
     local option level
     while true; do
@@ -7977,9 +8210,12 @@ sysinfo_menu() {
         echo -e "  ${CYAN}13)${NC} Buscar en toda la información"
         echo -e "  ${CYAN}14)${NC} Guardar informe completo para compartir (sin datos personales)"
         echo -e "  ${CYAN}15)${NC} Prueba de rendimiento (disco e internet)"
+        echo -e "\n${CYAN}🛡️ Seguridad:${NC}"
+        echo -e "  ${CYAN}16)${NC} Auditoría de seguridad con Lynis (puntaje y consejos, sin instalar)"
+        echo -e "  ${CYAN}17)${NC} Registro de auditoría (auditd): quién cambió usuarios, sudo, SSH..."
         echo -e "\n  ${CYAN} 0)${NC} 🔙 Volver"
         echo ""
-        read -r -p "📌 Opción (0-15): " option
+        read -r -p "📌 Opción (0-17): " option
         case $option in
             1) info_summary ;;
             2) info_fastfetch ;;
@@ -7998,6 +8234,8 @@ sysinfo_menu() {
             13) info_search ;;
             14) info_save_report ;;
             15) info_benchmark ;;
+            16) security_audit_lynis ;;
+            17) security_audit_menu; continue ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac

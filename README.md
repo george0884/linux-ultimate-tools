@@ -362,6 +362,7 @@ disponible, se vuelve a la selección escribiendo números.
   flatpak-builder de una vez, con doble confirmación y respaldos antes. Tus proyectos, tus claves de firma y
   tus apps Flatpak no se tocan.
 - **Quitar el escritorio instalado por el script** (11): solo sus paquetes; el arranque y la red vuelven a como estaban.
+- **Quitar el registro de auditoría** (13): borra las reglas de auditd del script y, si lo instaló, auditd.
 - **Quitar otros escritorios** (12): los que no instaló el script (por ejemplo uno puesto a mano). Nunca ofrece
   el original del sabor ni el que está abierto, deja la pantalla de inicio de sesión en uso y solo quita lo que
   ese escritorio dejó de usar. Si se llevara algo de otro escritorio, la red o el sonido, no quita nada.
@@ -393,6 +394,26 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 | 🧰 | **13** Buscar | Escribe una palabra (nvidia, temp, wifi, error...) y la busca en **toda** la información |
 | | **14** Guardar informe | Todo en `~/informe-sistema-<fecha>.txt`, **sin datos personales** (números de serie, MAC, IP, UUID, usuario, equipo y Wi-Fi) |
 | | **15** Rendimiento | Velocidad de lectura y escritura del disco, latencia y velocidad de descarga |
+| 🛡️ | **16** Auditoría con Lynis | Revisa la seguridad (usuarios, SSH, cortafuegos, servicios, permisos, kernel...) y da un **puntaje** con advertencias y consejos. **Sin instalar** (paquete oficial de la distro en una carpeta temporal) o instalado |
+| | **17** Registro de auditoría | Activa **auditd** con reglas propias: quién y cuándo cambió usuarios, contraseñas, sudo, SSH, hora, red, tareas, servicios, repositorios y módulos del kernel |
+
+### 🛡️ Auditoría de seguridad (opción 2 → 16 y 17)
+
+![Auditoría de seguridad con Lynis](screenshots/25-auditoria-lynis.png)
+
+- **Lynis** ([CISOfy](https://cisofy.com/lynis/), GPL-3.0) solo **revisa**: no cambia nada. El resumen sale en castellano
+  (puntaje, advertencias y sugerencias) y el informe completo queda en `~/auditoria-seguridad/<fecha>/`
+  (solo lo puede leer tu usuario: contiene datos del sistema, no lo compartas en público). Usado sin instalar,
+  se borra al terminar y no deja nada; instalado, se quita en 9 → 1.
+- **auditd** usa reglas **propias del script** en `/etc/audit/rules.d/60-ultimate-tools.rules`:
+  - solo vigila archivos que existen y llamadas que existen en tu procesador;
+  - **sin `-e 2`**: las reglas nunca quedan bloqueadas hasta reiniciar, y nunca provoca un *kernel panic*;
+  - si el sistema no las acepta (por ejemplo en un contenedor o WSL), se quitan solas y todo queda como estaba.
+  - **Ver qué se registró**: resumen por categoría y los últimos cambios en usuarios, sudo y SSH.
+  - **Quitar**: 2 → 17 → 3 o 9 → 13 borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
+    borrar sus registros.
+- Idea inspirada en [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) de Jeff Starke
+  (Starke427). No se usa su código porque su repositorio no tiene licencia (ver [CREDITOS.md](CREDITOS.md)).
 
 ---
 
@@ -601,7 +622,7 @@ Si algo no te convence, la opción 9 deshace optimizaciones y quita programas, y
 
 En la carpeta [**screenshots**](screenshots/) están las capturas de todos los menús: eliminar apps,
 GPU, kernel, revertir, arranque y GRUB, red, energía, perfiles, deshacer, información del sistema,
-Ubuntu Server e instalar un escritorio.
+Ubuntu Server, instalar un escritorio y auditoría de seguridad.
 
 ---
 
