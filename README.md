@@ -404,20 +404,31 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 | Opción | Qué hace |
 |---|---|
 | **1** Revisar con Lynis | Revisa la seguridad (usuarios, SSH, cortafuegos, servicios, permisos, kernel...) y da un **puntaje** con advertencias y consejos. **Sin instalar** (Ubuntu y Debian) o instalado |
-| **2** Activar registro | **auditd** con reglas propias: quién y cuándo cambió usuarios, contraseñas, sudo, SSH, hora, red, tareas, servicios, repositorios y módulos del kernel |
-| **3** Ver qué se registró | Resumen por categoría y últimos cambios en usuarios, sudo y SSH |
-| **4** Quitar | Borra las reglas y, si lo instaló el script, auditd y sus registros |
+| **2** Revisar con linaudit | [linaudit](https://lexiworks.dev/linaudit) de **Alexia Michelle**: más de 100 controles **en castellano**, puntaje de 1 a 10 y cómo arreglar cada cosa. Como todavía no publica programas listos, se **compila en una carpeta temporal** (con Rust temporal si hace falta) y se borra todo; al final puedes dejarlo instalado |
+| **3** Activar registro | **auditd** con reglas propias: quién y cuándo cambió usuarios, contraseñas, sudo, SSH, hora, red, tareas, servicios, repositorios y módulos del kernel |
+| **4** Ver qué se registró | Resumen por categoría y últimos cambios en usuarios, sudo y SSH |
+| **5** Quitar registro | Borra las reglas y, si lo instaló el script, auditd y sus registros |
+| **6** Quitar linaudit | Si lo dejaste instalado: borra el programa y su manual |
 
 - **Lynis** ([CISOfy](https://cisofy.com/lynis/), GPL-3.0) solo **revisa**: no cambia nada. El resumen sale en castellano
   (puntaje, advertencias y sugerencias) y el informe completo queda en `~/auditoria-seguridad/<fecha>/`
   (solo lo puede leer tu usuario: contiene datos del sistema, no lo compartas en público). Usado sin instalar,
   se borra al terminar y no deja nada; instalado (en Arch siempre, desde sus repositorios oficiales), se quita en 9 → 1.
+- **linaudit** ([Alexia Michelle](https://github.com/alexiarstein/linaudit), AGPL-3.0) también **solo revisa**. Usa el
+  programa si ya lo tienes, el paquete de la distro cuando llegue a los repositorios, o lo compila:
+  - baja el código oficial (`git clone`, o el `.tar.gz` si no hay git) a `/var/tmp/linaudit.*`;
+  - usa tu Rust si es 1.85 o más nuevo; si no, baja **rustup oficial** (verificado con su SHA-256) dentro de esa
+    misma carpeta, sin tocar tu sistema ni tu `~/.cargo`;
+  - si no tienes compilador de C, ofrece instalar `gcc` (queda registrado, se quita en 9 → 1);
+  - necesita ~3 GB libres y tarda de 5 a 15 minutos; al terminar **borra la carpeta entera**;
+  - si eliges dejarlo instalado: `/usr/local/bin/linaudit` y su manual en castellano (`man linaudit`), con la
+    versión (commit) anotada; se quita en 19 → 6.
 - **auditd** usa reglas **propias del script** en `/etc/audit/rules.d/60-ultimate-tools.rules`:
   - solo vigila archivos que existen y llamadas que existen en tu procesador;
   - **sin `-e 2`**: las reglas nunca quedan bloqueadas hasta reiniciar, y nunca provoca un *kernel panic*;
   - si el sistema no las acepta (por ejemplo en un contenedor o WSL), se quitan solas y todo queda como estaba.
   - **Ver qué se registró**: resumen por categoría y los últimos cambios en usuarios, sudo y SSH.
-  - **Quitar**: 19 → 4 (o Deshacer: Ubuntu 9 → 13, Debian y Arch 9 → 11) borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
+  - **Quitar**: 19 → 5 (o Deshacer: Ubuntu 9 → 13, Debian y Arch 9 → 11) borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
     borrar sus registros.
 - Idea inspirada en [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) de Jeff Starke
   (Starke427). No se usa su código porque su repositorio no tiene licencia (ver [CREDITOS.md](CREDITOS.md)).
