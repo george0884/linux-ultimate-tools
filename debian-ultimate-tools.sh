@@ -3609,9 +3609,9 @@ grub_repair_menu() {
         boot_option 8 "🔢 ORDEN DE ARRANQUE UEFI - Qué arranca primero / solo la próxima vez"
         boot_option 9 "🎨 PERSONALIZAR MENÚ - Ocultar entradas, orden, colores, fondo, parámetros"
         if boot_verbose_active; then
-            boot_option 16 "📜 VER MENSAJES AL ARRANCAR - Activado (elige para volver al logo)"
+            boot_option 16 "🐞 ARRANQUE DETALLADO (verbose) - Activado: elige para restaurar la pantalla de carga"
         else
-            boot_option 16 "📜 VER MENSAJES AL ARRANCAR - Quitar el logo (splash) y ver qué hace el sistema"
+            boot_option 16 "🐞 ARRANQUE DETALLADO (verbose) - Quitar la pantalla de carga (splash) para ver errores"
         fi
         boot_section "🚑 Cuando el sistema NO arranca:" 10 11 12 13
         if $BOOT_LIVE; then
@@ -4804,7 +4804,8 @@ grub_appearance_menu() {
 
 # Parámetros con los que arranca el kernel (GRUB_CMDLINE_LINUX_DEFAULT)
 # ------------------------------------------------------------
-# Ver los mensajes al arrancar: quita el logo (splash) y el modo silencioso.
+# Arranque detallado (verbose): quita la pantalla de carga (splash, Plymouth) y el arranque silencioso
+# (quiet) para ver los errores que el inicio decorado tapa.
 # Sirve en todas las distros del menú de arranque (Ubuntu, Debian, Arch, Manjaro, Fedora, openSUSE)
 # y recuerda cómo estaba, para volver exactamente a eso.
 # ------------------------------------------------------------
@@ -4864,7 +4865,7 @@ boot_verbose_on() {
     done
     removed=${removed% }
     if [ -z "$removed" ] && ! boot_verbose_active; then
-        echo -e "${GREEN}✓ Ya se ven los mensajes al arrancar (no hay quiet ni splash)${NC}"
+        echo -e "${GREEN}✓ El arranque ya es detallado (no hay pantalla de carga ni quiet)${NC}"
         return 0
     fi
     echo -e "${PURPLE}Se quita:${NC} ${removed:-nada nuevo}"
@@ -4872,7 +4873,7 @@ boot_verbose_on() {
     if [ "$BOOT_FAMILY" = debian ] && [ -d /etc/default/grub.d ]; then
         # Un archivo propio que se lee al final: /etc/default/grub no se toca y se deshace borrándolo
         {
-            echo "# Ubuntu Ultimate Tools: ver los mensajes al arrancar (se deshace en el menú de arranque → 16)"
+            echo "# Ubuntu Ultimate Tools: arranque detallado (se deshace en el menú de arranque → 16)"
             [ "$new_def" != "$cur_def" ] && echo "GRUB_CMDLINE_LINUX_DEFAULT=$(grub_quote "$new_def")"
             [ "$new_lin" != "$cur_lin" ] && echo "GRUB_CMDLINE_LINUX=$(grub_quote "$new_lin")"
         } | sudo tee "$BOOT_VERBOSE_DROPIN" > /dev/null
@@ -4895,9 +4896,9 @@ boot_verbose_on() {
             && echo "bls_quitados=$removed" >> "$BOOT_VERBOSE_STATE"
     fi
     regen_grub || return 1
-    log_success "Al reiniciar vas a ver los mensajes del sistema en vez del logo"
+    log_success "Arranque detallado activado: al reiniciar vas a ver cada paso y los errores, sin pantalla de carga"
     echo -e "${CYAN}ℹ Si el arranque se queda trabado, la última línea es la pista de qué falla (sácale una foto).${NC}"
-    echo -e "${CYAN}  Para volver al logo: esta misma opción.${NC}"
+    echo -e "${CYAN}  Para restaurar la pantalla de carga: esta misma opción.${NC}"
 }
 
 boot_verbose_off() {
@@ -4916,22 +4917,23 @@ boot_verbose_off() {
         run "No se pudieron restaurar los parámetros de los kernels" sudo grubby --update-kernel=ALL --args="$bls"
     fi
     rm -f "$BOOT_VERBOSE_STATE"
-    regen_grub && log_success "Vuelve el arranque como estaba (con logo, si lo tenía)"
+    regen_grub && log_success "Pantalla de carga restaurada: el arranque vuelve a como estaba"
 }
 
 boot_verbose_menu() {
-    echo -e "${PURPLE}📜 VER LOS MENSAJES AL ARRANCAR${NC}\n"
-    echo -e "   Muchas distros muestran un logo (splash) y esconden lo que hace el sistema al encender."
-    echo -e "   Sin el logo ves cada paso: útil para saber en qué se traba o qué tarda.\n"
+    echo -e "${PURPLE}🐞 ARRANQUE DETALLADO (verbose)${NC}\n"
+    echo -e "   Muchas distros arrancan con una pantalla de carga decorada (splash, la dibuja Plymouth) y en"
+    echo -e "   modo silencioso (quiet): eso tapa los errores. En arranque detallado ves cada paso y cada fallo."
+    echo -e "   La pantalla de carga se puede restaurar cuando quieras desde esta misma opción.\n"
     echo -e "   Parámetros ahora: ${CYAN}$(grub_effective_var GRUB_CMDLINE_LINUX) $(grub_effective_var GRUB_CMDLINE_LINUX_DEFAULT)${NC}"
     echo -e "   ${CYAN}💡 Solo para un arranque: en el menú de GRUB pulsa 'e', borra 'quiet splash' y pulsa Ctrl+X;${NC}"
     echo -e "   ${CYAN}   en Ubuntu también puedes pulsar Esc mientras se ve el logo.${NC}\n"
     if boot_verbose_active; then
-        echo -e "   Estado: ${GREEN}se ven los mensajes${NC} (lo cambió el script)\n"
-        confirm "${PURPLE}¿Volver al arranque como estaba (con logo)?${NC}" && boot_verbose_off
+        echo -e "   Estado: ${GREEN}arranque detallado activado${NC} (lo cambió el script)\n"
+        confirm "${PURPLE}¿Restaurar la pantalla de carga (splash) y el arranque silencioso?${NC}" && boot_verbose_off
     else
-        echo -e "   Estado: ${YELLOW}como viene de fábrica${NC}\n"
-        confirm "${PURPLE}¿Quitar el logo y ver los mensajes al arrancar?${NC}" && boot_verbose_on
+        echo -e "   Estado: ${YELLOW}arranque con pantalla de carga (como viene de fábrica)${NC}\n"
+        confirm "${PURPLE}¿Activar el arranque detallado (quitar la pantalla de carga)?${NC}" && boot_verbose_on
     fi
 }
 
@@ -4939,8 +4941,8 @@ grub_kernel_params_menu() {
     local current option params word
     current=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=//p' /etc/default/grub | tr -d '"')
     echo -e "${PURPLE}⚙ Parámetros actuales:${NC} ${current:-(ninguno)}\n"
-    echo -e "  ${PURPLE}1)${NC} Ver los mensajes al arrancar (quita el logo y el modo silencioso)"
-    echo -e "  ${PURPLE}2)${NC} Arranque silencioso con logo (como estaba, o pone 'quiet splash')"
+    echo -e "  ${PURPLE}1)${NC} Arranque detallado (verbose): quitar la pantalla de carga para ver errores"
+    echo -e "  ${PURPLE}2)${NC} Restaurar la pantalla de carga y el arranque silencioso (como estaba, o 'quiet splash')"
     echo -e "  ${PURPLE}3)${NC} Escribirlos a mano"
     echo -e "\n  ${PURPLE}0)${NC} 🔙 Volver"
     echo ""
@@ -5049,7 +5051,7 @@ grub_restore_original() {
         return 0
     fi
     confirm "${PURPLE}¿Volver el menú de GRUB a como estaba antes de usar el script?${NC}" || return 0
-    # Primero se deshace "ver mensajes al arrancar" (incluye los parámetros de cada kernel en Fedora)
+    # Primero se deshace el arranque detallado (incluye los parámetros de cada kernel en Fedora)
     boot_verbose_active && boot_verbose_off
     if [ -f "$GRUB_DEFAULT_BACKUP" ]; then
         sudo cp -p "$GRUB_DEFAULT_BACKUP" /etc/default/grub && sudo rm -f "$GRUB_DEFAULT_BACKUP"
