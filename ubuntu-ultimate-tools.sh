@@ -4064,7 +4064,7 @@ boot_option_ok() {
         8) $BOOT_UEFI ;;
         4) $BOOT_GRUB && ! $BOOT_LIVE && ! $BOOT_UEFI ;;
         15) $BOOT_GRUB && ! $BOOT_LIVE && $BOOT_UEFI ;;
-        2|3|6|7|9|14) $BOOT_GRUB && ! $BOOT_LIVE ;;
+        2|3|6|7|9|14|16) $BOOT_GRUB && ! $BOOT_LIVE ;;
         *) return 1 ;;
     esac
 }
@@ -4142,11 +4142,16 @@ grub_repair_menu() {
         fi
         boot_option 4 "💿 INSTALAR GRUB EN OTRO DISCO - Elegir en qué disco va el arranque"
         boot_option 5 "🩺 PARTICIÓN EFI - Verificar, reparar y ver espacio libre"
-        boot_section "🎨 Configurar el menú de arranque:" 6 7 8 9
+        boot_section "🎨 Configurar el menú de arranque:" 6 7 8 9 16
         boot_option 6 "📂 SISTEMA POR DEFECTO - Qué arranca solo y cuánto espera el menú"
         boot_option 7 "🪟 OTROS SISTEMAS - Detectar Windows y otras distros"
         boot_option 8 "🔢 ORDEN DE ARRANQUE UEFI - Qué arranca primero / solo la próxima vez"
         boot_option 9 "🎨 PERSONALIZAR MENÚ - Ocultar entradas, orden, colores, fondo, parámetros"
+        if boot_verbose_active; then
+            boot_option 16 "📜 VER MENSAJES AL ARRANCAR - Activado (elige para volver al logo)"
+        else
+            boot_option 16 "📜 VER MENSAJES AL ARRANCAR - Quitar el logo (splash) y ver qué hace el sistema"
+        fi
         boot_section "🚑 Cuando el sistema NO arranca:" 10 11 12 13
         if $BOOT_LIVE; then
             boot_option 10 "🚑 REPARAR EL SISTEMA DEL DISCO - Automático (chroot)"
@@ -4165,7 +4170,7 @@ grub_repair_menu() {
         echo ""
         read -r -p "📌 Opción: " grub_option
 
-        if [[ "$grub_option" =~ ^[0-9]+$ ]] && [ "$grub_option" -ge 1 ] && [ "$grub_option" -le 15 ] \
+        if [[ "$grub_option" =~ ^[0-9]+$ ]] && [ "$grub_option" -ge 1 ] && [ "$grub_option" -le 16 ] \
             && ! boot_option_ok "$grub_option"; then
             echo -e "${YELLOW}ℹ La opción $grub_option no aplica: $(boot_option_reason "$grub_option")${NC}"
             sleep 3
@@ -4187,6 +4192,7 @@ grub_repair_menu() {
             13) grub_live_guide ;;
             14) rescue_card_menu ;;
             15) uefi_fallback_menu ;;
+            16) boot_verbose_menu; pause ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
         esac
@@ -5336,18 +5342,152 @@ grub_appearance_menu() {
 }
 
 # Parámetros con los que arranca el kernel (GRUB_CMDLINE_LINUX_DEFAULT)
+# ------------------------------------------------------------
+# Ver los mensajes al arrancar: quita el logo (splash) y el modo silencioso.
+# Sirve en todas las distros del menú de arranque (Ubuntu, Debian, Arch, Manjaro, Fedora, openSUSE)
+# y recuerda cómo estaba, para volver exactamente a eso.
+# ------------------------------------------------------------
+BOOT_VERBOSE_STATE="$STATE_DIR/arranque-con-mensajes.txt"
+BOOT_VERBOSE_DROPIN="/etc/default/grub.d/99-ultimate-tools-ver-arranque.cfg"
+# Palabras que esconden los mensajes: logo (splash, rhgb en Fedora, splash=silent en openSUSE),
+# modo silencioso (quiet), y niveles de registro bajos (loglevel=3 en Arch, udev, systemd)
+BOOT_QUIET_RE='^(quiet|splash|splash=.*|rhgb|loglevel=[0-3]|rd\.udev\.log_level=.*|udev\.log_level=.*|udev\.log_priority=.*|rd\.systemd\.show_status=.*|systemd\.show_status=.*|vt\.global_cursor_default=0)$'
+
+boot_strip_quiet() {
+    local w words=() out=()
+    read -r -a words <<< "$1"
+    for w in "${words[@]}"; do
+        [[ "$w" =~ $BOOT_QUIET_RE ]] || out+=("$w")
+    done
+    echo "${out[*]}"
+}
+
+# Valor real de una variable de GRUB. En Ubuntu y Debian los archivos de /etc/default/grub.d
+# se leen después y pueden pisarlo (pasa en imágenes de la nube); el archivo de este script no cuenta.
+grub_effective_var() {
+    (
+        # shellcheck disable=SC1091
+        . /etc/default/grub 2> /dev/null
+        if [ "$BOOT_FAMILY" = debian ]; then
+            for f in /etc/default/grub.d/*.cfg; do
+                # shellcheck disable=SC1090
+                [ -e "$f" ] && [ "$f" != "$BOOT_VERBOSE_DROPIN" ] && . "$f"
+            done
+        fi
+        eval "printf '%s' \"\${$1}\""
+    )
+}
+
+boot_verbose_active() { [ -f "$BOOT_VERBOSE_STATE" ]; }
+
+# Valor entre comillas dobles, escapado para /etc/default/grub (parámetros como acpi_osi="Windows 2020")
+grub_quote() {
+    local v="$1"
+    v=${v//\\/\\\\}
+    v=${v//\"/\\\"}
+    v=${v//\$/\\\$}
+    v=${v//\`/\\\`}
+    printf '"%s"' "$v"
+}
+
+boot_verbose_on() {
+    local cur_def cur_lin new_def new_lin w removed=""
+    cur_def=$(grub_effective_var GRUB_CMDLINE_LINUX_DEFAULT)
+    cur_lin=$(grub_effective_var GRUB_CMDLINE_LINUX)
+    new_def=$(boot_strip_quiet "$cur_def")
+    new_lin=$(boot_strip_quiet "$cur_lin")
+    local words=()
+    read -r -a words <<< "$cur_def $cur_lin"
+    for w in "${words[@]}"; do
+        [[ "$w" =~ $BOOT_QUIET_RE ]] && [[ " $removed " != *" $w "* ]] && removed+="$w "
+    done
+    removed=${removed% }
+    if [ -z "$removed" ] && ! boot_verbose_active; then
+        echo -e "${GREEN}✓ Ya se ven los mensajes al arrancar (no hay quiet ni splash)${NC}"
+        return 0
+    fi
+    echo -e "${PURPLE}Se quita:${NC} ${removed:-nada nuevo}"
+    mkdir -p "$STATE_DIR"
+    if [ "$BOOT_FAMILY" = debian ] && [ -d /etc/default/grub.d ]; then
+        # Un archivo propio que se lee al final: /etc/default/grub no se toca y se deshace borrándolo
+        {
+            echo "# Ubuntu Ultimate Tools: ver los mensajes al arrancar (se deshace en el menú de arranque → 16)"
+            [ "$new_def" != "$cur_def" ] && echo "GRUB_CMDLINE_LINUX_DEFAULT=$(grub_quote "$new_def")"
+            [ "$new_lin" != "$cur_lin" ] && echo "GRUB_CMDLINE_LINUX=$(grub_quote "$new_lin")"
+        } | sudo tee "$BOOT_VERBOSE_DROPIN" > /dev/null
+        boot_verbose_active || echo "modo=archivo" > "$BOOT_VERBOSE_STATE"
+    else
+        # Se anotan los valores originales una sola vez, para volver exactamente a ellos
+        if ! boot_verbose_active; then
+            {
+                echo "modo=default"
+                [ "$new_def" != "$cur_def" ] && echo "orig_default=$cur_def"
+                [ "$new_lin" != "$cur_lin" ] && echo "orig_linux=$cur_lin"
+            } > "$BOOT_VERBOSE_STATE"
+        fi
+        [ "$new_def" != "$cur_def" ] && set_grub_var GRUB_CMDLINE_LINUX_DEFAULT "$(grub_quote "$new_def")"
+        [ "$new_lin" != "$cur_lin" ] && set_grub_var GRUB_CMDLINE_LINUX "$(grub_quote "$new_lin")"
+    fi
+    # Fedora y openSUSE con BLS: cada kernel guarda sus parámetros, se cambian con grubby
+    if [ -n "$removed" ] && grub_uses_bls && command -v grubby &> /dev/null; then
+        run "No se pudieron cambiar los parámetros de los kernels" sudo grubby --update-kernel=ALL --remove-args="$removed" \
+            && echo "bls_quitados=$removed" >> "$BOOT_VERBOSE_STATE"
+    fi
+    regen_grub || return 1
+    log_success "Al reiniciar vas a ver los mensajes del sistema en vez del logo"
+    echo -e "${CYAN}ℹ Si el arranque se queda trabado, la última línea es la pista de qué falla (sácale una foto).${NC}"
+    echo -e "${CYAN}  Para volver al logo: esta misma opción.${NC}"
+}
+
+boot_verbose_off() {
+    local mode orig_def orig_lin bls
+    mode=$(sed -n 's/^modo=//p' "$BOOT_VERBOSE_STATE")
+    orig_def=$(sed -n 's/^orig_default=//p' "$BOOT_VERBOSE_STATE")
+    orig_lin=$(sed -n 's/^orig_linux=//p' "$BOOT_VERBOSE_STATE")
+    bls=$(sed -n 's/^bls_quitados=//p' "$BOOT_VERBOSE_STATE" | head -1)
+    if [ "$mode" = archivo ]; then
+        sudo rm -f "$BOOT_VERBOSE_DROPIN"
+    else
+        grep -q '^orig_default=' "$BOOT_VERBOSE_STATE" && set_grub_var GRUB_CMDLINE_LINUX_DEFAULT "$(grub_quote "$orig_def")"
+        grep -q '^orig_linux=' "$BOOT_VERBOSE_STATE" && set_grub_var GRUB_CMDLINE_LINUX "$(grub_quote "$orig_lin")"
+    fi
+    if [ -n "$bls" ] && command -v grubby &> /dev/null; then
+        run "No se pudieron restaurar los parámetros de los kernels" sudo grubby --update-kernel=ALL --args="$bls"
+    fi
+    rm -f "$BOOT_VERBOSE_STATE"
+    regen_grub && log_success "Vuelve el arranque como estaba (con logo, si lo tenía)"
+}
+
+boot_verbose_menu() {
+    echo -e "${PURPLE}📜 VER LOS MENSAJES AL ARRANCAR${NC}\n"
+    echo -e "   Muchas distros muestran un logo (splash) y esconden lo que hace el sistema al encender."
+    echo -e "   Sin el logo ves cada paso: útil para saber en qué se traba o qué tarda.\n"
+    echo -e "   Parámetros ahora: ${CYAN}$(grub_effective_var GRUB_CMDLINE_LINUX) $(grub_effective_var GRUB_CMDLINE_LINUX_DEFAULT)${NC}"
+    echo -e "   ${CYAN}💡 Solo para un arranque: en el menú de GRUB pulsa 'e', borra 'quiet splash' y pulsa Ctrl+X;${NC}"
+    echo -e "   ${CYAN}   en Ubuntu también puedes pulsar Esc mientras se ve el logo.${NC}\n"
+    if boot_verbose_active; then
+        echo -e "   Estado: ${GREEN}se ven los mensajes${NC} (lo cambió el script)\n"
+        confirm "${PURPLE}¿Volver al arranque como estaba (con logo)?${NC}" && boot_verbose_off
+    else
+        echo -e "   Estado: ${YELLOW}como viene de fábrica${NC}\n"
+        confirm "${PURPLE}¿Quitar el logo y ver los mensajes al arrancar?${NC}" && boot_verbose_on
+    fi
+}
+
 grub_kernel_params_menu() {
     local current option params word
     current=$(sed -n 's/^GRUB_CMDLINE_LINUX_DEFAULT=//p' /etc/default/grub | tr -d '"')
     echo -e "${PURPLE}⚙ Parámetros actuales:${NC} ${current:-(ninguno)}\n"
-    echo -e "  ${PURPLE}1)${NC} Ver los mensajes al arrancar (quita 'quiet splash': útil si algo falla)"
-    echo -e "  ${PURPLE}2)${NC} Arranque silencioso con logo (pone 'quiet splash', lo normal en Ubuntu y Fedora)"
+    echo -e "  ${PURPLE}1)${NC} Ver los mensajes al arrancar (quita el logo y el modo silencioso)"
+    echo -e "  ${PURPLE}2)${NC} Arranque silencioso con logo (como estaba, o pone 'quiet splash')"
     echo -e "  ${PURPLE}3)${NC} Escribirlos a mano"
     echo -e "\n  ${PURPLE}0)${NC} 🔙 Volver"
     echo ""
     read -r -p "📌 Opción: " option
     case $option in
-        1|2)
+        1) boot_verbose_on; return ;;
+        2) if boot_verbose_active; then boot_verbose_off; return; fi ;;&
+        2)
             params=""
             for word in $current; do
                 [[ "$word" == "quiet" || "$word" == "splash" ]] || params+="$word "
@@ -5443,11 +5583,13 @@ undo_grub_customizer() {
 
 grub_restore_original() {
     if [ ! -f "$GRUB_DEFAULT_BACKUP" ] && [ ! -f "$GRUB_LOOK_FILE" ] && [ ! -f "$GRUB_OTHERS_FIRST" ] \
-        && [ ! -f "$GRUB_HIDDEN_LIST" ]; then
+        && [ ! -f "$GRUB_HIDDEN_LIST" ] && ! boot_verbose_active; then
         echo -e "${GREEN}✓ El menú de GRUB no tiene cambios del script${NC}"
         return 0
     fi
     confirm "${PURPLE}¿Volver el menú de GRUB a como estaba antes de usar el script?${NC}" || return 0
+    # Primero se deshace "ver mensajes al arrancar" (incluye los parámetros de cada kernel en Fedora)
+    boot_verbose_active && boot_verbose_off
     if [ -f "$GRUB_DEFAULT_BACKUP" ]; then
         sudo cp -p "$GRUB_DEFAULT_BACKUP" /etc/default/grub && sudo rm -f "$GRUB_DEFAULT_BACKUP"
     fi
