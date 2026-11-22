@@ -128,6 +128,14 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [inxi](https://github.com/smxi/inxi) | GPL-3.0-or-later | Instala |
 | [smartmontools](https://www.smartmontools.org/) | GPL-2.0-or-later | Instala: salud de los discos |
 
+## 🛡️ Auditoría de seguridad (opción 2 → 16 y 17)
+
+| Proyecto | Autor | Licencia | Uso |
+|---|---|---|---|
+| [Lynis](https://github.com/CISOfy/lynis) | Michael Boelen / CISOfy | GPL-3.0 | Externo: paquete oficial de la distro, usado **sin instalar** (carpeta temporal que se borra) o instalado |
+| [Linux Audit (auditd)](https://github.com/linux-audit/audit-userspace) | Red Hat y colaboradores | GPL-2.0-or-later (bibliotecas LGPL-2.1) | Instala: registro de auditoría con reglas **propias del script** |
+| [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) | Jeff Starke (Starke427) | **Sin licencia publicada** | **Inspiración**: la idea de combinar auditd y Lynis. No se copia ni se descarga su código ni sus reglas: un repositorio sin licencia no se puede redistribuir. Las reglas de auditd del script se escribieron desde cero para Ubuntu y Debian actuales |
+
 ## 🔒 Servicios de DNS
 
 Cloudflare, AdGuard DNS y Quad9 son **servicios** de terceros, no software: el script solo configura
