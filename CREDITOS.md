@@ -133,6 +133,8 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | Proyecto | Autor | Licencia | Uso |
 |---|---|---|---|
 | [Lynis](https://github.com/CISOfy/lynis) | Michael Boelen / CISOfy | GPL-3.0 | Externo: paquete oficial de la distro, usado **sin instalar** en Ubuntu y Debian (carpeta temporal que se borra) o instalado (Arch: repositorios oficiales) |
+| [linaudit](https://github.com/alexiarstein/linaudit) ([sitio](https://lexiworks.dev/linaudit)) | Alexia Michelle | AGPL-3.0-or-later | Externo: se compila desde su código oficial en una carpeta temporal (o se usa el paquete de la distro cuando exista); opcionalmente queda en `/usr/local/bin` |
+| [Rust y rustup](https://www.rust-lang.org/) | The Rust Project Developers | MIT / Apache-2.0 | Externo: rustup oficial **temporal** solo para compilar linaudit si el Rust del sistema es anterior a 1.85 |
 | [Linux Audit (auditd)](https://github.com/linux-audit/audit-userspace) | Red Hat y colaboradores | GPL-2.0-or-later (bibliotecas LGPL-2.1) | Instala: registro de auditoría con reglas **propias del script** |
 | [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) | Jeff Starke (Starke427) | **Sin licencia publicada** | **Inspiración**: la idea de combinar auditd y Lynis. No se copia ni se descarga su código ni sus reglas: un repositorio sin licencia no se puede redistribuir. Las reglas de auditd del script se escribieron desde cero para Ubuntu y Debian actuales |
 
