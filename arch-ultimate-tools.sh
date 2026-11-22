@@ -194,7 +194,7 @@ pkg_install() {
 pkg_remove() { pacman_unlock && run "No se pudo eliminar: $*" sudo pacman -Rns --noconfirm "$@"; }
 
 # Instala y anota en INSTALLED_LIST los paquetes que NO estaban instalados antes,
-# para poder quitarlos después desde "Deshacer optimizaciones" (opción 9).
+# para poder quitarlos después desde "Deshacer optimizaciones" (opción 10).
 pkg_install_recorded() {
     local new=() arg
     for arg in "$@"; do
@@ -494,14 +494,14 @@ FLAVORS=(
     "budgie|Arch Linux||budgie|Budgie|budgie-desktop"
 )
 
-# Detecta el sabor por su meta-paquete o, si se quitó (opción 11), por su escritorio
+# Detecta el sabor por su meta-paquete o, si se quitó (opción 12), por su escritorio
 detect_flavor() {
     local entry meta marker found=""
     for entry in "${FLAVORS[@]}"; do
         IFS='|' read -r _ _ meta _ _ marker <<< "$entry"
         [ -n "$meta" ] && pkg_installed "$meta" | grep -qx -- "$meta" && { found=$entry; break; }
     done
-    # Si se quitó con la opción 11, queda anotado: así un Ubuntu mínimo no se confunde con el completo
+    # Si se quitó con la opción 12, queda anotado: así un Ubuntu mínimo no se confunde con el completo
     if [ -z "$found" ] && [ -s "$REMOVED_LIST" ]; then
         for entry in "${FLAVORS[@]}"; do
             IFS='|' read -r _ _ meta _ _ _ <<< "$entry"
@@ -801,7 +801,7 @@ CORE_PKGS=(plasma-desktop plasma-workspace kwin systemsettings dolphin sddm
     sudo systemd polkit grub base linux linux-lts linux-zen linux-firmware pacman)
 
 # ============================================================
-# OPCIÓN 3: ELIMINAR APLICACIONES (COLOR: CIAN)
+# OPCIÓN 4: ELIMINAR APLICACIONES (COLOR: CIAN)
 # ============================================================
 
 select_apps_to_remove() {
@@ -857,7 +857,7 @@ select_apps_to_remove() {
 }
 
 # ============================================================
-# OPCIÓN 11: CONFIGURAR SISTEMA (COLOR: VERDE)
+# OPCIÓN 12: CONFIGURAR SISTEMA (COLOR: VERDE)
 # ============================================================
 
 # Lista de servidores (espejos) más rápidos. Arch/EndeavourOS: reflector; Manjaro: pacman-mirrors.
@@ -931,7 +931,7 @@ configure_system() {
 }
 
 # ============================================================
-# OPCIÓN 12: OPTIMIZACIÓN DE GPU (COLOR: MAGENTA)
+# OPCIÓN 13: OPTIMIZACIÓN DE GPU (COLOR: MAGENTA)
 # ============================================================
 
 optimize_gpu_menu() {
@@ -1129,7 +1129,7 @@ auto_detect_gpu() {
 }
 
 # ============================================================
-# OPCIÓN 13: OPTIMIZACIÓN DE KERNEL (COLOR: AZUL)
+# OPCIÓN 14: OPTIMIZACIÓN DE KERNEL (COLOR: AZUL)
 # ============================================================
 
 optimize_kernel_menu() {
@@ -1207,7 +1207,7 @@ arch_grub_default() {
     if [ -n "$path" ]; then
         run "No se pudo fijar el kernel por defecto" grub_set_default "$path" && log_success "GRUB arrancará por defecto: $k"
     else
-        log_info "Elige $k en 'Opciones avanzadas' del menú de GRUB (o la opción 18 → 6)"
+        log_info "Elige $k en 'Opciones avanzadas' del menú de GRUB (o la opción 19 → 6)"
     fi
 }
 
@@ -1376,7 +1376,7 @@ advanced_kernel_tweaks() {
 }
 
 # ============================================================
-# OPCIÓN 14: OPTIMIZACIÓN DE MEMORIA RAM (COLOR: AMARILLO)
+# OPCIÓN 15: OPTIMIZACIÓN DE MEMORIA RAM (COLOR: AMARILLO)
 # ============================================================
 
 apply_ram_tweaks() {
@@ -1683,7 +1683,7 @@ do_system_update() {
     if command -v paccache &> /dev/null; then
         run "No se pudo limpiar la caché" sudo paccache -rk2
     else
-        echo -e "  ${YELLOW}ℹ Sin pacman-contrib: se omite (actívalo en la opción 11)${NC}"
+        echo -e "  ${YELLOW}ℹ Sin pacman-contrib: se omite (actívalo en la opción 12)${NC}"
     fi
 
     echo -e "${GREEN}[4/4] Apps Flatpak...${NC}"
@@ -1723,7 +1723,7 @@ system_update() {
 }
 
 # ============================================================
-# OPCIÓN 7: INSTALAR ALACRITTY Y TEMAS (COLOR: CIAN)
+# OPCIÓN 8: INSTALAR ALACRITTY Y TEMAS (COLOR: CIAN)
 # ============================================================
 
 # ------------------------------------------------------------
@@ -1843,7 +1843,7 @@ install_tokyo_night_theme() {
     else
         echo -e "${CYAN}ℹ En Konsole: Configuración → Gestionar perfiles → Tokyo Night${NC}"
     fi
-    echo -e "${CYAN}ℹ Para volver a los colores originales: opción 10 (Revertir) o Preferencias del sistema → Colores${NC}"
+    echo -e "${CYAN}ℹ Para volver a los colores originales: opción 11 (Revertir) o Preferencias del sistema → Colores${NC}"
 }
 
 # Modo oscuro de GNOME: estilo oscuro y, con el tema Yaru de Ubuntu, su variante oscura
@@ -2534,7 +2534,7 @@ dev_nuclear() {
 
 
 # ============================================================
-# OPCIÓN 6: SOFTWARE OPCIONAL (COLOR: AZUL)
+# OPCIÓN 7: SOFTWARE OPCIONAL (COLOR: AZUL)
 # ============================================================
 
 # Programa|descripción|paquetes oficiales (separados por coma)|(sin uso)|app de Flathub
@@ -2776,12 +2776,12 @@ remove_apps_with_progress() {
     fi
 
     echo -e "${CYAN}══════════════════════════════════════════════════════════════════${NC}"
-    $AUTO_MODE || echo -e "${CYAN}ℹ Para quitar los íconos del escritorio o del panel usa la opción 5${NC}"
+    $AUTO_MODE || echo -e "${CYAN}ℹ Para quitar los íconos del escritorio o del panel usa la opción 6${NC}"
     echo ""
 }
 
 # ============================================================
-# OPCIÓN 10: REVERTIR CAMBIOS (COLOR: ROJO)
+# OPCIÓN 11: REVERTIR CAMBIOS (COLOR: ROJO)
 # ============================================================
 
 # Instala los paquetes que falten; si el lote falla, los intenta uno a uno
@@ -2813,7 +2813,7 @@ install_missing_pkgs() {
     log_success "Paquetes reinstalados"
 }
 
-# Vuelve el tema del escritorio al de antes de la opción 7 (Tokyo Night o modo oscuro)
+# Vuelve el tema del escritorio al de antes de la opción 8 (Tokyo Night o modo oscuro)
 restore_theme() {
     local kwrite value
     kwrite=$(command -v kwriteconfig6 || command -v kwriteconfig5)
@@ -2875,8 +2875,8 @@ revert_changes() {
         echo -e "  • Restaurar el tema del escritorio (si el script lo cambió)"
     fi
     echo -e "  • Volver a los valores de fábrica los ajustes del script (RAM, DNS, ZRAM, energía...)"
-    echo -e "\n${YELLOW}ℹ No cambia el kernel (opción 13), los repositorios (opción 11) ni el arranque (opción 18).${NC}"
-    echo -e "${YELLOW}  Los programas que instaló el script se quitan desde la opción 9.${NC}\n"
+    echo -e "\n${YELLOW}ℹ No cambia el kernel (opción 14), los repositorios (opción 12) ni el arranque (opción 19).${NC}"
+    echo -e "${YELLOW}  Los programas que instaló el script se quitan desde la opción 10.${NC}\n"
 
     if ! confirm "${RED}⚠ ¿Revertir a la instalación original?${NC}"; then
         return 0
@@ -2917,12 +2917,12 @@ revert_changes() {
 }
 
 # ============================================================
-# OPCIÓN 18: REPARAR GRUB (COLOR: MAGENTA)
+# OPCIÓN 19: REPARAR GRUB (COLOR: MAGENTA)
 # ============================================================
 
 # ------------------------------------------------------------
 # Arranque en cualquier distribución: Ubuntu/Debian, Arch/Manjaro, Fedora y openSUSE.
-# Todo lo de GRUB pasa por estas funciones, así el menú 18 sirve en todas.
+# Todo lo de GRUB pasa por estas funciones, así el menú 19 sirve en todas.
 # BOOT_ROOT vacío = el sistema que está corriendo; con una ruta = el sistema montado
 # desde un Live USB (los comandos se ejecutan dentro de él con chroot).
 # ------------------------------------------------------------
@@ -3534,7 +3534,7 @@ CAMINO MANUAL: BUSCAR LA PARTICIÓN A MANO
        linux /vmlinuz ...  e  initrd /initrd.img
 
 PASO FINAL: YA DENTRO DEL SISTEMA (repararlo de forma permanente)
-  Ejecuta este script → opción 18 → 2 (REPARACIÓN RÁPIDA) o → 3 (COMPLETA).
+  Ejecuta este script → opción 19 → 2 (REPARACIÓN RÁPIDA) o → 3 (COMPLETA).
 EOF
     echo -e "\n${YELLOW}📌 Presiona Enter para volver...${NC}"
     read -r
@@ -3567,7 +3567,7 @@ PASO 3: CARGAR GRUB (cambia hd0,gpt2 y la ruta por las que encontraste)
   Aparece el menú de siempre (o "grub>": entonces sigue la guía 11).
 
 PASO 4: YA DENTRO DEL SISTEMA
-  Ejecuta este script → opción 18 → 2 (REPARACIÓN RÁPIDA) o → 3 (COMPLETA).
+  Ejecuta este script → opción 19 → 2 (REPARACIÓN RÁPIDA) o → 3 (COMPLETA).
 
 SI "insmod normal" FALLA
   Los archivos de GRUB están dañados: arranca desde un USB de tu distribución
@@ -4110,7 +4110,7 @@ regen_grub() {
     tail -8 <<< "$out" | sed 's/^/   /'
     if [ -d /etc/grub.d/proxifiedScripts ]; then
         echo -e "${YELLOW}⚠ Grub Customizer cambió los scripts de /etc/grub.d: suele ser la causa de este error.${NC}"
-        echo -e "${YELLOW}  Deshazlo en: opción 18 → 9 (Personalizar menú) → 7${NC}"
+        echo -e "${YELLOW}  Deshazlo en: opción 19 → 9 (Personalizar menú) → 7${NC}"
     fi
     return $rc
 }
@@ -4831,7 +4831,7 @@ rescue_card_text() {
     if $rc_crypt; then
         echo " ATENCIÓN: /boot está en un disco cifrado. Desde 'grub>' o"
         echo " 'grub rescue>' no se puede arrancar a mano: usa un Live USB y"
-        echo " este script, opción 18 -> 10 (reparación automática)."
+        echo " este script, opción 19 -> 10 (reparación automática)."
         echo ""
     else
         echo "----------------------------------------------------------------"
@@ -4873,14 +4873,14 @@ rescue_card_text() {
     echo "----------------------------------------------------------------"
     echo " C) CUANDO VUELVAS A ENTRAR AL SISTEMA"
     echo "----------------------------------------------------------------"
-    echo " Arréglalo de forma permanente: este script, opción 18 -> 2"
-    echo " (reparación rápida) o 18 -> 3 (reparación completa)."
+    echo " Arréglalo de forma permanente: este script, opción 19 -> 2"
+    echo " (reparación rápida) o 19 -> 3 (reparación completa)."
     echo ""
     echo "----------------------------------------------------------------"
     echo " D) SI NADA DE ESTO FUNCIONA"
     echo "----------------------------------------------------------------"
     echo " Arranca con un USB de instalación de tu distribución (modo Live),"
-    echo " abre este script desde el pendrive y usa la opción 18 -> 10."
+    echo " abre este script desde el pendrive y usa la opción 19 -> 10."
     echo "    bash /media/\$USER/<pendrive>/arch-ultimate-tools.sh"
     echo "================================================================"
 }
@@ -5209,7 +5209,7 @@ EXPL
 }
 
 # ============================================================
-# OPCIÓN 19: APAGAR O REINICIAR (COLOR: AMARILLO)
+# OPCIÓN 20: APAGAR O REINICIAR (COLOR: AMARILLO)
 # ============================================================
 
 shutdown_menu() {
@@ -5247,7 +5247,7 @@ shutdown_menu() {
 }
 
 # ============================================================
-# OPCIÓN 5: QUITAR ACCESOS DIRECTOS (COLOR: CIAN)
+# OPCIÓN 6: QUITAR ACCESOS DIRECTOS (COLOR: CIAN)
 # ============================================================
 
 PLASMA_APPLETSRC="$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc"
@@ -5485,7 +5485,7 @@ remove_shortcuts_menu() {
 }
 
 # ============================================================
-# OPCIÓN 15: RED, DNS Y DRIVERS (COLOR: AZUL)
+# OPCIÓN 16: RED, DNS Y DRIVERS (COLOR: AZUL)
 # ============================================================
 
 RESOLVED_DNS_CONF="/etc/systemd/resolved.conf.d/99-arch-ultimate-tools-dns.conf"
@@ -5742,7 +5742,7 @@ network_menu() {
 }
 
 # ============================================================
-# OPCIÓN 16: ENERGÍA Y RENDIMIENTO (COLOR: AMARILLO)
+# OPCIÓN 17: ENERGÍA Y RENDIMIENTO (COLOR: AMARILLO)
 # ============================================================
 
 is_laptop() {
@@ -5779,7 +5779,7 @@ set_power_profile() {
     local profile="$1"
     if ! command -v powerprofilesctl &> /dev/null; then
         if pkg_installed tlp | grep -qx tlp; then
-            log_error "Usas TLP: los perfiles de energía los maneja TLP (quítalo en la opción 9 para usar estos)"
+            log_error "Usas TLP: los perfiles de energía los maneja TLP (quítalo en la opción 10 para usar estos)"
             return 1
         fi
         # Xubuntu, Lubuntu y otros no lo traen: es el servicio estándar de perfiles de energía
@@ -5942,11 +5942,11 @@ enable_steam_play() {
     if [ ! -f "$cfg" ]; then
         log_info "Abre Steam una vez e inicia sesión. Proton ya está activo para los juegos verificados;"
         log_info "para todos: Steam → Configuración → Compatibilidad → 'Activar Steam Play para todos los demás títulos'"
-        log_info "(o, con Steam cerrado, usa la opción 16 → 6 y se activa solo)"
+        log_info "(o, con Steam cerrado, usa la opción 17 → 6 y se activa solo)"
         return 0
     fi
     if pgrep -x steam &> /dev/null; then
-        log_warning "Steam está abierto: ciérralo y usa la opción 16 → 6 para activar Proton en todos los juegos"
+        log_warning "Steam está abierto: ciérralo y usa la opción 17 → 6 para activar Proton en todos los juegos"
         return 0
     fi
     tmp=$(mktemp)
@@ -6117,7 +6117,7 @@ power_menu() {
 }
 
 # ============================================================
-# OPCIÓN 9: DESHACER OPTIMIZACIONES (COLOR: ROJO)
+# OPCIÓN 10: DESHACER OPTIMIZACIONES (COLOR: ROJO)
 # ============================================================
 
 # Programas que el script puede instalar. Sirve para ofrecer también los que se
@@ -6239,8 +6239,8 @@ undo_menu() {
         echo -e "         con respaldos antes de borrar"
         echo -e "  ${RED}11)${NC} 📝 Quitar el registro de auditoría (auditd)"
         echo -e "\n  ${RED} 0)${NC} 🔙 Volver"
-        echo -e "\n${YELLOW}ℹ Otros cambios se deshacen en su menú: kernel (13), distribución original (10),${NC}"
-        echo -e "${YELLOW}  accesos directos (5), DNS/BBR/Wi-Fi (15), energía e indexador (16)${NC}\n"
+        echo -e "\n${YELLOW}ℹ Otros cambios se deshacen en su menú: kernel (14), distribución original (11),${NC}"
+        echo -e "${YELLOW}  accesos directos (6), DNS/BBR/Wi-Fi (16), energía e indexador (17)${NC}\n"
         read -r -p "📌 Opción (0-11): " undo_option
 
         case $undo_option in
@@ -6271,7 +6271,7 @@ undo_menu() {
 }
 
 # ============================================================
-# OPCIÓN 2: INFORMACIÓN DEL SISTEMA Y HARDWARE (COLOR: CIAN)
+# OPCIÓN 3: INFORMACIÓN DEL SISTEMA Y HARDWARE (COLOR: CIAN)
 # ============================================================
 
 # Cada sección imprime texto sin colores: así sirve para la pantalla, para buscar
@@ -6346,7 +6346,7 @@ info_gpu() {
         show && /^[^\t]/ { sub(/^[^ ]+ [^:]+: /, ""); print "  " $0 }
         show && /Kernel driver in use/ { sub(/.*: /, ""); print "    Driver en uso: " $0 }'
     if LC_ALL=C lspci -k 2>/dev/null | grep -A3 -i nvidia | grep -q 'driver in use: nouveau'; then
-        echo "  ⚠ La NVIDIA usa el driver libre 'nouveau': para juegos instala el de NVIDIA (opción 15 → 6)"
+        echo "  ⚠ La NVIDIA usa el driver libre 'nouveau': para juegos instala el de NVIDIA (opción 16 → 6)"
     fi
 }
 
@@ -6362,7 +6362,7 @@ info_disks() {
             echo "  (smartmontools no está instalado)"
             return 0
         fi
-        echo -e "${CYAN}ℹ Para leer la salud de los discos hace falta smartmontools (se puede quitar en la opción 9)${NC}"
+        echo -e "${CYAN}ℹ Para leer la salud de los discos hace falta smartmontools (se puede quitar en la opción 10)${NC}"
         confirm "${CYAN}¿Instalarlo?${NC}" || return 0
         pkg_refresh
         pkg_install_recorded smartmontools || return 1
@@ -6590,7 +6590,7 @@ info_benchmark() {
 # ------------------------------------------------------------
 # Auditoría de seguridad
 # - Lynis (CISOfy, GPL-3.0): revisa la seguridad del sistema y da un puntaje con sugerencias.
-#   En Arch se instala desde los repositorios oficiales (se quita en 9 → 1).
+#   En Arch se instala desde los repositorios oficiales (se quita en 10 → 1).
 # - auditd (Linux Audit, GPL-2.0): registra cambios en usuarios, sudo, SSH, hora, módulos...
 #   Las reglas son propias de este script, sin "-e 2" (no se bloquean) y se quitan cuando quieras.
 # Idea inspirada en Linux-Security-Policy de Jeff Starke (Starke427): no se usa su código
@@ -6644,7 +6644,7 @@ security_audit_lynis() {
         lynis_cmd=(lynis)
     else
         echo -e "${CYAN}ℹ Lynis no está instalado. Se instala desde los repositorios oficiales de Arch${NC}"
-        echo -e "${CYAN}  (~1 MB, se quita en 9 → 1).${NC}"
+        echo -e "${CYAN}  (~1 MB, se quita en 10 → 1).${NC}"
         confirm "${CYAN}¿Instalar Lynis?${NC}" || return 0
         pkg_install_recorded lynis || return 1
         lynis_cmd=(lynis)
@@ -6674,7 +6674,7 @@ audit_rules_active() { [ -f "$AUDIT_RULES_FILE" ]; }
 # Reglas del script: solo vigila rutas que existen y llamadas que existen en este procesador
 build_audit_rules() {
     local p arch
-    echo "## Arch Ultimate Tools: registro de auditoría (se quita desde el menú 19 → 5)"
+    echo "## Arch Ultimate Tools: registro de auditoría (se quita desde el menú 2 → 5)"
     echo "## Reglas propias del script (AGPL-3.0-or-later). Sin -e 2: no se bloquean hasta reiniciar."
     for p in "/etc/passwd:identidad" "/etc/group:identidad" "/etc/shadow:identidad" "/etc/gshadow:identidad" \
         "/etc/security/opasswd:identidad" "/etc/sudoers:sudo" "/etc/sudoers.d:sudo" \
@@ -6717,7 +6717,7 @@ enable_audit() {
     fi
     if sudo augenrules --load >> "$LOG_FILE" 2>&1 && sudo auditctl -l 2>/dev/null | grep -q -- '-k identidad'; then
         log_success "Registro de auditoría activo ($(sudo auditctl -l | grep -c -- ' -k ') reglas)"
-        echo -e "${CYAN}ℹ Para verlo: opción 19 → 4 (Ver qué se registró)${NC}"
+        echo -e "${CYAN}ℹ Para verlo: opción 2 → 4 (Ver qué se registró)${NC}"
     else
         sudo rm -f "$AUDIT_RULES_FILE"
         sudo augenrules --load >> "$LOG_FILE" 2>&1
@@ -6796,7 +6796,7 @@ version_ge() { [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]; 
 # Compilador de C (Rust lo necesita para enlazar): se instala y queda registrado si falta
 linaudit_need_cc() {
     command -v cc &> /dev/null && return 0
-    echo -e "${YELLOW}ℹ Para compilar hace falta un compilador de C (gcc, ~40 MB; se quita en 9 → 1)${NC}"
+    echo -e "${YELLOW}ℹ Para compilar hace falta un compilador de C (gcc, ~40 MB; se quita en 10 → 1)${NC}"
     confirm "${CYAN}¿Instalar gcc?${NC}" || return 1
     if declare -F apt_install_recorded > /dev/null; then
         apt_update
@@ -6886,7 +6886,7 @@ security_audit_linaudit() {
     fi
     # Cuando esté en los repositorios de la distro, se usa el paquete oficial
     if declare -F available_pkgs > /dev/null && [ -n "$(available_pkgs linaudit)" ]; then
-        confirm "${CYAN}linaudit está en los repositorios oficiales. ¿Instalarlo? (se quita en 9 → 1)${NC}" || return 0
+        confirm "${CYAN}linaudit está en los repositorios oficiales. ¿Instalarlo? (se quita en 10 → 1)${NC}" || return 0
         apt_install_recorded linaudit || return 1
         record_installed linaudit "repositorios oficiales de la distro"
         linaudit_run "$(command -v linaudit)"
@@ -6896,7 +6896,7 @@ security_audit_linaudit() {
     echo -e "${YELLOW}ℹ linaudit todavía no publica programas listos ni está en los repositorios: hay que compilarlo.${NC}"
     echo -e "   • Se baja su código oficial y se compila en una carpeta temporal (5 a 15 minutos, ~3 GB)."
     echo -e "   • Si tu Rust es viejo o no lo tienes, se usa uno temporal. Todo se borra al terminar."
-    echo -e "   • Al final puedes dejarlo instalado para la próxima vez (se quita en 19 → 6).\n"
+    echo -e "   • Al final puedes dejarlo instalado para la próxima vez (se quita en 2 → 6).\n"
     confirm "${CYAN}¿Compilar y ejecutar linaudit?${NC}" || return 0
 
     local tmp
@@ -6911,7 +6911,7 @@ security_audit_linaudit() {
     linaudit_run "$tmp/src/target/release/linaudit"
 
     echo ""
-    if confirm "${CYAN}¿Dejar linaudit instalado para usarlo cuando quieras (sudo linaudit)? (se quita en 19 → 6)${NC}"; then
+    if confirm "${CYAN}¿Dejar linaudit instalado para usarlo cuando quieras (sudo linaudit)? (se quita en 2 → 6)${NC}"; then
         sudo install -m 0755 "$tmp/src/target/release/linaudit" "$LINAUDIT_BIN" \
             && sudo install -D -m 0644 "$tmp/src/doc/linaudit.1" /usr/local/share/man/man1/linaudit.1 \
             && sudo install -D -m 0644 "$tmp/src/doc/linaudit.es.1" /usr/local/share/man/es/man1/linaudit.1 \
@@ -6925,7 +6925,7 @@ security_audit_linaudit() {
 remove_linaudit() {
     if [ ! -f "$LINAUDIT_STATE" ] && [ ! -x "$LINAUDIT_BIN" ]; then
         if grep -qx linaudit "$INSTALLED_LIST" 2>/dev/null; then
-            echo -e "${YELLOW}ℹ linaudit vino de los repositorios: se quita en 9 → 1${NC}"
+            echo -e "${YELLOW}ℹ linaudit vino de los repositorios: se quita en 10 → 1${NC}"
         else
             echo -e "${YELLOW}ℹ El script no instaló linaudit${NC}"
         fi
@@ -7066,14 +7066,14 @@ boot_only_menu() {
             echo -e "${CYAN}  Ubuntu, Debian, Arch, Manjaro, Fedora y openSUSE. El resto del script es para Arch.${NC}\n"
         fi
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
-        echo -e "  ${CYAN}18)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
+        echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
         echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (18, 20 o 0): " option
+        read -r -p "🔢 Opción (19, 20 o 0): " option
         case $option in
-            18|1) grub_repair_menu ;;
+            19|1) grub_repair_menu ;;
             20|2) shutdown_menu ;;
             0) echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"; exit 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
@@ -7087,52 +7087,52 @@ main_menu() {
         print_header
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
         echo -e "  ${CYAN} 1)${NC} 🔄 ACTUALIZAR SISTEMA (pacman -Syu y Flatpak)"
-        echo -e "  ${CYAN} 2)${NC} 📊 Información del sistema y hardware"
+        echo -e "  ${CYAN} 2)${NC} 🛡️ AUDITORÍA DE SEGURIDAD (Lynis y registro de auditoría)"
+        echo -e "  ${CYAN} 3)${NC} 📊 Información del sistema y hardware"
         echo ""
-        echo -e "  ${CYAN} 3)${NC} 🚮 Eliminar aplicaciones preinstaladas"
-        echo -e "  ${CYAN} 5)${NC} 🧹 Quitar accesos directos (escritorio y panel)"
+        echo -e "  ${CYAN} 4)${NC} 🚮 Eliminar aplicaciones preinstaladas"
+        echo -e "  ${CYAN} 6)${NC} 🧹 Quitar accesos directos (escritorio y panel)"
         echo ""
-        echo -e "  ${CYAN} 6)${NC} 📦 Instalar software opcional"
-        echo -e "  ${CYAN} 7)${NC} 💻 Instalar Alacritty (terminal GPU) y temas"
-        echo -e "  ${CYAN} 9)${NC} 🩹 Deshacer optimizaciones / quitar programas"
-        echo -e "  ${CYAN}10)${NC} ⏪ Revertir a la instalación original"
+        echo -e "  ${CYAN} 7)${NC} 📦 Instalar software opcional"
+        echo -e "  ${CYAN} 8)${NC} 💻 Instalar Alacritty (terminal GPU) y temas"
+        echo -e "  ${CYAN}10)${NC} 🩹 Deshacer optimizaciones / quitar programas"
+        echo -e "  ${CYAN}11)${NC} ⏪ Revertir a la instalación original"
         echo ""
-        echo -e "  ${CYAN}11)${NC} 🔩 Configurar sistema (multilib, servidores, descargas en paralelo)"
-        echo -e "  ${CYAN}12)${NC} 🎮 GPU y drivers (NVIDIA/AMD/Intel)"
-        echo -e "  ${CYAN}13)${NC} 🐧 Kernel (linux, LTS, Zen; en Manjaro con mhwd-kernel)"
-        echo -e "  ${CYAN}14)${NC} 💾 Optimizar Memoria RAM (automático)"
-        echo -e "  ${CYAN}15)${NC} 🌐 Red, DNS y firmware"
-        echo -e "  ${CYAN}16)${NC} 🔋 Energía y rendimiento"
-        echo -e "  ${CYAN}18)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
-        echo -e "  ${CYAN}19)${NC} 🛡️ AUDITORÍA DE SEGURIDAD (Lynis y registro de auditoría)"
+        echo -e "  ${CYAN}12)${NC} 🔩 Configurar sistema (multilib, servidores, descargas en paralelo)"
+        echo -e "  ${CYAN}13)${NC} 🎮 GPU y drivers (NVIDIA/AMD/Intel)"
+        echo -e "  ${CYAN}14)${NC} 🐧 Kernel (linux, LTS, Zen; en Manjaro con mhwd-kernel)"
+        echo -e "  ${CYAN}15)${NC} 💾 Optimizar Memoria RAM (automático)"
+        echo -e "  ${CYAN}16)${NC} 🌐 Red, DNS y firmware"
+        echo -e "  ${CYAN}17)${NC} 🔋 Energía y rendimiento"
+        echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
         echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
-        echo -e "\n${YELLOW}ℹ Versión beta: los números son los mismos que en Ubuntu. Snap (4 y 8) no aplica en${NC}"
-        echo -e "${YELLOW}  Arch y los perfiles automáticos (17) llegan en una próxima versión.${NC}"
+        echo -e "\n${YELLOW}ℹ Versión beta: los números son los mismos que en Ubuntu. Snap (5 y 9) no aplica en${NC}"
+        echo -e "${YELLOW}  Arch y los perfiles automáticos (18) llegan en una próxima versión.${NC}"
         echo ""
         read -r -p "🔢 Opción: " option
 
         case $option in
             1) system_update ;;
-            2) sysinfo_menu ;;
-            3) select_apps_to_remove ;;
-            5) remove_shortcuts_menu ;;
-            6) select_optional_software ;;
-            7) install_custom_software ;;
-            9) undo_menu ;;
-            10) revert_changes ;;
-            11) configure_system ;;
-            12) optimize_gpu_menu ;;
-            13) optimize_kernel_menu ;;
-            14) optimize_ram_menu ;;
-            15) network_menu ;;
-            16) power_menu ;;
-            18) grub_repair_menu ;;
-            19) security_menu ;;
+            2) security_menu ;;
+            3) sysinfo_menu ;;
+            4) select_apps_to_remove ;;
+            6) remove_shortcuts_menu ;;
+            7) select_optional_software ;;
+            8) install_custom_software ;;
+            10) undo_menu ;;
+            11) revert_changes ;;
+            12) configure_system ;;
+            13) optimize_gpu_menu ;;
+            14) optimize_kernel_menu ;;
+            15) optimize_ram_menu ;;
+            16) network_menu ;;
+            17) power_menu ;;
+            19) grub_repair_menu ;;
             20) shutdown_menu ;;
             4|8) echo -e "${YELLOW}ℹ Snap no se usa en Arch${NC}"; sleep 2 ;;
-            17) echo -e "${YELLOW}ℹ Los perfiles automáticos llegan en una próxima versión${NC}"; sleep 2 ;;
+            18) echo -e "${YELLOW}ℹ Los perfiles automáticos llegan en una próxima versión${NC}"; sleep 2 ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
                 exit 0

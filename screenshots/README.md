@@ -13,63 +13,63 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 
 ---
 
-## Información del sistema y hardware (opción 2)
+## Información del sistema y hardware (opción 3)
 
-![Información del sistema y hardware (opción 2)](14-informacion-sistema.png)
-
----
-
-## Resumen rápido del sistema (opción 2 → 1)
-
-![Resumen rápido del sistema (opción 2 → 1)](15-resumen-sistema.png)
+![Información del sistema y hardware (opción 3)](14-informacion-sistema.png)
 
 ---
 
-## Eliminar aplicaciones (opción 3) — lista con casillas
+## Resumen rápido del sistema (opción 3 → 1)
 
-![Eliminar aplicaciones (opción 3) — lista con casillas](02-eliminar-apps.png)
-
----
-
-## Quitar accesos directos (opción 5)
-
-![Quitar accesos directos (opción 5)](09-accesos-directos.png)
+![Resumen rápido del sistema (opción 3 → 1)](15-resumen-sistema.png)
 
 ---
 
-## Instalar software opcional (opción 6) — lista con casillas
+## Eliminar aplicaciones (opción 4) — lista con casillas
 
-![Instalar software opcional (opción 6) — lista con casillas](08-software-opcional.png)
+![Eliminar aplicaciones (opción 4) — lista con casillas](02-eliminar-apps.png)
 
 ---
 
-## Ubuntu Server: menú principal (opción 6 instala un escritorio)
+## Quitar accesos directos (opción 6)
+
+![Quitar accesos directos (opción 6)](09-accesos-directos.png)
+
+---
+
+## Instalar software opcional (opción 7) — lista con casillas
+
+![Instalar software opcional (opción 7) — lista con casillas](08-software-opcional.png)
+
+---
+
+## Ubuntu Server: menú principal (opción 7 instala un escritorio)
 
 ![Ubuntu Server: menú principal](23-ubuntu-server-menu.png)
 
 ---
 
-## Instalar un escritorio (opción 6 → Escritorio)
+## Instalar un escritorio (opción 7 → Escritorio)
 
 ![Instalar un escritorio: KDE Plasma, GNOME, Xfce, LXQt, MATE, Budgie o Cinnamon](24-instalar-escritorio.png)
 
 ---
 
-## Deshacer optimizaciones (opción 9)
+## Deshacer optimizaciones (opción 10)
 
-![Deshacer optimizaciones (opción 9)](13-deshacer.png)
-
----
-
-## Revertir a distribución original (opción 10)
-
-![Revertir a distribución original (opción 10)](16-revertir.png)
+![Deshacer optimizaciones (opción 10)](13-deshacer.png)
 
 ---
 
-## Optimizar GPU (opción 12)
+## Revertir a distribución original (opción 11)
 
-![Optimizar GPU (opción 12)](03-gpu.png)
+![Revertir a distribución original (opción 11)](16-revertir.png)
+
+---
+
+## Optimizar GPU (opción 13)
+
+![Optimizar GPU (opción 13)](03-gpu.png)
 
 ---
 
@@ -79,45 +79,45 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 
 ---
 
-## Red, DNS y drivers (opción 15)
+## Red, DNS y drivers (opción 16)
 
-![Red, DNS y drivers (opción 15)](10-red-dns-drivers.png)
-
----
-
-## Energía y rendimiento (opción 16)
-
-![Energía y rendimiento (opción 16)](11-energia.png)
+![Red, DNS y drivers (opción 16)](10-red-dns-drivers.png)
 
 ---
 
-## Perfiles automáticos (opción 17)
+## Energía y rendimiento (opción 17)
 
-![Perfiles automáticos (opción 17)](12-perfiles.png)
-
----
-
-## Arranque: reparar y personalizar GRUB/EFI (opción 18)
-
-![Arranque: reparar y personalizar GRUB/EFI (opción 18)](05-arranque-grub.png)
+![Energía y rendimiento (opción 17)](11-energia.png)
 
 ---
 
-## Personalizar el menú de GRUB (opción 18 → 9)
+## Perfiles automáticos (opción 18)
 
-![Personalizar el menú de GRUB (opción 18 → 9)](06-personalizar-grub.png)
-
----
-
-## Ocultar entradas del menú de GRUB (opción 18 → 9 → 1)
-
-![Ocultar entradas del menú de GRUB (opción 18 → 9 → 1)](07-ocultar-entradas-grub.png)
+![Perfiles automáticos (opción 18)](12-perfiles.png)
 
 ---
 
-## Tarjeta de rescate de tu PC (opción 18 → 14)
+## Arranque: reparar y personalizar GRUB/EFI (opción 19)
 
-![Tarjeta de rescate de tu PC (opción 18 → 14)](17-tarjeta-rescate.png)
+![Arranque: reparar y personalizar GRUB/EFI (opción 19)](05-arranque-grub.png)
+
+---
+
+## Personalizar el menú de GRUB (opción 19 → 9)
+
+![Personalizar el menú de GRUB (opción 19 → 9)](06-personalizar-grub.png)
+
+---
+
+## Ocultar entradas del menú de GRUB (opción 19 → 9 → 1)
+
+![Ocultar entradas del menú de GRUB (opción 19 → 9 → 1)](07-ocultar-entradas-grub.png)
+
+---
+
+## Tarjeta de rescate de tu PC (opción 19 → 14)
+
+![Tarjeta de rescate de tu PC (opción 19 → 14)](17-tarjeta-rescate.png)
 
 ---
 
@@ -127,15 +127,15 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 
 ---
 
-## Menú de arranque en Arch Linux (opción 18)
+## Menú de arranque en Arch Linux (opción 19)
 
-![Menú de arranque en Arch Linux (opción 18)](19-arranque-arch.png)
+![Menú de arranque en Arch Linux (opción 19)](19-arranque-arch.png)
 
 ---
 
-## Menú de arranque desde un Live USB (opción 18)
+## Menú de arranque desde un Live USB (opción 19)
 
-![Menú de arranque desde un Live USB (opción 18)](20-arranque-live-usb.png)
+![Menú de arranque desde un Live USB (opción 19)](20-arranque-live-usb.png)
 
 ---
 
@@ -151,12 +151,12 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 
 ---
 
-## Auditoría de seguridad con Lynis (opción 19 → 1)
+## Auditoría de seguridad con Lynis (opción 2 → 1)
 
 ![Auditoría de seguridad con Lynis: puntaje, advertencias y sugerencias](25-auditoria-lynis.png)
 
 ---
 
-## Menú de auditoría de seguridad (opción 19)
+## Menú de auditoría de seguridad (opción 2)
 
 ![Auditoría de seguridad: Lynis y registro de auditoría (auditd)](26-registro-auditoria.png)

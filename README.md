@@ -47,10 +47,10 @@ sin importar el sabor. Al iniciar **detecta qué sabor y qué escritorio tienes*
 | **Ubuntu Studio** | KDE Plasma | Igual que Kubuntu, salvo Rolling Release |
 | **Edubuntu** | GNOME | Igual que Ubuntu |
 | **Ubuntu Kylin** | UKUI | Sin lista propia de apps: solo las comunes |
-| **Ubuntu Server** | sin escritorio | Kernel, GRUB, red, RAM, Snap y actualizaciones. **Opción 6: instalar un escritorio** |
+| **Ubuntu Server** | sin escritorio | Kernel, GRUB, red, RAM, Snap y actualizaciones. **Opción 7: instalar un escritorio** |
 
 El sabor se detecta por su meta-paquete (`kubuntu-desktop`, `xubuntu-desktop`...). Si lo quitaste con la
-opción 11, se reconoce por su escritorio. Las opciones que no aplican a tu escritorio lo explican y no hacen nada.
+opción 12, se reconoce por su escritorio. Las opciones que no aplican a tu escritorio lo explican y no hacen nada.
 
 ---
 
@@ -71,7 +71,7 @@ todas, y te dice cuál usar.
 **Qué traen las betas:** actualizar, información del sistema, eliminar apps y accesos directos, software
 opcional, Alacritty y temas, deshacer, revertir, configuración, GPU y drivers, kernel, RAM/ZRAM, red y DNS,
 energía (incluidos Steam, Proton y herramientas de juego) y el menú de arranque completo.
-**Todavía no:** los perfiles automáticos (17). Snap (4 y 8) no aplica en Debian ni en Arch.
+**Todavía no:** los perfiles automáticos (18). Snap (5 y 9) no aplica en Debian ni en Arch.
 
 ### Debian (beta)
 
@@ -158,7 +158,7 @@ chmod +x ubuntu-ultimate-tools.sh
 
 ## 🚀 Perfiles automáticos
 
-Aplican varias optimizaciones de una vez, sin preguntas intermedias. Se eligen desde el menú (opción 17)
+Aplican varias optimizaciones de una vez, sin preguntas intermedias. Se eligen desde el menú (opción 18)
 o desde la terminal:
 
 ```bash
@@ -182,7 +182,7 @@ o desde la terminal:
 
 ---
 
-## 🌐 Red, DNS y drivers (opción 15)
+## 🌐 Red, DNS y drivers (opción 16)
 
 - **DNS**: Cloudflare, Cloudflare con bloqueo de malware, Google, Quad9 o AdGuard (bloquea anuncios), con DNS
   cifrado cuando el servidor lo permite. También puede **medir cuál responde más rápido** desde tu conexión.
@@ -196,7 +196,7 @@ o desde la terminal:
 
 ---
 
-## 🔋 Energía y rendimiento (opción 16)
+## 🔋 Energía y rendimiento (opción 17)
 
 Perfiles rendimiento / equilibrado / ahorro, TLP para portátiles, activar o desactivar el indexador
 de archivos Baloo, y herramientas de juego: GameMode, MangoHud, Steam y Proton-GE.
@@ -210,16 +210,16 @@ Shift derecho + F12 oculta el panel · Shift izquierdo + F2 pausa/reanuda la gra
 - **Steam**: se instala el `.deb` oficial de Valve y se activan las librerías de 32 bits (`i386`) que necesitan
   Steam y los juegos, incluida la parte de 32 bits del driver de NVIDIA si lo usas.
 - **Proton** viene dentro de Steam. El script lo activa para **todos los juegos** (Proton Experimental):
-  si Steam todavía no se abrió nunca, ábrelo una vez, inicia sesión, ciérralo y usa la opción 16 → 6;
+  si Steam todavía no se abrió nunca, ábrelo una vez, inicia sesión, ciérralo y usa la opción 17 → 6;
   o actívalo a mano en *Steam → Configuración → Compatibilidad*. Si ya elegiste una versión, no se cambia.
 - **Proton-GE**: la última versión se descarga de la página oficial del proyecto, se comprueba que llegó
   entera (suma SHA-512) y se instala en `compatibilitytools.d`. Se elige por juego en
   *Propiedades → Compatibilidad*. Funciona también con Steam de Flatpak.
-- Se quitan desde la opción 9: Steam en "Quitar programas" y Proton-GE en "Quitar Proton-GE".
+- Se quitan desde la opción 10: Steam en "Quitar programas" y Proton-GE en "Quitar Proton-GE".
 
 ---
 
-## 🔧 Arranque: reparar y personalizar GRUB/EFI (opción 18)
+## 🔧 Arranque: reparar y personalizar GRUB/EFI (opción 19)
 
 Todo lo hace el propio script, sin instalar programas externos.
 
@@ -242,9 +242,9 @@ Todo lo hace el propio script, sin instalar programas externos.
 - El script detecta la distribución, la carpeta de GRUB (`/boot/grub` o `/boot/grub2`), dónde está montada la
   partición EFI y cómo se llama su carpeta (`ubuntu`, `debian`, `GRUB`, `manjaro`, `fedora`...).
 - **En Ubuntu y sus derivadas** (Kubuntu, Mint, Pop!_OS...) está todo el script. **En las demás distribuciones**
-  el menú principal muestra solo **18) Arranque** y **20) Apagar**, con los mismos números, así la tarjeta de
+  el menú principal muestra solo **19) Arranque** y **20) Apagar**, con los mismos números, así la tarjeta de
   rescate y las guías sirven igual.
-- Desde el USB de cualquiera de estas distribuciones, la **reparación desde Live USB (18 → 10)** detecta qué
+- Desde el USB de cualquiera de estas distribuciones, la **reparación desde Live USB (19 → 10)** detecta qué
   sistema hay en el disco y usa sus comandos (también con btrfs, `/boot` aparte y discos cifrados).
 - Si el sistema usa **systemd-boot** en lugar de GRUB (algunos Arch y EndeavourOS), el script lo detecta y lo
   avisa: siguen sirviendo el diagnóstico, la partición EFI, el orden UEFI y las guías.
@@ -278,7 +278,7 @@ ejecuta `<script>_ubuntu_ultimate_tools`, que lo llama y quita las entradas de l
 (sin entradas duplicadas) hasta que se vuelva a usar la opción. No se pueden ocultar todas las
 entradas de tu sistema.
 
-Si usaste **Grub Customizer**, la opción 18 → 9 → 7 deja `/etc/grub.d` como lo instala Ubuntu: devuelve
+Si usaste **Grub Customizer**, la opción 19 → 9 → 7 deja `/etc/grub.d` como lo instala Ubuntu: devuelve
 cada script a su nombre, quita sus `*_proxy` (que duplican entradas) y guarda antes una copia
 completa en `/etc/grub.d.antes-de-deshacer-grub-customizer-<fecha>`.
 
@@ -292,9 +292,9 @@ La reparación automática desde Live USB:
 
 #### Prepárate antes de necesitarlo
 
-Con el sistema funcionando, usa la opción 18 → 14 y la 18 → 15. Son tres pasos:
+Con el sistema funcionando, usa la opción 19 → 14 y la 19 → 15. Son tres pasos:
 
-1. **Tarjeta de rescate (18 → 14).** Calcula los comandos exactos para tu PC: el nombre que GRUB le da a
+1. **Tarjeta de rescate (19 → 14).** Calcula los comandos exactos para tu PC: el nombre que GRUB le da a
    tu partición (por ejemplo `(hd0,gpt2)`), su UUID y las rutas del kernel. Funciona con ext4, btrfs y
    `/boot` en partición aparte.
    - **Sácale una foto con el celular**: cuando aparece `grub>` no puedes abrir archivos de tu disco.
@@ -303,7 +303,7 @@ Con el sistema funcionando, usa la opción 18 → 14 y la 18 → 15. Son tres pa
    - Se actualiza sola cada vez que el script cambia GRUB.
 2. **Pendrive.** En esa misma opción, el script copia **la tarjeta y el propio script** al pendrive que
    elijas. Como el repositorio es privado, desde un Live USB no se podría descargar sin iniciar sesión.
-3. **Arranque de respaldo UEFI (18 → 15).** El firmware guarda una lista de sistemas para arrancar, y
+3. **Arranque de respaldo UEFI (19 → 15).** El firmware guarda una lista de sistemas para arrancar, y
    a veces la pierde: al actualizar la BIOS, por un reseteo o al cambiar el disco de PC. Entonces la PC
    no arranca o va directo a Windows, aunque Ubuntu esté bien.
    - El script copia el arranque de Ubuntu a la ruta de emergencia `EFI/BOOT/BOOTX64.EFI`, la que el
@@ -312,7 +312,7 @@ Con el sistema funcionando, usa la opción 18 → 14 y la 18 → 15. Son tres pa
    - Funciona con Secure Boot y se mantiene al día con cada actualización (un hook de apt).
    - Si esa ruta la usa Windows, no se toca. Si la usaba otro sistema, se guarda una copia y al
      quitarlo vuelve como estaba.
-   - La reparación completa (18 → 3) también lo ofrece.
+   - La reparación completa (19 → 3) también lo ofrece.
 
 Ten a mano también un **USB de instalación de tu sabor de Ubuntu** (el Live USB).
 
@@ -327,7 +327,7 @@ Ten a mano también un **USB de instalación de tu sabor de Ubuntu** (el Live US
 
 ```bash
 cd /media/$USER/PENDRIVE
-bash ubuntu-ultimate-tools.sh      # opción 18 → 10
+bash ubuntu-ultimate-tools.sh      # opción 19 → 10
 ```
 
 - Se usa `bash ubuntu-ultimate-tools.sh` y no `./ubuntu-ultimate-tools.sh` porque los pendrives FAT32/exFAT
@@ -340,14 +340,14 @@ bash ubuntu-ultimate-tools.sh      # opción 18 → 10
 
 ## ☑️ Selección con barra espaciadora
 
-En "Eliminar aplicaciones" (opción 3) y "Software opcional" (opción 6) las listas usan casillas:
+En "Eliminar aplicaciones" (opción 4) y "Software opcional" (opción 7) las listas usan casillas:
 **Espacio** marca o desmarca, **flechas** para moverse, **Enter** para aceptar. La lista de eliminación
 solo muestra las apps instaladas, y la de software marca las que ya tienes. Si `whiptail` no está
 disponible, se vuelve a la selección escribiendo números.
 
 ---
 
-## ↩️ Deshacer optimizaciones (opción 9)
+## ↩️ Deshacer optimizaciones (opción 10)
 
 - **Quitar programas instalados por el script**, con casillas. El script anota en
   `~/.local/share/ubuntu-ultimate-tools/paquetes-instalados.txt` solo los programas que **no tenías antes**;
@@ -367,7 +367,7 @@ disponible, se vuelve a la selección escribiendo números.
   el original del sabor ni el que está abierto, deja la pantalla de inicio de sesión en uso y solo quita lo que
   ese escritorio dejó de usar. Si se llevara algo de otro escritorio, la red o el sonido, no quita nada.
 - **Restaurar todos los ajustes** de una vez, sin desinstalar programas. "Revertir a
-  distribución original" (opción 10) también lo hace.
+  distribución original" (opción 11) también lo hace.
 
 ---
 
@@ -375,7 +375,7 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 
 ---
 
-## 🖥️ Información del sistema y hardware (opción 2)
+## 🖥️ Información del sistema y hardware (opción 3)
 
 | | Opción | Qué muestra |
 |---|---|---|
@@ -397,7 +397,7 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 
 ---
 
-## 🛡️ Auditoría de seguridad (opción 19)
+## 🛡️ Auditoría de seguridad (opción 2)
 
 ![Auditoría de seguridad con Lynis](screenshots/25-auditoria-lynis.png)
 
@@ -413,22 +413,22 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 - **Lynis** ([CISOfy](https://cisofy.com/lynis/), GPL-3.0) solo **revisa**: no cambia nada. El resumen sale en castellano
   (puntaje, advertencias y sugerencias) y el informe completo queda en `~/auditoria-seguridad/<fecha>/`
   (solo lo puede leer tu usuario: contiene datos del sistema, no lo compartas en público). Usado sin instalar,
-  se borra al terminar y no deja nada; instalado (en Arch siempre, desde sus repositorios oficiales), se quita en 9 → 1.
+  se borra al terminar y no deja nada; instalado (en Arch siempre, desde sus repositorios oficiales), se quita en 10 → 1.
 - **linaudit** ([Alexia Michelle](https://github.com/alexiarstein/linaudit), AGPL-3.0) también **solo revisa**. Usa el
   programa si ya lo tienes, el paquete de la distro cuando llegue a los repositorios, o lo compila:
   - baja el código oficial (`git clone`, o el `.tar.gz` si no hay git) a `/var/tmp/linaudit.*`;
   - usa tu Rust si es 1.85 o más nuevo; si no, baja **rustup oficial** (verificado con su SHA-256) dentro de esa
     misma carpeta, sin tocar tu sistema ni tu `~/.cargo`;
-  - si no tienes compilador de C, ofrece instalar `gcc` (queda registrado, se quita en 9 → 1);
+  - si no tienes compilador de C, ofrece instalar `gcc` (queda registrado, se quita en 10 → 1);
   - necesita ~3 GB libres y tarda de 5 a 15 minutos; al terminar **borra la carpeta entera**;
   - si eliges dejarlo instalado: `/usr/local/bin/linaudit` y su manual en castellano (`man linaudit`), con la
-    versión (commit) anotada; se quita en 19 → 6.
+    versión (commit) anotada; se quita en 2 → 6.
 - **auditd** usa reglas **propias del script** en `/etc/audit/rules.d/60-ultimate-tools.rules`:
   - solo vigila archivos que existen y llamadas que existen en tu procesador;
   - **sin `-e 2`**: las reglas nunca quedan bloqueadas hasta reiniciar, y nunca provoca un *kernel panic*;
   - si el sistema no las acepta (por ejemplo en un contenedor o WSL), se quitan solas y todo queda como estaba.
   - **Ver qué se registró**: resumen por categoría y los últimos cambios en usuarios, sudo y SSH.
-  - **Quitar**: 19 → 5 (o Deshacer: Ubuntu 9 → 13, Debian y Arch 9 → 11) borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
+  - **Quitar**: 2 → 5 (o Deshacer: Ubuntu 10 → 13, Debian y Arch 10 → 11) borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
     borrar sus registros.
 - Idea inspirada en [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) de Jeff Starke
   (Starke427). No se usa su código porque su repositorio no tiene licencia (ver [CREDITOS.md](CREDITOS.md)).
@@ -441,7 +441,7 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 - Los `.deb` externos (VSCode, Chrome, Discord) se descargan en paralelo.
 - `apt update` se ejecuta una vez por sesión (o se omite si el sistema lo hizo hace menos de 30 minutos).
 - Cambiar de kernel no regenera GRUB: se usa `GRUB_DEFAULT=saved` + `grub-set-default`.
-- La opción 11 permite desactivar la indexación de manuales (`man-db`), lo más lento de cada instalación.
+- La opción 12 permite desactivar la indexación de manuales (`man-db`), lo más lento de cada instalación.
 
 ---
 
@@ -469,12 +469,12 @@ Dentro de la opción 3:
 
 ---
 
-## ↩️ Revertir a distribución original (opción 10)
+## ↩️ Revertir a distribución original (opción 11)
 
 Deja tu Ubuntu como vino de fábrica, sea cual sea el sabor (muestra cuál detectó antes de empezar):
 
 - Reinstala el meta-paquete de tu sabor **con todas sus aplicaciones** (`kubuntu-desktop`, `xubuntu-desktop`,
-  `ubuntu-desktop-minimal`...). Si lo quitaste con la opción 11, recuerda cuál era: un Ubuntu mínimo no se
+  `ubuntu-desktop-minimal`...). Si lo quitaste con la opción 12, recuerda cuál era: un Ubuntu mínimo no se
   convierte en uno completo.
 - Reinstala todo lo que el script eliminó (incluidas dependencias); la lista está en
   `~/.local/share/ubuntu-ultimate-tools/paquetes-eliminados.txt`.
@@ -487,12 +487,12 @@ Deja tu Ubuntu como vino de fábrica, sea cual sea el sabor (muestra cuál detec
 - Vuelve a fábrica todos los ajustes (RAM, DNS, ZRAM, energía, indexador...).
 - En Ubuntu Server hace lo que aplica: paquetes, Snap y ajustes.
 
-No cambia el kernel (opción 13) ni el arranque (opción 18). Los programas que instaló el script se quitan
-desde la opción 9.
+No cambia el kernel (opción 14) ni el arranque (opción 19). Los programas que instaló el script se quitan
+desde la opción 10.
 
 ---
 
-## 📦 Software opcional (opción 6)
+## 📦 Software opcional (opción 7)
 
 | Programa | Para qué sirve | Origen |
 |----------|----------------|--------|
@@ -548,8 +548,8 @@ Primera opción de la lista de software opcional. Instala el escritorio que elij
 - **Si ya tienes escritorio**, se conserva tu pantalla de inicio de sesión (GDM, SDDM, LightDM).
 - **Red**: en Server pasa la red a NetworkManager con `netplan try` (si en 60 s no confirmas, vuelve
   sola a como estaba). Por SSH no se cambia, para no dejarte sin conexión.
-- **Otros escritorios** (instalados a mano o que ya venían): se quitan en la opción 9 → 12, con las mismas protecciones.
-- **Se puede quitar**: opción 9 → 11 quita solo los paquetes que trajo, y vuelve el arranque y la red
+- **Otros escritorios** (instalados a mano o que ya venían): se quitan en la opción 10 → 12, con las mismas protecciones.
+- **Se puede quitar**: opción 10 → 11 quita solo los paquetes que trajo, y vuelve el arranque y la red
   a como estaban (si quitarlo arrastrara algo que ya tenías, no se quita).
 
 ### 🤖 Compilar APK
@@ -564,9 +564,9 @@ cd mi-proyecto
 
 - **NDK y CMake** (proyectos con C/C++): Gradle baja solo la versión exacta que pide el proyecto,
   porque ya aceptaste las licencias del SDK (el script te las muestra la primera vez).
-- **Actualizar**: vuelve a usar la opción 6 → Compilar APK y se actualiza el SDK.
-- **Quitar**: opción 9 → 7 (Android Studio y SDK; tus claves de firma en `~/.android` no se tocan)
-  y 9 → 8 (SDK de Flatpak).
+- **Actualizar**: vuelve a usar la opción 7 → Compilar APK y se actualiza el SDK.
+- **Quitar**: opción 10 → 7 (Android Studio y SDK; tus claves de firma en `~/.android` no se tocan)
+  y 10 → 8 (SDK de Flatpak).
 
 ### 🐳 Compilar con Docker
 
@@ -582,7 +582,7 @@ docker run --rm -v "$PWD":/home/source mi-compilador  # la ruta la indica el REA
 - Para usar `docker` sin `sudo`, el script ofrece sumar tu usuario al grupo `docker` (avisa que ese grupo
   equivale a ser administrador).
 - Si había configuración de un Docker anterior, se guarda un respaldo antes de instalar.
-- **Quitar** (opción 9 → 9): solo los programas, conservando imágenes y volúmenes; o la **eliminación
+- **Quitar** (opción 10 → 9): solo los programas, conservando imágenes y volúmenes; o la **eliminación
   nuclear**, que borra todo (datos, configuración y grupo) después de guardar un respaldo de la
   configuración y, si quieres, de tus volúmenes.
 
@@ -595,7 +595,7 @@ Android (`~/.android`). Nunca se pisa un respaldo anterior.
 
 ---
 
-## 🗑️ Aplicaciones que puedes eliminar (opción 3)
+## 🗑️ Aplicaciones que puedes eliminar (opción 4)
 
 La lista sale de los **meta-paquetes reales de cada sabor**, con dos filtros:
 
@@ -621,13 +621,13 @@ graph LR
     E --> F[Reiniciar]
 ```
 
-Si algo no te convence, la opción 9 deshace optimizaciones y quita programas, y la 10 vuelve a la distribución original.
+Si algo no te convence, la opción 10 deshace optimizaciones y quita programas, y la 10 vuelve a la distribución original.
 
 ---
 
 ## 🛡️ Seguridad
 
-- ✅ **Reversible**: cada ajuste se puede deshacer (opción 9) y todo se puede revertir (opción 10).
+- ✅ **Reversible**: cada ajuste se puede deshacer (opción 10) y todo se puede revertir (opción 11).
 - ✅ **Confirmaciones**: cada acción importante pide confirmación y muestra qué se va a cambiar.
 - ✅ **Seguro de dependencias**: nunca quita una app que arrastre piezas esenciales del sistema.
 - ✅ **Copias antes de tocar el arranque**: `/etc/default/grub` se guarda antes del primer cambio, y `/etc/grub.d` entero antes de deshacer Grub Customizer.
@@ -654,7 +654,7 @@ no está probado.
 
 **¿Y en Debian, Arch, Manjaro o Fedora?**
 
-Por ahora solo el menú de **arranque** (opción 18): reparar y personalizar GRUB, la tarjeta de rescate, el
+Por ahora solo el menú de **arranque** (opción 19): reparar y personalizar GRUB, la tarjeta de rescate, el
 arranque de respaldo UEFI y la reparación desde Live USB. El resto del script es para Ubuntu.
 
 **¿Qué pasa si elimino Snap?**
@@ -663,7 +663,7 @@ Firefox y la tienda Snap se eliminarán. En Ubuntu `apt install firefox` solo in
 
 **¿Cómo vuelvo atrás?**
 
-Para quitar ajustes o programas sueltos, usa la opción 9. Para volver del todo, la opción 10: reinstala el meta-paquete de tu sabor con todas sus apps y restaura Snap.
+Para quitar ajustes o programas sueltos, usa la opción 10. Para volver del todo, la opción 11: reinstala el meta-paquete de tu sabor con todas sus apps y restaura Snap.
 
 **¿Usaba la versión anterior, "Kubuntu Lite"?**
 
