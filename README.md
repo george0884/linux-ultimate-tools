@@ -31,10 +31,13 @@ sirven también en Fedora, openSUSE y otras.
 Sirven para dejar tu sistema más liviano, rápido y a tu gusto. Al iniciar **detectan la distribución, el sabor y
 el escritorio** y adaptan sus opciones:
 
-- 🗑️ **Eliminar** las apps preinstaladas de tu sabor (con un seguro que nunca quita piezas del escritorio)
-- ⚡ **Cambiar de kernel** (Liquorix, XanMod, oficial LTS/HWE) y **reparar o personalizar GRUB**
+- 🗑️ **Eliminar** las apps preinstaladas: las conocidas de tu sabor y **todas las demás que detecta en el menú** y en
+  Flatpak (con un seguro que nunca quita piezas del escritorio)
+- 🛡️ **Auditar la seguridad** con Lynis y linaudit (puntaje y consejos) y llevar un registro de auditoría
+- ⚡ **Cambiar de kernel** (Liquorix, XanMod, oficial LTS/HWE, backports...) y **reparar o personalizar GRUB**
 - 🎮 **Optimizar** GPU, RAM, red, DNS y energía, o aplicar un **perfil automático** (gaming, productividad...)
-- 📦 **Instalar** software popular y la terminal Alacritty con tema Tokyo Night
+- 📦 **Instalar** software popular, la terminal Alacritty con tema Tokyo Night o **un escritorio completo**
+- 💿 **Crear un USB de instalación**: descarga la ISO oficial, la verifica y la graba sin riesgo de borrar otro disco
 - ↩️ **Deshacer** cualquier cambio o **revertir** a la distribución original
 - 🖥️ **Ver** toda la información del sistema y del hardware, con fastfetch e inxi sin instalar
 
@@ -46,7 +49,7 @@ el escritorio** y adaptan sus opciones:
 
 ---
 
-## 🐧 Sabores compatibles
+## 🐧 Ubuntu: sabores compatibles
 
 | Sabor | Escritorio | Notas |
 |-------|------------|-------|
@@ -70,26 +73,14 @@ opción 12, se reconoce por su escritorio. Las opciones que no aplican a tu escr
 
 ## 🧪 Versiones BETA para Debian y Arch
 
-Además del script de Ubuntu hay dos hermanos, en **versión beta** (probados con sistemas simulados, todavía no
-en equipos reales: úsalos con cuidado y reporta lo que falle). Mismo menú y **mismos números** que en Ubuntu.
+Los scripts de Debian y Arch están en **versión beta**: el de Debian ya se probó en un equipo real (GoldenDog
+Linux, base Debian 13) y el de Arch, por ahora, solo con sistemas simulados. Úsalos con cuidado y reporta lo que
+falle. Tienen el mismo menú y **los mismos números** que el de Ubuntu (ver la tabla de la [Descripción](#-descripción)).
 
-**Cada script detecta la distribución.** Si abres el que no corresponde (por ejemplo `ubuntu-ultimate-tools.sh` en
-Debian), te dice cuál es el correcto y ofrece abrirlo; si no está en la carpeta, ofrece descargarlo del repositorio
-oficial. Linux Mint y Pop!_OS cuentan como Ubuntu; LMDE y Kali como Debian; Manjaro y EndeavourOS como Arch. La
-pestaña de la terminal muestra el script y la distribución detectada.
-
-| Script | Para | Ejecutar |
-|---|---|---|
-| `ubuntu-ultimate-tools.sh` | Ubuntu y sus sabores, Mint, Pop!_OS | `./ubuntu-ultimate-tools.sh` |
-| `debian-ultimate-tools.sh` (beta) | Debian 12/13 y derivadas (MX Linux, LMDE...) | `./debian-ultimate-tools.sh` |
-| `arch-ultimate-tools.sh` (beta) | Arch, Manjaro, EndeavourOS (y CachyOS, Garuda...) | `./arch-ultimate-tools.sh` |
-
-Si abres un script en una distribución que no es la suya, solo muestra el menú de arranque (19) y crear un USB (20), que sirven en
-todas, y te dice cuál usar.
-
-**Qué traen las betas:** actualizar, información del sistema, eliminar apps y accesos directos, software
-opcional, Alacritty y temas, deshacer, revertir, configuración, GPU y drivers, kernel, RAM/ZRAM, red y DNS,
-energía (incluidos Steam, Proton y herramientas de juego) y el menú de arranque completo.
+**Qué traen las betas:** actualizar, auditoría de seguridad, información del sistema, eliminar apps y accesos
+directos, software opcional, Alacritty y temas, deshacer, revertir, configuración, GPU y drivers, kernel,
+RAM/ZRAM, red y DNS, energía (incluidos Steam, Proton y herramientas de juego), el menú de arranque completo y
+crear un USB de instalación.
 **Todavía no:** los perfiles automáticos (18). Snap (5 y 9) no aplica en Debian ni en Arch.
 
 ### Debian (beta)
@@ -175,14 +166,15 @@ chmod +x *-ultimate-tools.sh
 ./arch-ultimate-tools.sh       # Arch, Manjaro, EndeavourOS... (beta)
 ```
 
-💡 No es necesario ejecutarlo como root. El script solicitará sudo cuando sea necesario.
+💡 No hay que ejecutarlo como root: pide la contraseña de `sudo` cuando hace falta. La primera vez muestra un
+[aviso](#aviso-del-primer-uso) con la licencia y lo que hace.
 
 ---
 
 ## 🚀 Perfiles automáticos
 
 Aplican varias optimizaciones de una vez, sin preguntas intermedias. Se eligen desde el menú (opción 18)
-o desde la terminal:
+o desde la terminal. Por ahora solo en el script de Ubuntu:
 
 ```bash
 ./ubuntu-ultimate-tools.sh --perfiles                  # lista los perfiles
@@ -294,7 +286,8 @@ Todo lo hace el propio script, sin instalar programas externos.
 | | **15** Arranque de respaldo UEFI | Que la PC arranque aunque la BIOS pierda la entrada de tu sistema (en Fedora y openSUSE ya viene: solo se comprueba) |
 
 Antes del primer cambio, el script guarda una copia de `/etc/default/grub`
-(`/etc/default/grub.ubuntu-ultimate-tools.orig`) para poder volver al menú original.
+(`/etc/default/grub.ubuntu-ultimate-tools.orig`; en Debian y Arch, `debian-…` o `arch-…`) para poder volver al
+menú original.
 
 Para ocultar entradas sueltas, el script desactiva el script de GRUB que las genera y en su lugar
 ejecuta `<script>_ubuntu_ultimate_tools`, que lo llama y quita las entradas de la lista
@@ -326,7 +319,7 @@ Con el sistema funcionando, usa la opción 19 → 14 y la 19 → 15. Son tres pa
      Live USB o desde Windows.
    - Se actualiza sola cada vez que el script cambia GRUB.
 2. **Pendrive.** En esa misma opción, el script copia **la tarjeta y el propio script** al pendrive que
-   elijas. Como el repositorio es privado, desde un Live USB no se podría descargar sin iniciar sesión.
+   elijas. Así lo tienes a mano aunque el Live USB no tenga internet.
 3. **Arranque de respaldo UEFI (19 → 15).** El firmware guarda una lista de sistemas para arrancar, y
    a veces la pierde: al actualizar la BIOS, por un reseteo o al cambiar el disco de PC. Entonces la PC
    no arranca o va directo a Windows, aunque Ubuntu esté bien.
@@ -338,27 +331,26 @@ Con el sistema funcionando, usa la opción 19 → 14 y la 19 → 15. Son tres pa
      quitarlo vuelve como estaba.
    - La reparación completa (19 → 3) también lo ofrece.
 
-Ten a mano también un **USB de instalación de tu sabor de Ubuntu** (el Live USB).
+Ten a mano también un **USB de instalación de tu distribución** (el Live USB): lo puedes crear con la opción 20.
 
 #### Cuando el sistema no arranca
 
-1. Arranca desde el USB y elige **"Probar Ubuntu"** (o "Probar Kubuntu", "Probar Xubuntu"...).
+1. Arranca desde el USB y elige **"Probar Ubuntu"** (o "Probar Kubuntu", "Live system" en Debian...).
    Debe arrancar en el mismo modo que el sistema instalado (UEFI o BIOS/Legacy).
-2. Conecta el pendrive con el script. Aparece en el gestor de archivos (Dolphin);
+2. Conecta el pendrive con el script. Aparece en el gestor de archivos (Dolphin, Nautilus...);
    haz clic en él para montarlo.
-3. Abre **Konsole** y ejecuta (cambia `PENDRIVE` por el nombre de tu pendrive;
+3. Abre una terminal y ejecuta (cambia `PENDRIVE` por el nombre de tu pendrive;
    la tecla TAB lo autocompleta):
 
 ```bash
 cd /media/$USER/PENDRIVE
-bash ubuntu-ultimate-tools.sh      # opción 19 → 10
+bash ubuntu-ultimate-tools.sh      # opción 19 → 10 (o el script de tu distribución)
 ```
 
-- Se usa `bash ubuntu-ultimate-tools.sh` y no `./ubuntu-ultimate-tools.sh` porque los pendrives FAT32/exFAT
-  no guardan el permiso de ejecución.
+- Se usa `bash …` y no `./…` porque los pendrives FAT32/exFAT no guardan el permiso de ejecución.
 - `ls /media/$USER/` muestra el nombre exacto del pendrive.
-- Si tienes internet en el Live USB y prefieres no usar pendrive: `sudo apt install gh`,
-  `gh auth login` y `git clone` (ver *Instalación*).
+- Si el Live USB tiene internet, no hace falta pendrive: descárgalo con `wget` (ver *Instalación*) y ejecútalo
+  con `bash`.
 
 ---
 
@@ -380,7 +372,8 @@ solo muestra las apps instaladas, y la de software marca las que ya tienes.
 ## ↩️ Deshacer optimizaciones (opción 10)
 
 - **Quitar programas instalados por el script**, con casillas. El script anota en
-  `~/.local/share/ubuntu-ultimate-tools/paquetes-instalados.txt` solo los programas que **no tenías antes**;
+  `~/.local/share/<script>/paquetes-instalados.txt` (por ejemplo `ubuntu-ultimate-tools`) solo los programas que
+  **no tenías antes**;
   los instalados con versiones anteriores del script aparecen marcados "sin registro".
   Antes de desinstalar avisa si se quitará algo más por dependencias.
 - **Restaurar ajustes del sistema** (RAM, inotify, BBR...) a sus valores de fábrica.
@@ -391,11 +384,13 @@ solo muestra las apps instaladas, y la de software marca las que ya tienes.
 - ☢️ **Eliminación nuclear de desarrollo**: Android Studio, SDK, SDK de Flatpak, Docker, JDK y
   flatpak-builder de una vez, con doble confirmación y respaldos antes. Tus proyectos, tus claves de firma y
   tus apps Flatpak no se tocan.
-- **Quitar el escritorio instalado por el script** (11): solo sus paquetes; el arranque y la red vuelven a como estaban.
-- **Quitar el registro de auditoría** (13): borra las reglas de auditd del script y, si lo instaló, auditd.
-- **Quitar otros escritorios** (12): los que no instaló el script (por ejemplo uno puesto a mano). Nunca ofrece
-  el original del sabor ni el que está abierto, deja la pantalla de inicio de sesión en uso y solo quita lo que
-  ese escritorio dejó de usar. Si se llevara algo de otro escritorio, la red o el sonido, no quita nada.
+- **Quitar el escritorio instalado por el script** (11, solo Ubuntu): solo sus paquetes; el arranque y la red
+  vuelven a como estaban.
+- **Quitar otros escritorios** (12, solo Ubuntu): los que no instaló el script (por ejemplo uno puesto a mano).
+  Nunca ofrece el original del sabor ni el que está abierto, deja la pantalla de inicio de sesión en uso y solo
+  quita lo que ese escritorio dejó de usar. Si se llevara algo de otro escritorio, la red o el sonido, no quita nada.
+- **Quitar el registro de auditoría** (Ubuntu 13; Debian y Arch 11): borra las reglas de auditd del script y, si
+  lo instaló, auditd.
 - **Restaurar todos los ajustes** de una vez, sin desinstalar programas. "Revertir a
   distribución original" (opción 11) también lo hace.
 
@@ -411,7 +406,7 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 |---|---|---|
 | 👀 | **1** Resumen rápido | Sabor, kernel, CPU, GPU, RAM, disco, tiempo encendido y temperatura. Sin internet ni instalar nada |
 | | **2** Fastfetch | El instalado o, si no lo tienes, uno **temporal** (descarga oficial que se borra al terminar) |
-| | **3** inxi | Igual: el instalado o el paquete oficial de Ubuntu usado **sin instalar**. Nivel normal o muy detallado |
+| | **3** inxi | Igual: el instalado o el paquete oficial de tu distribución usado **sin instalar**. Nivel normal o muy detallado |
 | 🔩 | **4** CPU y RAM | Modelo, núcleos, frecuencias y **cada módulo de RAM** (tamaño, tipo, velocidad, ranuras libres) |
 | | **5** Gráfica | Modelo y **driver en uso**; avisa si una NVIDIA usa el driver libre |
 | | **6** Discos | Particiones, espacio y **salud SMART** (horas de uso, desgaste, errores; instala `smartmontools` si hace falta) |
@@ -506,7 +501,7 @@ Funciona en todas las distribuciones (también en el modo arranque de Arch, Fedo
 
 ---
 
-## ⚡ Cambio de kernel (opción 13)
+## ⚡ Cambio de kernel (opción 14)
 
 | Opción | Kernel | Notas |
 |--------|--------|-------|
@@ -526,7 +521,8 @@ Dentro de la opción 3:
 - Liquorix y XanMod **no están firmados**: requieren **Secure Boot desactivado** (el script lo comprueba).
 - El kernel oficial se conserva siempre como respaldo. Si un kernel no arranca, elige el `generic`
   en *Opciones avanzadas* de GRUB (Shift/Esc al encender) y usa la opción 3.
-- Los errores se muestran en pantalla y el detalle completo queda en `~/ubuntu-ultimate-tools.log`.
+- Los errores se muestran en pantalla y el detalle completo queda en el log (`~/ubuntu-ultimate-tools.log`).
+- En Debian y Arch el menú de kernel es distinto: ver la sección [beta](#-versiones-beta-para-debian-y-arch).
 
 ---
 
@@ -585,6 +581,9 @@ desde la opción 10.
 | Compilar Flatpaks | `flatpak-builder` y el SDK que elijas: KDE, GNOME o Freedesktop | Ubuntu + Flathub |
 | Docker + Compose | Compilar con el `Dockerfile` de un proyecto (SDK, NDK y versiones exactas ya listos adentro). Sirve en un VPS | Ubuntu (`docker.io`, `docker-buildx`, `docker-compose-v2`) |
 
+La columna *Origen* es la del script de Ubuntu. En Debian salen de sus repositorios (y de los oficiales de cada
+programa); en Arch, de los repositorios oficiales y de Flathub, nunca del AUR.
+
 Lo que ya tienes instalado aparece marcado "(ya instalado)".
 
 ### 🖥️ Instalar un escritorio (Ubuntu Server o agregar otro)
@@ -626,6 +625,7 @@ cd mi-proyecto
 - **NDK y CMake** (proyectos con C/C++): Gradle baja solo la versión exacta que pide el proyecto,
   porque ya aceptaste las licencias del SDK (el script te las muestra la primera vez).
 - **Actualizar**: vuelve a usar la opción 7 → Compilar APK y se actualiza el SDK.
+- El perfil `desarrollo` también instala las herramientas para compilar APK.
 - **Quitar**: opción 10 → 7 (Android Studio y SDK; tus claves de firma en `~/.android` no se tocan)
   y 10 → 8 (SDK de Flatpak).
 
@@ -650,9 +650,9 @@ docker run --rm -v "$PWD":/home/source mi-compilador  # la ruta la indica el REA
 ### 💾 Respaldos
 
 Antes de borrar algo que no se puede recuperar, el script guarda un `.tar.gz` con fecha en
-`~/respaldos-ubuntu-ultimate-tools/`: la configuración y los volúmenes de Docker, y tus claves de firma de
-Android (`~/.android`). Nunca se pisa un respaldo anterior.
-- El perfil `desarrollo` también instala las herramientas para compilar APK.
+`~/respaldos-ubuntu-ultimate-tools/` (en Debian y Arch, `respaldos-debian-…` o `respaldos-arch-…`): la
+configuración y los volúmenes de Docker, y tus claves de firma de Android (`~/.android`). Nunca se pisa un
+respaldo anterior.
 
 ---
 
@@ -681,7 +681,7 @@ La lista conocida sale de los **meta-paquetes reales de cada sabor**, con dos fi
   gestor de ventanas, red, sonido, Bluetooth, energía, notificaciones, portales o actualizaciones.
 - **Solo las que tienes instaladas**: lista de tu escritorio + apps comunes a todos los Ubuntu.
 
-Y un **seguro de dependencias**: antes de borrar, el script simula qué se llevaría `apt`. Si una app
+Y un **seguro de dependencias**: antes de borrar, el script simula qué se llevaría el gestor de paquetes (`apt` o `pacman`). Si una app
 arrastraría una pieza esencial (escritorio, sesión, gestor de inicio de sesión, red, sonido...), **no se
 quita** y se explica por qué. Si arrastra otras cosas, se muestran antes de confirmar.
 
@@ -691,14 +691,15 @@ quita** y se explica por qué. Si arrastra otras cosas, se muestran antes de con
 
 ```mermaid
 graph LR
-    A[19: Ver información] --> B[1: Eliminar apps]
-    B --> C[6: Actualizar]
-    C --> D[17: Perfil automático]
-    D --> E[8: Software opcional]
-    E --> F[Reiniciar]
+    A[3: Ver información] --> B[2: Auditoría de seguridad]
+    B --> C[4: Eliminar apps]
+    C --> D[1: Actualizar]
+    D --> E[18: Perfil automático]
+    E --> F[7: Software opcional]
+    F --> G[21: Reiniciar]
 ```
 
-Si algo no te convence, la opción 10 deshace optimizaciones y quita programas, y la 10 vuelve a la distribución original.
+Si algo no te convence, la opción 10 deshace optimizaciones y quita programas, y la 11 vuelve a la distribución original.
 
 ---
 
@@ -709,7 +710,9 @@ Si algo no te convence, la opción 10 deshace optimizaciones y quita programas, 
 - ✅ **Seguro de dependencias**: nunca quita una app que arrastre piezas esenciales del sistema.
 - ✅ **Copias antes de tocar el arranque**: `/etc/default/grub` se guarda antes del primer cambio, y `/etc/grub.d` entero antes de deshacer Grub Customizer.
 - ✅ **Kernel de respaldo**: el kernel oficial se conserva siempre y el que está en uso nunca se borra en caliente.
-- ✅ **Registro**: todo queda en `~/ubuntu-ultimate-tools.log`.
+- ✅ **Aviso del primer uso**: antes de tocar nada explica la licencia y que el script modifica el sistema.
+- ✅ **Registro**: todo queda en el log de cada script (`~/ubuntu-ultimate-tools.log`, `~/debian-ultimate-tools.log`
+  o `~/arch-ultimate-tools.log`).
 
 ---
 
@@ -727,16 +730,19 @@ Ubuntu Server, instalar un escritorio, auditoría de seguridad y crear un USB de
 
 Sí: Ubuntu, Kubuntu, Xubuntu, Lubuntu, MATE, Budgie, Cinnamon, Unity, Studio, Edubuntu, Kylin y Server.
 El banner muestra qué sabor y escritorio detectó. En distribuciones basadas en Ubuntu (Mint, Pop!_OS...)
-no está probado.
+funciona, pero está menos probado.
 
 **¿Y en Debian, Arch, Manjaro o Fedora?**
 
-Por ahora solo el menú de **arranque** (opción 19): reparar y personalizar GRUB, la tarjeta de rescate, el
-arranque de respaldo UEFI y la reparación desde Live USB. El resto del script es para Ubuntu.
+Debian y sus derivadas tienen `debian-ultimate-tools.sh`, y Arch, Manjaro y EndeavourOS, `arch-ultimate-tools.sh`
+(los dos en beta). En Fedora, openSUSE y otras sirven el menú de **arranque** (19: reparar y personalizar GRUB,
+tarjeta de rescate, arranque de respaldo UEFI, reparación desde Live USB) y **crear un USB de instalación** (20).
 
 **¿Qué pasa si elimino Snap?**
 
-Firefox y la tienda Snap se eliminarán. En Ubuntu `apt install firefox` solo instala el snap, así que usa el PPA de Mozilla: `sudo add-apt-repository ppa:mozillateam/ppa`
+Se van Firefox y la tienda Snap. Al terminar, el script ofrece instalar **Firefox .deb del repositorio oficial de
+Mozilla** (en Ubuntu `apt install firefox` solo instala el snap); también está en la opción 7. Snap se puede
+reinstalar con la opción 9.
 
 **¿Cómo vuelvo atrás?**
 
@@ -757,7 +763,7 @@ No es necesario, pero se recomienda reiniciar para aplicar todos los cambios cor
 
 Las contribuciones son bienvenidas. Puedes:
 
-1. Reportar errores en Issues
+1. Reportar errores en [Issues](https://github.com/george0884/linux-ultimate-tools/issues)
 2. Sugerir nuevos programas para incluir en la lista opcional
 3. Mejorar la documentación
 
@@ -767,7 +773,7 @@ Las contribuciones son bienvenidas. Puedes:
 
 Este proyecto está bajo la licencia **GNU AGPL v3** (o posterior). Ver el archivo [LICENSE](LICENSE).
 
-En resumen: puedes usar, copiar, modificar y compartir el script libremente. Si distribuyes una
+En resumen: puedes usar, copiar, modificar y compartir los scripts libremente. Si distribuyes una
 versión modificada, o la ofreces como servicio por red, debes publicar su código fuente bajo la
 misma licencia AGPL v3.
 
@@ -807,6 +813,6 @@ para indicar compatibilidad.
 
 <div align="center">
 
-⭐ ¿Te fue útil este script? ¡Dale una estrella en GitHub!
+⭐ ¿Te fueron útiles estos scripts? ¡Dale una estrella en GitHub!
 
 </div>
