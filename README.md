@@ -637,10 +637,14 @@ Android (`~/.android`). Nunca se pisa un respaldo anterior.
 Además de la lista conocida, **el script detecta solo todas las demás apps instaladas**, también en distros
 derivadas que traen sus propias apps:
 
-- **🔎 Detectadas en el menú:** cada app con ícono en el menú (`/usr/share/applications`) se busca en el gestor de
-  paquetes (`dpkg` en Ubuntu y Debian, `pacman` en Arch) y aparece con su nombre en castellano. No se ofrecen las
-  ocultas, los paneles de configuración, la terminal, las piezas del escritorio ni los paquetes que la distribución
-  marca como imprescindibles (prioridad `required` o `important`).
+- **🔎 Detectadas en el menú:** cada app con ícono en el menú (`/usr/share/applications` y
+  `/usr/local/share/applications`) se busca en el gestor de paquetes (`dpkg` en Ubuntu y Debian, `pacman` en Arch) y
+  aparece con su **nombre y qué es**, en castellano si lo tiene (por ejemplo *"Configuración de GPU NVIDIA — Instale y
+  administre el driver de video"*). También las herramientas propias de cada distro. No se ofrecen las ocultas, la
+  terminal, las piezas del escritorio ni los paquetes que la distribución marca como imprescindibles (prioridad
+  `required` o `important`).
+- Las apps del menú que **no vienen de ningún paquete** (instaladas a mano) se nombran aparte: no se pueden quitar
+  con el gestor de paquetes.
 - **📦 Flatpak:** las apps de Flatpak instaladas (del sistema o del usuario) se quitan con `flatpak uninstall`, y
   después se limpian los runtimes que ya no usa ninguna.
 - Al quitar, siguen valiendo las protecciones de siempre: si una app arrastrara una pieza esencial del sistema, no

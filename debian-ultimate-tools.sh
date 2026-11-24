@@ -777,14 +777,24 @@ CORE_PKGS=(plasma-desktop plasma-workspace kwin-x11 kwin-wayland systemsettings 
 # Apps con ícono en el menú que no están en la lista conocida: se detectan solas en cualquier
 # distro (cada .desktop de /usr/share/applications se busca en el gestor de paquetes)
 desktop_file_owners() {
+    local files=() f owned
+    shopt -s nullglob
+    files=(/usr/share/applications/*.desktop /usr/local/share/applications/*.desktop)
+    shopt -u nullglob
+    [ ${#files[@]} -gt 0 ] || return 0
     if command -v dpkg-query &> /dev/null; then
         # "paquete: ruta" (o "paquete:amd64: ruta")
-        dpkg-query -S /usr/share/applications/*.desktop 2>/dev/null \
-            | awk -F': ' '{split($1, p, ", "); sub(/:.*/, "", p[1]); print p[1], $2}'
+        owned=$(dpkg-query -S "${files[@]}" 2>/dev/null \
+            | awk -F': ' '{split($1, p, ", "); sub(/:.*/, "", p[1]); print p[1], $2}')
     elif command -v pacman &> /dev/null; then
         # "ruta is owned by paquete versión"
-        LC_ALL=C pacman -Qo /usr/share/applications/*.desktop 2>/dev/null | awk '{print $(NF-1), $1}'
+        owned=$(LC_ALL=C pacman -Qo "${files[@]}" 2>/dev/null | awk '{print $(NF-1), $1}')
     fi
+    [ -n "$owned" ] && echo "$owned"
+    # Los que no son de ningún paquete (instalados a mano): "- ruta"
+    for f in "${files[@]}"; do
+        grep -qF " $f" <<< "$owned" || echo "- $f"
+    done
 }
 
 # Nunca se ofrecen: piezas del escritorio, la terminal (la que estás usando) ni paneles de configuración
@@ -793,7 +803,7 @@ DETECT_SKIP_PKGS=(konsole gnome-terminal gnome-console kgx xfce4-terminal qtermi
 
 detected_app_entries() {
     local -A seen=() important=()
-    local k pkg path name cats stem known=" $* "
+    local k pkg path name desc stem known=" $* "
     for k in "$@" "${CORE_PKGS[@]}" "${DETECT_SKIP_PKGS[@]}"; do
         seen[$k]=1
     done
@@ -804,6 +814,11 @@ detected_app_entries() {
     fi
     while read -r pkg path; do
         [ -n "$pkg" ] && [ -f "$path" ] || continue
+        if [ "$pkg" = - ]; then
+            name=$(awk '/^\[/ {main = ($0 == "[Desktop Entry]")} main && /^Name=/ {sub(/^[^=]*=/, ""); print; exit}' "$path")
+            grep -qiE '^(NoDisplay|Hidden)=true' "$path" || echo "-|${name:-$(basename "$path" .desktop)}"
+            continue
+        fi
         [ -n "${seen[$pkg]:-}" ] || [ -n "${important[$pkg]:-}" ] && continue
         # libreoffice-common, foo-data...: es la misma app que una de la lista conocida
         stem=${pkg%-common}
@@ -811,13 +826,19 @@ detected_app_entries() {
         [ "$stem" != "$pkg" ] && [[ "$known" == *" $stem-"* ]] && continue
         grep -qiE '^(NoDisplay|Hidden)=true' "$path" && continue
         grep -q '^Type=Application' "$path" || continue
-        cats=$(sed -n 's/^Categories=//p' "$path" | head -1)
-        [[ ";$cats;" == *";Settings;"* || ";$cats;" == *";DesktopSettings;"* ]] && continue
         # Nombre en castellano si lo tiene, solo de la sección principal (no de sus acciones)
         name=$(awk '/^\[/ {main = ($0 == "[Desktop Entry]")} main && /^Name\[es\]=/ {sub(/^[^=]*=/, ""); print; exit}' "$path")
         [ -n "$name" ] || name=$(awk '/^\[/ {main = ($0 == "[Desktop Entry]")} main && /^Name=/ {sub(/^[^=]*=/, ""); print; exit}' "$path")
+        # Qué es: nombre genérico ("Navegador web") o, si no tiene, el comentario del .desktop
+        desc=""
+        for k in 'GenericName[es]' GenericName 'Comment[es]' Comment; do
+            desc=$(awk -v key="$k=" '/^\[/ {main = ($0 == "[Desktop Entry]")} main && index($0, key) == 1 {print substr($0, length(key) + 1); exit}' "$path")
+            [ -n "$desc" ] && [ "$desc" != "$name" ] && break
+            desc=""
+        done
+        [ ${#desc} -gt 55 ] && desc="${desc:0:54}…"
         seen[$pkg]=1
-        echo "$pkg|🔎 ${name:-$pkg} (detectada en el menú)"
+        echo "$pkg|🔎 ${name:-$pkg}${desc:+ — $desc} (detectada)"
     done < <(desktop_file_owners)
 }
 
@@ -865,7 +886,15 @@ select_apps_to_remove() {
     done
     local known=${#entries[@]} detected=() flatpaks=()
     echo -e "${CYAN}🔎 Buscando el resto de las apps instaladas (las del menú y las de Flatpak)...${NC}"
-    mapfile -t detected < <(detected_app_entries "${apps[@]%%|*}" | sort -t'|' -k2,2f)
+    local unowned=()
+    mapfile -t detected < <(detected_app_entries "${entries[@]%%|*}" | sort -t'|' -k2,2f)
+    mapfile -t unowned < <(printf '%s\n' "${detected[@]}" | sed -n 's/^-|//p')
+    mapfile -t detected < <(printf '%s\n' "${detected[@]}" | grep -v '^-|' | grep -v '^$')
+    if [ ${#unowned[@]} -gt 0 ]; then
+        echo -e "${YELLOW}ℹ Estas apps del menú no vienen de ningún paquete (se instalaron a mano), así que no se${NC}"
+        echo -e "${YELLOW}  pueden quitar desde aquí: $(printf '%s, ' "${unowned[@]}" | sed 's/, $//')${NC}"
+        sleep 3
+    fi
     mapfile -t flatpaks < <(flatpak_app_entries | sort -t'|' -k2,2f)
     entries+=("${detected[@]}" "${flatpaks[@]}")
     if [ ${#entries[@]} -eq 0 ]; then
