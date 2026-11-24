@@ -112,12 +112,126 @@ run() {
     local desc="$1"
     shift
     echo "[$(date '+%H:%M:%S')] \$ $*" >> "$LOG_FILE"
+    # Instalar, quitar o actualizar paquetes puede tardar minutos: con terminal se muestra el avance
+    if [ -t 1 ] && progress_wanted "$@"; then
+        run_with_progress "$desc" "$@"
+        return
+    fi
     "$@" >> "$LOG_FILE" 2>&1
     local rc=$?
     if [ $rc -ne 0 ]; then
         log_error "$desc (código $rc). Detalles en: $LOG_FILE"
     fi
     return $rc
+}
+
+# ¿El comando es apt-get o pacman cambiando paquetes? (no las consultas rápidas)
+progress_wanted() {
+    local a
+    for a in "$@"; do
+        case $a in
+            apt-get|pacman) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+# Barra de avance: [#######-------]  45%  01:23  Quitando libreoffice-core
+progress_draw() {
+    local pct="$1" text="$2" secs="$3" elapsed cols width filled bar line
+    cols=$(tput cols 2>/dev/null || echo 80)
+    printf -v elapsed '%02d:%02d' $((secs / 60)) $((secs % 60))
+    if [ -n "$pct" ]; then
+        width=20
+        filled=$((pct * width / 100))
+        printf -v bar '%*s' "$filled" ''
+        bar=${bar// /#}
+        printf -v bar '%-*s' "$width" "$bar"
+        bar=${bar// /-}
+        line="  [$bar] $(printf '%3d' "$pct")%  $elapsed  $text"
+    else
+        local spin='|/-\'
+        line="  ${spin:$((secs % 4)):1} Trabajando...  $elapsed  $text"
+    fi
+    printf '\r\033[K%s' "${line:0:$((cols - 1))}"
+}
+
+run_with_progress() {
+    local desc="$1"
+    shift
+    local status="" verb="Procesando" a cmd=() is_apt=false pid rc start line pct pkg n m
+    for a in "$@"; do
+        case $a in
+            apt-get) is_apt=true ;;
+            install|-S|-Syu|-Su) verb="Instalando" ;;
+            purge|remove|-R|-Rns|-Rs) verb="Quitando" ;;
+            autoremove) verb="Limpiando" ;;
+            full-upgrade|upgrade|dist-upgrade) verb="Actualizando" ;;
+        esac
+    done
+    if $is_apt && [ "$1" = sudo ]; then
+        # apt informa su avance real por un descriptor aparte (APT::Status-Fd)
+        status=$(mktemp)
+        shift
+        cmd=(sudo bash -c 'exec 3>>"$1"; shift; exec "$@"' _ "$status")
+        for a in "$@"; do
+            cmd+=("$a")
+            [ "$a" = apt-get ] && cmd+=(-o APT::Status-Fd=3)
+        done
+    else
+        cmd=("$@")
+    fi
+    "${cmd[@]}" >> "$LOG_FILE" 2>&1 &
+    pid=$!
+    start=$SECONDS
+    # sudo corre como root: se mira /proc en vez de kill -0
+    while [ -d "/proc/$pid" ]; do
+        pct="" line=""
+        if [ -n "$status" ]; then
+            line=$(grep -a -E '^(pm|dl)status:' "$status" 2>/dev/null | tail -1)
+            if [ -n "$line" ]; then
+                IFS=: read -r _ pkg pct _ <<< "$line"
+                pct=${pct%%.*}
+                if [[ "$line" == dlstatus:* ]]; then
+                    line="Descargando"
+                elif [ "$pkg" = dpkg-exec ]; then
+                    line="Preparando..."
+                else
+                    line="$verb $pkg"
+                fi
+            fi
+        else
+            # pacman escribe "( 3/12) eliminando paquete": el avance sale de ahí
+            line=$(tail -n 5 "$LOG_FILE" 2>/dev/null | grep -a -E '^\( *[0-9]+/[0-9]+\)' | tail -1)
+            if [[ "$line" =~ ^\(\ *([0-9]+)/([0-9]+)\)\ *(.*)$ ]]; then
+                n=${BASH_REMATCH[1]} m=${BASH_REMATCH[2]}
+                pct=$((n * 100 / m))
+                line=${BASH_REMATCH[3]}
+            else
+                line=$(tail -n 1 "$LOG_FILE" 2>/dev/null | tr -d '\r')
+            fi
+        fi
+        [[ "$pct" =~ ^[0-9]+$ ]] || pct=""
+        progress_draw "$pct" "$line" $((SECONDS - start))
+        sleep 0.5
+    done
+    wait "$pid"
+    rc=$?
+    printf '\r\033[K'
+    [ -n "$status" ] && rm -f "$status"
+    if [ $rc -ne 0 ]; then
+        log_error "$desc (código $rc). Detalles en: $LOG_FILE"
+    elif [ $((SECONDS - start)) -ge 3 ]; then
+        echo -e "  ${GREEN}✓ Listo en $(printf '%02d:%02d' $(((SECONDS - start) / 60)) $(((SECONDS - start) % 60)))${NC}"
+    fi
+    return $rc
+}
+
+# Nombre del script en la pestaña y la ventana de la terminal (Konsole muestra la carpeta si no)
+set_terminal_title() {
+    [ -t 1 ] || return 0
+    printf '\033]0;%s\007\033]30;%s\007' "$1" "$1"
+    trap 'printf "\033]30;\007"' EXIT
 }
 
 # Como 'run', pero mostrando la salida en pantalla (para operaciones largas)
@@ -8320,6 +8434,8 @@ case ${1:-} in
     "") ;;
     *) echo -e "${RED}❌ Opción desconocida: $1${NC} (en la beta no hay perfiles automáticos)"; exit 1 ;;
 esac
+
+set_terminal_title "Debian Ultimate Tools (beta)"
 
 # Antes de pedir la contraseña o tocar nada
 first_run_notice
