@@ -774,6 +774,77 @@ CORE_PKGS=(plasma-desktop plasma-workspace kwin-x11 kwin-wayland systemsettings 
 # OPCIÓN 4: ELIMINAR APLICACIONES (COLOR: CIAN)
 # ============================================================
 
+# Apps con ícono en el menú que no están en la lista conocida: se detectan solas en cualquier
+# distro (cada .desktop de /usr/share/applications se busca en el gestor de paquetes)
+desktop_file_owners() {
+    if command -v dpkg-query &> /dev/null; then
+        # "paquete: ruta" (o "paquete:amd64: ruta")
+        dpkg-query -S /usr/share/applications/*.desktop 2>/dev/null \
+            | awk -F': ' '{split($1, p, ", "); sub(/:.*/, "", p[1]); print p[1], $2}'
+    elif command -v pacman &> /dev/null; then
+        # "ruta is owned by paquete versión"
+        LC_ALL=C pacman -Qo /usr/share/applications/*.desktop 2>/dev/null | awk '{print $(NF-1), $1}'
+    fi
+}
+
+# Nunca se ofrecen: piezas del escritorio, la terminal (la que estás usando) ni paneles de configuración
+DETECT_SKIP_PKGS=(konsole gnome-terminal gnome-console kgx xfce4-terminal qterminal mate-terminal lxterminal
+    terminator tilix xterm kitty sudo policykit-1 polkitd)
+
+detected_app_entries() {
+    local -A seen=() important=()
+    local k pkg path name cats stem known=" $* "
+    for k in "$@" "${CORE_PKGS[@]}" "${DETECT_SKIP_PKGS[@]}"; do
+        seen[$k]=1
+    done
+    # Paquetes que la distribución marca como imprescindibles (Debian/Ubuntu: prioridad required o important)
+    if command -v dpkg-query &> /dev/null; then
+        while read -r k; do important[$k]=1; done < <(dpkg-query -W -f='${Package} ${Priority}\n' 2>/dev/null \
+            | awk '$2 == "required" || $2 == "important" {print $1}')
+    fi
+    while read -r pkg path; do
+        [ -n "$pkg" ] && [ -f "$path" ] || continue
+        [ -n "${seen[$pkg]:-}" ] || [ -n "${important[$pkg]:-}" ] && continue
+        # libreoffice-common, foo-data...: es la misma app que una de la lista conocida
+        stem=${pkg%-common}
+        stem=${stem%-data}
+        [ "$stem" != "$pkg" ] && [[ "$known" == *" $stem-"* ]] && continue
+        grep -qiE '^(NoDisplay|Hidden)=true' "$path" && continue
+        grep -q '^Type=Application' "$path" || continue
+        cats=$(sed -n 's/^Categories=//p' "$path" | head -1)
+        [[ ";$cats;" == *";Settings;"* || ";$cats;" == *";DesktopSettings;"* ]] && continue
+        # Nombre en castellano si lo tiene, solo de la sección principal (no de sus acciones)
+        name=$(awk '/^\[/ {main = ($0 == "[Desktop Entry]")} main && /^Name\[es\]=/ {sub(/^[^=]*=/, ""); print; exit}' "$path")
+        [ -n "$name" ] || name=$(awk '/^\[/ {main = ($0 == "[Desktop Entry]")} main && /^Name=/ {sub(/^[^=]*=/, ""); print; exit}' "$path")
+        seen[$pkg]=1
+        echo "$pkg|🔎 ${name:-$pkg} (detectada en el menú)"
+    done < <(desktop_file_owners)
+}
+
+# Apps de Flatpak instaladas: "flatpak:ID|📦 Nombre (Flatpak)"
+flatpak_app_entries() {
+    command -v flatpak &> /dev/null || return 0
+    local id name
+    flatpak list --app --columns=application,name 2>/dev/null | while IFS=$'\t' read -r id name; do
+        [ -n "$id" ] && echo "flatpak:$id|📦 ${name:-$id} (Flatpak)"
+    done
+}
+
+# Quita apps de Flatpak, del sistema o del usuario según dónde estén instaladas
+remove_flatpak_apps() {
+    local id where
+    for id in "$@"; do
+        where=$(flatpak list --app --columns=application,installation 2>/dev/null | awk -v a="$id" '$1 == a {print $2; exit}')
+        if [ "$where" = user ]; then
+            run "No se pudo quitar $id" flatpak uninstall -y --noninteractive --user "$id"
+        else
+            run "No se pudo quitar $id" sudo flatpak uninstall -y --noninteractive --system "$id"
+        fi && echo -e "  ${GREEN}✓ Eliminado: $id (Flatpak)${NC}"
+    done
+    # Runtimes que ya no usa ninguna app
+    sudo flatpak uninstall -y --noninteractive --unused >> "$LOG_FILE" 2>&1
+}
+
 select_apps_to_remove() {
     clear
     echo -e "${CYAN}${BOLD}"
@@ -792,14 +863,19 @@ select_apps_to_remove() {
     for app in "${apps[@]}"; do
         printf '%s\n' "${installed[@]}" | grep -qx -- "${app%%|*}" && entries+=("$app")
     done
+    local known=${#entries[@]} detected=() flatpaks=()
+    echo -e "${CYAN}🔎 Buscando el resto de las apps instaladas (las del menú y las de Flatpak)...${NC}"
+    mapfile -t detected < <(detected_app_entries "${apps[@]%%|*}" | sort -t'|' -k2,2f)
+    mapfile -t flatpaks < <(flatpak_app_entries | sort -t'|' -k2,2f)
+    entries+=("${detected[@]}" "${flatpaks[@]}")
     if [ ${#entries[@]} -eq 0 ]; then
-        echo -e "${YELLOW}ℹ Ninguna de estas aplicaciones está instalada${NC}"
+        echo -e "${YELLOW}ℹ No se encontraron aplicaciones para quitar${NC}"
         pause
         return 0
     fi
 
     SELECTED_APPS=()
-    if checklist_select "Eliminar aplicaciones" "Marca las aplicaciones que quieres ELIMINAR (${#entries[@]} instaladas)" "${entries[@]}"; then
+    if checklist_select "Eliminar aplicaciones" "Marca las que quieres ELIMINAR: $known conocidas, ${#detected[@]} detectadas en el menú (🔎), ${#flatpaks[@]} de Flatpak (📦)" "${entries[@]}"; then
         SELECTED_APPS=("${CHOSEN[@]}")
     fi
     clear
@@ -813,7 +889,13 @@ select_apps_to_remove() {
         echo ""
 
         if confirm "${CYAN}⚠️ ¿Confirmar eliminación de estas ${#SELECTED_APPS[@]} aplicaciones?${NC}"; then
-            remove_apps_with_progress "${SELECTED_APPS[@]}"
+            # Las de Flatpak se quitan con flatpak; el resto, con el gestor de paquetes
+            local pkgs=() fps=()
+            for app in "${SELECTED_APPS[@]}"; do
+                if [[ "$app" == flatpak:* ]]; then fps+=("${app#flatpak:}"); else pkgs+=("$app"); fi
+            done
+            [ ${#pkgs[@]} -gt 0 ] && remove_apps_with_progress "${pkgs[@]}"
+            [ ${#fps[@]} -gt 0 ] && remove_flatpak_apps "${fps[@]}"
             echo -e "${GREEN}✓ Eliminación completada${NC}"
         else
             echo -e "${YELLOW}ℹ Eliminación cancelada${NC}"

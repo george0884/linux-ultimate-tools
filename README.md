@@ -634,7 +634,19 @@ Android (`~/.android`). Nunca se pisa un respaldo anterior.
 
 ## 🗑️ Aplicaciones que puedes eliminar (opción 4)
 
-La lista sale de los **meta-paquetes reales de cada sabor**, con dos filtros:
+Además de la lista conocida, **el script detecta solo todas las demás apps instaladas**, también en distros
+derivadas que traen sus propias apps:
+
+- **🔎 Detectadas en el menú:** cada app con ícono en el menú (`/usr/share/applications`) se busca en el gestor de
+  paquetes (`dpkg` en Ubuntu y Debian, `pacman` en Arch) y aparece con su nombre en castellano. No se ofrecen las
+  ocultas, los paneles de configuración, la terminal, las piezas del escritorio ni los paquetes que la distribución
+  marca como imprescindibles (prioridad `required` o `important`).
+- **📦 Flatpak:** las apps de Flatpak instaladas (del sistema o del usuario) se quitan con `flatpak uninstall`, y
+  después se limpian los runtimes que ya no usa ninguna.
+- Al quitar, siguen valiendo las protecciones de siempre: si una app arrastrara una pieza esencial del sistema, no
+  se quita, y se avisa qué otros paquetes se irían por dependencias.
+
+La lista conocida sale de los **meta-paquetes reales de cada sabor**, con dos filtros:
 
 - **Solo apps**: juegos, oficina, correo, multimedia, cámaras, escáneres, torrents, IRC, utilidades...
   Nunca se ofrecen las piezas del escritorio: gestor de archivos, configuración del sistema, panel, sesión,
