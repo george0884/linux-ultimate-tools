@@ -7212,17 +7212,318 @@ boot_only_menu() {
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
         echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
-        echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
+        echo -e "  ${CYAN}20)${NC} 💿 CREAR USB DE INSTALACIÓN (descarga y graba Ubuntu, Debian, Arch...)"
+        echo ""
+        echo -e "  ${CYAN}21)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (19, 20 o 0): " option
+        read -r -p "🔢 Opción (19, 20, 21 o 0): " option
         case $option in
             19|1) grub_repair_menu ;;
-            20|2) shutdown_menu ;;
+            20) create_usb_menu; pause ;;
+            21|2) shutdown_menu ;;
             0) echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"; exit 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
         esac
     done
+}
+
+# ============================================================
+# CREAR USB DE INSTALACIÓN (con dd), fácil y a prueba de errores
+# - La ISO: una que ya tengas (la busca sola) o la descarga oficial con verificación SHA-256
+# - El pendrive: solo discos USB (o tarjetas SD), nunca el disco del sistema; si no hay,
+#   espera a que lo conectes y lo detecta solo
+# - Muestra qué tiene el pendrive y pide escribir BORRAR antes de grabar
+# - Graba con dd, comprueba que se copió bien y lo expulsa
+# ============================================================
+
+# Distribuciones que se pueden descargar: clave|nombre|tipo|dato
+#   tipo ubuntu: dato = "carpeta|patrón" (la última LTS se detecta sola)
+#   tipo lista:  dato = "url de la carpeta|archivo de sumas|patrón del nombre"
+USB_DISTROS=(
+    "ubuntu|Ubuntu (GNOME), última LTS|ubuntu|releases|ubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "kubuntu|Kubuntu (KDE Plasma), última LTS|ubuntu|kubuntu|kubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "xubuntu|Xubuntu (Xfce, liviano), última LTS|ubuntu|xubuntu|xubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "lubuntu|Lubuntu (LXQt, el más liviano), última LTS|ubuntu|lubuntu|lubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "server|Ubuntu Server, última LTS|ubuntu|releases|ubuntu-[0-9.]+-live-server-amd64\\.iso"
+    "debian-kde|Debian con KDE Plasma (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-kde\\.iso"
+    "debian-gnome|Debian con GNOME (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-gnome\\.iso"
+    "debian-net|Debian netinst (instalador mínimo, baja el resto de internet)|lista|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd|SHA256SUMS|debian-[0-9.]+-amd64-netinst\\.iso"
+    "arch|Arch Linux (instalación por terminal)|lista|https://geo.mirror.pkgbuild.com/iso/latest|sha256sums.txt|archlinux-[0-9.]+-x86_64\\.iso"
+)
+
+usb_download_dir() {
+    local d
+    d=$(xdg-user-dir DOWNLOAD 2>/dev/null)
+    [ -n "$d" ] && [ "$d" != "$HOME" ] || d="$HOME/Descargas"
+    [ -d "$d" ] || d="$HOME/Downloads"
+    [ -d "$d" ] || { d="$HOME/Descargas"; mkdir -p "$d"; }
+    echo "$d"
+}
+
+# "hash archivo" de la versión más nueva que coincide con el patrón, dentro de una lista de sumas
+usb_pick_from_sums() {
+    local sums="$1" pattern="$2"
+    awk -v re="^${pattern}\$" '{f = $2; sub(/^\*/, "", f); if (f ~ re) print $1, f}' <<< "$sums" \
+        | sort -k2,2V | tail -1
+}
+
+# Deja en USB_ISO_URL, USB_ISO_FILE y USB_ISO_SHA la descarga elegida
+usb_resolve_download() {
+    local entry="$1" key name type a b c dist sums base picked
+    IFS='|' read -r key name type a b c <<< "$entry"
+    if [ "$type" = ubuntu ]; then
+        dist=$(curl -sSfL -m 30 https://changelogs.ubuntu.com/meta-release-lts | awk '/^Dist:/ {d = $2} END {print d}')
+        [ -n "$dist" ] || { log_error "No se pudo saber cuál es la última versión LTS de Ubuntu"; return 1; }
+        if [ "$a" = releases ]; then
+            base="https://releases.ubuntu.com/$dist"
+        else
+            base="https://cdimage.ubuntu.com/$a/releases/$dist/release"
+        fi
+        sums=$(curl -sSfL -m 30 "$base/SHA256SUMS") || { log_error "No se pudo leer la lista de $name"; return 1; }
+        picked=$(usb_pick_from_sums "$sums" "$b")
+    else
+        base="$a"
+        sums=$(curl -sSfL -m 30 "$base/$b") || { log_error "No se pudo leer la lista de $name"; return 1; }
+        picked=$(usb_pick_from_sums "$sums" "$c")
+    fi
+    [ -n "$picked" ] || { log_error "No se encontró la ISO de $name en $base"; return 1; }
+    USB_ISO_SHA=${picked%% *}
+    USB_ISO_FILE=${picked#* }
+    USB_ISO_URL="$base/$USB_ISO_FILE"
+}
+
+# Descarga (se puede retomar si se corta) y verifica; deja la ruta en USB_ISO
+usb_download_iso() {
+    local i entry name choice dir size_mb free_mb
+    echo -e "\n${CYAN}💿 ¿Qué sistema quieres en el pendrive?${NC} (descarga oficial, se verifica sola)\n"
+    i=1
+    for entry in "${USB_DISTROS[@]}"; do
+        IFS='|' read -r _ name _ <<< "$entry"
+        printf "  ${CYAN}%d)${NC} %s\n" "$i" "$name"
+        i=$((i + 1))
+    done
+    echo -e "  ${CYAN}0)${NC} Volver"
+    read -r -p "🔢 Opción: " choice
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#USB_DISTROS[@]} ] || return 1
+    entry=${USB_DISTROS[$((choice - 1))]}
+    command -v curl &> /dev/null || { log_error "Falta curl para descargar"; return 1; }
+    echo -e "${BLUE}🔍 Buscando la última versión...${NC}"
+    usb_resolve_download "$entry" || return 1
+    dir=$(usb_download_dir)
+    USB_ISO="$dir/$USB_ISO_FILE"
+    echo -e "   ${GREEN}$USB_ISO_FILE${NC}\n   desde $USB_ISO_URL\n   se guarda en $dir"
+    # Si ya está bajada y entera, no se vuelve a bajar
+    if [ -f "$USB_ISO" ] && [ "$(sha256sum "$USB_ISO" | awk '{print $1}')" = "$USB_ISO_SHA" ]; then
+        log_success "Ya la tenías descargada y está entera"
+        return 0
+    fi
+    size_mb=$(( $(curl -sSfLI -m 30 "$USB_ISO_URL" | awk 'tolower($1) == "content-length:" {n = $2} END {print n + 0}') / 1048576 ))
+    free_mb=$(df -Pm "$dir" | awk 'NR == 2 {print $4}')
+    if [ "$size_mb" -gt 0 ] && [ "$free_mb" -lt $((size_mb + 200)) ]; then
+        log_error "No hay espacio en $dir: la ISO ocupa ~${size_mb} MB y hay ${free_mb} MB libres"
+        return 1
+    fi
+    confirm "${CYAN}¿Descargar ($([ "$size_mb" -gt 0 ] && echo "~${size_mb} MB" || echo "tamaño desconocido"))?${NC}" || return 1
+    echo -e "${BLUE}⬇ Descargando (si se corta, vuelve a elegirla y sigue donde quedó)...${NC}"
+    if ! curl -fL -C - --progress-bar -o "$USB_ISO" "$USB_ISO_URL"; then
+        log_error "La descarga se cortó: vuelve a elegirla para continuar"
+        return 1
+    fi
+    echo -e "${BLUE}🔐 Comprobando que llegó entera (SHA-256)...${NC}"
+    if [ "$(sha256sum "$USB_ISO" | awk '{print $1}')" != "$USB_ISO_SHA" ]; then
+        log_error "La ISO no coincide con la suma oficial: está dañada, no se usa (se borra)"
+        rm -f -- "$USB_ISO"
+        return 1
+    fi
+    log_success "ISO descargada y verificada"
+}
+
+# Busca ISOs en las carpetas habituales y deja la elegida en USB_ISO
+usb_pick_local_iso() {
+    local isos=() i choice f path
+    mapfile -t isos < <(find "$(usb_download_dir)" "$HOME" "$HOME/Escritorio" "$HOME/Desktop" /media /run/media \
+        -maxdepth 3 -type f -iname '*.iso' -size +50M 2>/dev/null | sort -u)
+    echo ""
+    if [ ${#isos[@]} -gt 0 ]; then
+        echo -e "${CYAN}💿 ISOs encontradas:${NC}"
+        i=1
+        for f in "${isos[@]}"; do
+            printf "  ${CYAN}%d)${NC} %s  ${YELLOW}(%s, %s)${NC}\n" "$i" "$(basename "$f")" \
+                "$(du -h "$f" | cut -f1)" "$(date -r "$f" '+%d/%m/%Y')"
+            i=$((i + 1))
+        done
+    else
+        echo -e "${YELLOW}ℹ No encontré ISOs en Descargas, tu carpeta personal ni en discos conectados${NC}"
+    fi
+    echo -e "  ${CYAN}r)${NC} Escribir la ruta a mano"
+    echo -e "  ${CYAN}0)${NC} Volver"
+    read -r -p "🔢 Opción: " choice
+    if [ "$choice" = r ]; then
+        read -r -e -p "📁 Ruta de la ISO: " path
+        path=${path/#\~/$HOME}
+        [ -f "$path" ] || { log_error "No existe: $path"; return 1; }
+        USB_ISO="$path"
+    elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#isos[@]} ]; then
+        USB_ISO=${isos[$((choice - 1))]}
+    else
+        return 1
+    fi
+    USB_ISO_SHA=""
+}
+
+# ¿Se puede grabar con dd? Las ISO de Linux son "híbridas" (arrancan desde un USB);
+# las de Windows no (necesitan otra herramienta, por ejemplo WoeUSB)
+usb_check_iso() {
+    local iso="$1" label sig
+    label=$(dd if="$iso" bs=1 skip=32808 count=32 2>/dev/null | tr -d '\0' | sed 's/ *$//')
+    sig=$(dd if="$iso" bs=1 skip=510 count=2 2>/dev/null | od -An -tx1 | tr -d ' \n')
+    echo -e "   Nombre del disco: ${CYAN}${label:-(sin nombre)}${NC}, tamaño ${CYAN}$(du -h "$iso" | cut -f1)${NC}"
+    if [[ "$label" =~ ^(CCCOMA|CPBA|CCSA|CENA|ESD-ISO|J_CCSA|IR[0-9]) ]] || [[ "$(basename "$iso")" =~ [Ww]in(dows)?[0-9._-] ]]; then
+        log_error "Parece una ISO de Windows: con dd no arranca. Usa WoeUSB o Ventoy para Windows."
+        return 1
+    fi
+    if [ "$sig" != 55aa ]; then
+        log_warning "Esta ISO no es 'híbrida': grabada con dd puede no arrancar desde USB"
+        confirm "${YELLOW}¿Grabarla igualmente?${NC}" || return 1
+    fi
+}
+
+# Discos USB (y tarjetas SD) que se pueden borrar: "dispositivo|tamaño en bytes|descripción"
+usb_candidates() {
+    local name tran rm size model vendor busy p mp
+    while read -r name rm size tran; do
+        [ "$tran" = usb ] || { [[ "$name" == /dev/mmcblk* ]] && [ "$rm" = 1 ]; } || continue
+        # Nunca un disco con algo del sistema montado (raíz, /boot, /home, swap, el Live USB...)
+        busy=""
+        while read -r p mp; do
+            case "$mp" in
+                /|/boot|/boot/*|/efi|/home|/home/*|/usr|/var|/cdrom|/run/live/*|/run/archiso/*|/run/initramfs/*|\[SWAP\]) busy="$mp" ;;
+            esac
+        done < <(lsblk -lnpo NAME,MOUNTPOINT "$name" 2>/dev/null)
+        [ -n "$busy" ] && continue
+        model=$(lsblk -dno MODEL "$name" 2>/dev/null | sed 's/ *$//')
+        vendor=$(lsblk -dno VENDOR "$name" 2>/dev/null | sed 's/ *$//')
+        echo "$name|$size|$(lsblk -dno SIZE "$name" | tr -d ' ') ${vendor:+$vendor }${model:-USB}"
+    done < <(lsblk -dnbpo NAME,RM,SIZE,TRAN 2>/dev/null)
+}
+
+# Elige el pendrive; si no hay, espera a que lo conectes. Deja USB_DEV, USB_DEV_SIZE, USB_DEV_DESC
+usb_pick_device() {
+    local min_bytes="$1" devs=() i d choice waited=0
+    mapfile -t devs < <(usb_candidates)
+    if [ ${#devs[@]} -eq 0 ]; then
+        echo -e "\n${YELLOW}🔌 Conecta el pendrive ahora... (lo detecto solo; Ctrl+C para cancelar)${NC}"
+        while [ ${#devs[@]} -eq 0 ] && [ $waited -lt 120 ]; do
+            sleep 2
+            waited=$((waited + 2))
+            mapfile -t devs < <(usb_candidates)
+        done
+        [ ${#devs[@]} -gt 0 ] || { log_error "No se detectó ningún pendrive en 2 minutos"; return 1; }
+        sleep 2   # que el sistema termine de reconocerlo
+        mapfile -t devs < <(usb_candidates)
+    fi
+    echo -e "\n${CYAN}🔌 Pendrives conectados:${NC}"
+    i=1
+    for d in "${devs[@]}"; do
+        printf "  ${CYAN}%d)${NC} %s  ${YELLOW}%s${NC}\n" "$i" "${d%%|*}" "${d##*|}"
+        i=$((i + 1))
+    done
+    echo -e "  ${CYAN}0)${NC} Volver"
+    if [ ${#devs[@]} -eq 1 ]; then
+        read -r -p "🔢 Opción [1]: " choice
+        choice=${choice:-1}
+    else
+        read -r -p "🔢 Opción: " choice
+    fi
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#devs[@]} ] || return 1
+    IFS='|' read -r USB_DEV USB_DEV_SIZE USB_DEV_DESC <<< "${devs[$((choice - 1))]}"
+    if [ "$USB_DEV_SIZE" -lt "$min_bytes" ]; then
+        log_error "El pendrive es chico: tiene $(numfmt --to=iec "$USB_DEV_SIZE") y la ISO necesita $(numfmt --to=iec "$min_bytes")"
+        return 1
+    fi
+}
+
+create_usb_menu() {
+    clear
+    echo -e "${BLUE}${BOLD}"
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║                💿 CREAR USB DE INSTALACIÓN                       ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    echo -e "Graba un sistema en un pendrive para instalarlo o probarlo en cualquier PC."
+    echo -e "${YELLOW}⚠ Todo lo que tenga el pendrive se borra.${NC} El disco de tu sistema nunca aparece en la lista.\n"
+    echo -e "  ${BLUE}1)${NC} Descargar un sistema (Ubuntu, Kubuntu, Debian, Arch...) y grabarlo"
+    echo -e "  ${BLUE}2)${NC} Usar una ISO que ya tengo (la busco sola)"
+    echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
+    local option
+    read -r -p "📌 Opción (0-2): " option
+    USB_ISO="" USB_ISO_SHA=""
+    case $option in
+        1) usb_download_iso || return 1 ;;
+        2) usb_pick_local_iso || return 1 ;;
+        *) return 0 ;;
+    esac
+
+    echo -e "\n${CYAN}💿 ISO:${NC} $USB_ISO"
+    usb_check_iso "$USB_ISO" || return 1
+    local iso_bytes
+    iso_bytes=$(stat -c %s "$USB_ISO")
+    usb_pick_device "$iso_bytes" || return 1
+
+    # Qué se va a borrar, para que no haya dudas
+    echo -e "\n${RED}${BOLD}⚠ SE VA A BORRAR TODO ESTE PENDRIVE:${NC}"
+    echo -e "   ${BOLD}$USB_DEV${NC} — $USB_DEV_DESC"
+    lsblk -no NAME,SIZE,FSTYPE,LABEL,MOUNTPOINT "$USB_DEV" 2>/dev/null | sed 's/^/     /'
+    [ "$USB_DEV_SIZE" -gt $((256 * 1024 * 1024 * 1024)) ] \
+        && echo -e "${YELLOW}   ⚠ Es muy grande para ser un pendrive: ¿no será un disco externo con tus archivos?${NC}"
+    echo -e "\n   Se grabará: ${GREEN}$(basename "$USB_ISO")${NC}"
+    if $AUTO_MODE; then
+        log_error "Grabar un pendrive siempre se confirma a mano"
+        return 1
+    fi
+    local answer
+    read -r -p "✍ Para confirmar escribe BORRAR (cualquier otra cosa cancela): " answer
+    [ "$answer" = BORRAR ] || { echo -e "${YELLOW}ℹ Cancelado: no se tocó nada${NC}"; return 0; }
+
+    # Se comprueba otra vez que sea el mismo pendrive (por si se desconectó o cambió de nombre)
+    if ! usb_candidates | grep -q "^$USB_DEV|$USB_DEV_SIZE|"; then
+        log_error "El pendrive cambió o se desconectó: no se grabó nada"
+        return 1
+    fi
+    # Desmontar sus particiones (el escritorio las monta solas al conectarlo)
+    local part
+    for part in $(lsblk -lnpo NAME "$USB_DEV" | tail -n +2); do
+        if findmnt -rn -S "$part" > /dev/null; then
+            sudo umount "$part" 2>/dev/null || udisksctl unmount -b "$part" &> /dev/null \
+                || { log_error "No se pudo desmontar $part: cierra lo que lo esté usando"; return 1; }
+        fi
+    done
+
+    echo -e "\n${BLUE}🔥 Grabando (no desconectes el pendrive)...${NC}"
+    if ! sudo dd if="$USB_ISO" of="$USB_DEV" bs=4M status=progress oflag=direct conv=fsync; then
+        log_error "Falló la grabación: prueba con otro puerto USB u otro pendrive"
+        return 1
+    fi
+    sync
+    echo -e "\n${BLUE}🔍 Comprobando que se grabó bien...${NC}"
+    if sudo cmp -n "$iso_bytes" "$USB_ISO" "$USB_DEV" > /dev/null 2>&1; then
+        log_success "Pendrive listo y verificado"
+    else
+        log_error "La copia no coincide con la ISO: el pendrive puede estar dañado, prueba con otro"
+        return 1
+    fi
+    if command -v udisksctl &> /dev/null && udisksctl power-off -b "$USB_DEV" &> /dev/null; then
+        echo -e "${GREEN}✓ Expulsado: ya puedes sacarlo${NC}"
+    else
+        echo -e "${GREEN}✓ Ya puedes sacarlo${NC}"
+    fi
+    echo -e "\n${CYAN}💡 Para arrancar desde el pendrive: enchúfalo, enciende la PC y pulsa la tecla del menú de"
+    echo -e "   arranque (suele ser F12, F11, F10, F8 o Esc según la marca) y elige el USB.${NC}"
+    echo -e "${CYAN}   Si no aparece, desactiva \"Secure Boot\" o activa el arranque USB en la BIOS.${NC}"
+    if [ -n "$USB_ISO_SHA" ] && confirm "${CYAN}¿Borrar la ISO descargada para liberar espacio?${NC}"; then
+        rm -f -- "$USB_ISO" && log_success "ISO borrada"
+    fi
 }
 
 main_menu() {
@@ -7250,7 +7551,9 @@ main_menu() {
         echo -e "  ${CYAN}17)${NC} 🔋 Energía y rendimiento"
         echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
-        echo -e "  ${CYAN}20)${NC} 🔌 Apagar / Reiniciar sistema"
+        echo -e "  ${CYAN}20)${NC} 💿 CREAR USB DE INSTALACIÓN (descarga y graba Ubuntu, Debian, Arch...)"
+        echo ""
+        echo -e "  ${CYAN}21)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo -e "\n${YELLOW}ℹ Versión beta: los números son los mismos que en Ubuntu. Snap (5 y 9) no aplica en${NC}"
         echo -e "${YELLOW}  Arch y los perfiles automáticos (18) llegan en una próxima versión.${NC}"
@@ -7274,7 +7577,8 @@ main_menu() {
             16) network_menu ;;
             17) power_menu ;;
             19) grub_repair_menu ;;
-            20) shutdown_menu ;;
+            20) create_usb_menu; pause ;;
+            21) shutdown_menu ;;
             4|8) echo -e "${YELLOW}ℹ Snap no se usa en Arch${NC}"; sleep 2 ;;
             18) echo -e "${YELLOW}ℹ Los perfiles automáticos llegan en una próxima versión${NC}"; sleep 2 ;;
             0)

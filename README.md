@@ -242,7 +242,7 @@ Todo lo hace el propio script, sin instalar programas externos.
 - El script detecta la distribución, la carpeta de GRUB (`/boot/grub` o `/boot/grub2`), dónde está montada la
   partición EFI y cómo se llama su carpeta (`ubuntu`, `debian`, `GRUB`, `manjaro`, `fedora`...).
 - **En Ubuntu y sus derivadas** (Kubuntu, Mint, Pop!_OS...) está todo el script. **En las demás distribuciones**
-  el menú principal muestra solo **19) Arranque** y **20) Apagar**, con los mismos números, así la tarjeta de
+  el menú principal muestra solo **19) Arranque**, **20) Crear USB de instalación** y **21) Apagar**, con los mismos números, así la tarjeta de
   rescate y las guías sirven igual.
 - Desde el USB de cualquiera de estas distribuciones, la **reparación desde Live USB (19 → 10)** detecta qué
   sistema hay en el disco y usa sus comandos (también con btrfs, `/boot` aparte y discos cifrados).
@@ -433,6 +433,34 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
     borrar sus registros.
 - Idea inspirada en [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) de Jeff Starke
   (Starke427). No se usa su código porque su repositorio no tiene licencia (ver [CREDITOS.md](CREDITOS.md)).
+
+---
+
+## 💿 Crear USB de instalación (opción 20)
+
+![Crear USB de instalación](screenshots/27-crear-usb.png)
+
+Graba un sistema en un pendrive con `dd`, pensado para que lo use cualquiera y sin riesgo de borrar el disco equivocado.
+Funciona en todas las distribuciones (también en el modo arranque de Arch, Fedora, openSUSE...).
+
+1. **Elige la ISO:**
+   - **Descargarla**: Ubuntu, Kubuntu, Xubuntu, Lubuntu y Ubuntu Server (la **última LTS se detecta sola**), Debian con
+     KDE o GNOME, Debian netinst o Arch. Se baja de la página oficial a tu carpeta de Descargas, se puede **retomar si
+     se corta** y se **verifica con su SHA-256 oficial** (si está dañada, se borra y no se usa). Si ya la tenías
+     descargada y entera, no se baja de nuevo.
+   - **Una que ya tengas**: la busca sola en Descargas, tu carpeta personal, el Escritorio y discos conectados, o
+     escribes la ruta.
+   - Revisa que sirva para `dd`: las ISO de **Windows** no arrancan así (avisa que uses WoeUSB o Ventoy) y las que no
+     son "híbridas" piden confirmación.
+2. **Elige el pendrive:** solo aparecen **discos USB y tarjetas SD**. **Nunca** el disco del sistema, ni uno con algo
+   del sistema montado (raíz, `/boot`, `/home`, swap, el propio Live USB). Si no hay ninguno conectado, **espera a que
+   lo enchufes y lo detecta solo**. Si es más chico que la ISO, no deja seguir; si es muy grande (más de 256 GB),
+   avisa que puede ser un disco externo con tus archivos.
+3. **Confirma:** muestra el modelo, el tamaño y las particiones con su nombre, y hay que **escribir `BORRAR`**.
+   Justo antes de grabar comprueba que sigue siendo el mismo pendrive.
+4. **Graba y comprueba:** desmonta sus particiones, graba con `dd` mostrando el progreso, **compara la copia con la
+   ISO** byte a byte y lo **expulsa**. Al final explica cómo arrancar desde el USB (F12, F11, F10, F8 o Esc según la
+   marca, y Secure Boot) y ofrece borrar la ISO descargada.
 
 ---
 
@@ -641,7 +669,7 @@ Si algo no te convence, la opción 10 deshace optimizaciones y quita programas, 
 
 En la carpeta [**screenshots**](screenshots/) están las capturas de todos los menús: eliminar apps,
 GPU, kernel, revertir, arranque y GRUB, red, energía, perfiles, deshacer, información del sistema,
-Ubuntu Server, instalar un escritorio y auditoría de seguridad.
+Ubuntu Server, instalar un escritorio, auditoría de seguridad y crear un USB de instalación.
 
 ---
 

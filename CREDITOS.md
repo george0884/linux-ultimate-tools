@@ -138,6 +138,18 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [Linux Audit (auditd)](https://github.com/linux-audit/audit-userspace) | Red Hat y colaboradores | GPL-2.0-or-later (bibliotecas LGPL-2.1) | Instala: registro de auditoría con reglas **propias del script** |
 | [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) | Jeff Starke (Starke427) | **Sin licencia publicada** | **Inspiración**: la idea de combinar auditd y Lynis. No se copia ni se descarga su código ni sus reglas: un repositorio sin licencia no se puede redistribuir. Las reglas de auditd del script se escribieron desde cero para Ubuntu y Debian actuales |
 
+## 💿 Crear USB de instalación (opción 20)
+
+| Proyecto | Licencia | Uso |
+|---|---|---|
+| [GNU coreutils](https://www.gnu.org/software/coreutils/) (`dd`, `sha256sum`) | GPL-3.0-or-later | Sistema: grabar el pendrive y verificar las descargas |
+| [util-linux](https://github.com/util-linux/util-linux) (`lsblk`, `findmnt`) | GPL-2.0-or-later | Sistema: detectar los pendrives y lo que tienen montado |
+| [udisks](https://github.com/storaged-project/udisks) (`udisksctl`) | GPL-2.0-or-later | Sistema: desmontar y expulsar el pendrive |
+| [curl](https://curl.se/) | Licencia curl | Sistema: descargar las ISO oficiales |
+
+Las ISO se descargan de los sitios oficiales de cada distribución (Ubuntu, Debian, Arch Linux), con sus propias
+licencias y marcas; el script no las modifica.
+
 ## 🔒 Servicios de DNS
 
 Cloudflare, AdGuard DNS y Quad9 son **servicios** de terceros, no software: el script solo configura
