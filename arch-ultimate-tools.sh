@@ -525,7 +525,9 @@ helpline=white,black
 roottext=white,black
 '
 
-# Colores de dialog iguales a los del script: fondo oscuro y la línea del cursor resaltada en celeste
+# Colores de dialog iguales a los del script: fondo oscuro y la línea del cursor resaltada en celeste.
+# Lo resaltado va SIN negrita: muchas terminales (Konsole) muestran el negro en negrita como gris
+# claro, y sobre celeste no se lee.
 DIALOG_RC='use_shadow = OFF
 use_colors = ON
 screen_color = (WHITE,BLACK,OFF)
@@ -533,23 +535,23 @@ dialog_color = (WHITE,BLACK,OFF)
 title_color = (CYAN,BLACK,ON)
 border_color = (CYAN,BLACK,OFF)
 border2_color = (CYAN,BLACK,OFF)
-button_active_color = (BLACK,CYAN,ON)
+button_active_color = (BLACK,CYAN,OFF)
 button_inactive_color = (WHITE,BLACK,OFF)
-button_key_active_color = (BLACK,CYAN,ON)
+button_key_active_color = (BLACK,CYAN,OFF)
 button_key_inactive_color = (WHITE,BLACK,ON)
-button_label_active_color = (BLACK,CYAN,ON)
+button_label_active_color = (BLACK,CYAN,OFF)
 button_label_inactive_color = (WHITE,BLACK,ON)
 menubox_color = (WHITE,BLACK,OFF)
 menubox_border_color = (CYAN,BLACK,OFF)
 menubox_border2_color = (CYAN,BLACK,OFF)
 item_color = (WHITE,BLACK,OFF)
-item_selected_color = (BLACK,CYAN,ON)
+item_selected_color = (BLACK,CYAN,OFF)
 tag_color = (CYAN,BLACK,OFF)
-tag_selected_color = (BLACK,CYAN,ON)
+tag_selected_color = (BLACK,CYAN,OFF)
 tag_key_color = (CYAN,BLACK,OFF)
-tag_key_selected_color = (BLACK,CYAN,ON)
+tag_key_selected_color = (BLACK,CYAN,OFF)
 check_color = (WHITE,BLACK,OFF)
-check_selected_color = (BLACK,CYAN,ON)
+check_selected_color = (BLACK,CYAN,OFF)
 uarrow_color = (CYAN,BLACK,ON)
 darrow_color = (CYAN,BLACK,ON)
 position_indicator_color = (CYAN,BLACK,ON)'
