@@ -473,7 +473,13 @@ checklist_select() {
             desc=${entry#*|}
             # Sin el emoji inicial: se calcula mal su ancho y descuadra la lista
             [[ "$desc" == *" "* ]] && [[ "${desc%% *}" != *[A-Za-z0-9]* ]] && desc=${desc#* }
-            [ ${#desc} -gt "$max_desc" ] && desc="${desc:0:$((max_desc - 1))}…"
+            # whiptail no se adapta: se recorta al ancho de ahora. dialog se ajusta solo (también al
+            # agrandar o achicar la ventana), así que solo se limita a algo razonable
+            if [ "$tool" = whiptail ]; then
+                [ ${#desc} -gt "$max_desc" ] && desc="${desc:0:$((max_desc - 1))}…"
+            else
+                [ ${#desc} -gt 100 ] && desc="${desc:0:99}…"
+            fi
             args+=("$name" "$desc" "$status")
         done
         lh=${#entries[@]}
@@ -481,13 +487,14 @@ checklist_select() {
         [ "$lh" -lt 3 ] && lh=3
         h=$((lh + 10))
         if [ "$tool" = dialog ]; then
+            # Tamaño 0 0 0 = automático: dialog lo calcula y lo recalcula si cambias el tamaño de la ventana
             local rc_file
             rc_file=$(mktemp)
             printf '%s\n' "$DIALOG_RC" > "$rc_file"
             out=$(DIALOGRC="${DIALOGRC:-$rc_file}" NCURSES_NO_UTF8_ACS=1 dialog --title " $title " --ok-label "Aceptar" --cancel-label "Cancelar" \
                 --separate-output ${CHECKLIST_NOTAGS:+--no-tags} \
                 --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
-                "$h" "$w" "$lh" "${args[@]}" 3>&1 1>&2 2>&3)
+                0 0 0 "${args[@]}" 3>&1 1>&2 2>&3)
             local rc=$?
             rm -f "$rc_file"
             [ $rc -eq 0 ] || return 1
