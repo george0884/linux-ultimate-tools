@@ -8263,6 +8263,47 @@ main_menu() {
     done
 }
 
+# Aviso del primer uso: qué licencia tiene, que no tiene garantía y que modifica el sistema.
+# No es una condición de la licencia (la AGPL permite ejecutar el programa sin aceptarla):
+# solo confirma que la persona entiende lo que hace el script. Se muestra una vez por versión del aviso.
+NOTICE_VERSION=1
+NOTICE_FILE="$STATE_DIR/aviso-primer-uso.txt"
+
+first_run_notice() {
+    [ "$(sed -n 's/^version=//p' "$NOTICE_FILE" 2>/dev/null)" = "$NOTICE_VERSION" ] && return 0
+    $NOTICE_OK && { notice_save; return 0; }
+    echo -e "${CYAN}${BOLD}📜 AVISO ANTES DEL PRIMER USO${NC}\n"
+    echo -e "${BOLD}Debian Ultimate Tools (beta)${NC} es software libre bajo la licencia ${BOLD}GNU AGPL-3.0${NC} (archivo LICENSE)."
+    echo -e "  • Puedes usarlo, estudiarlo, modificarlo y compartirlo. Si distribuyes una versión modificada,"
+    echo -e "    o la ofreces como servicio en red, debes publicar su código con la misma licencia."
+    echo -e "  • Se ofrece ${BOLD}SIN GARANTÍA${NC} de ningún tipo (secciones 15 y 16 de la licencia)."
+    echo -e "  • ${YELLOW}⚠ Este script MODIFICA TU SISTEMA:${NC} quita programas, cambia el arranque (GRUB),"
+    echo -e "    instala kernels y drivers... Casi todo se puede deshacer (opciones 10 y 11 del menú),"
+    echo -e "    pero conviene tener una copia de seguridad de tus archivos."
+    echo -e "  • Créditos y licencias de todo el software que usa: CREDITOS.md"
+    echo -e "\n${CYAN}No necesitas aceptar la licencia para usar el script: esto solo confirma que entiendes lo que hace.${NC}"
+    echo -e "${CYAN}Este aviso aparece una sola vez.${NC}\n"
+    if [ ! -t 0 ]; then
+        echo -e "${YELLOW}ℹ Para usarlo sin terminal interactiva (por ejemplo en servidores o tareas programadas),${NC}"
+        echo -e "${YELLOW}  agrega --entiendo después de leer este aviso.${NC}"
+        exit 1
+    fi
+    local answer
+    read -r -p "¿Entiendes y quieres continuar? (s/n): " answer
+    if [[ "$answer" =~ ^([sSyY]|[sS][iIíÍ])$ ]]; then
+        notice_save
+        echo ""
+    else
+        echo -e "\n${YELLOW}De acuerdo: no se cambió nada. Puedes volver cuando quieras.${NC}"
+        exit 0
+    fi
+}
+
+notice_save() {
+    mkdir -p "$STATE_DIR"
+    printf 'version=%s\nfecha=%s\n' "$NOTICE_VERSION" "$(date '+%Y-%m-%d %H:%M')" > "$NOTICE_FILE"
+}
+
 # ============================================================
 # INICIO
 # ============================================================
@@ -8271,11 +8312,17 @@ if [ "$EUID" -eq 0 ]; then
     echo -e "${RED}❌ No ejecutes este script como root (no uses sudo)${NC}"
     exit 1
 fi
+NOTICE_OK=false
 case ${1:-} in
-    -h|--ayuda) echo "Uso: $0   (menú interactivo; versión beta para Debian y derivadas)"; exit 0 ;;
+    -h|--ayuda) echo "Uso: $0 [--entiendo]   (menú interactivo; versión beta para Debian y derivadas)"
+                echo "  --entiendo   No mostrar el aviso del primer uso (si ya lo leíste)"; exit 0 ;;
+    --entiendo) NOTICE_OK=true ;;
     "") ;;
     *) echo -e "${RED}❌ Opción desconocida: $1${NC} (en la beta no hay perfiles automáticos)"; exit 1 ;;
 esac
+
+# Antes de pedir la contraseña o tocar nada
+first_run_notice
 if ! command -v sudo &> /dev/null; then
     echo -e "${RED}❌ Falta sudo. Instálalo como root (su -c 'apt install sudo') y agrega tu usuario:${NC}"
     echo -e "${RED}   su -c 'usermod -aG sudo $USER'  (después cierra sesión y vuelve a entrar)${NC}"
