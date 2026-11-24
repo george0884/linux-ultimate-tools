@@ -467,6 +467,9 @@ Funciona en todas las distribuciones (también en el modo arranque de Arch, Fedo
 ## ⏱️ Velocidad
 
 - Las apps se instalan y eliminan **en una sola operación** de apt, no una por una.
+- Mientras apt o pacman instalan, quitan o actualizan, se ve una **barra de avance** con el porcentaje, el tiempo
+  y el paquete que se está procesando (`[########------]  45%  01:23  Quitando libreoffice-core`), así se sabe que no
+  se colgó. El detalle completo queda en el log.
 - Los `.deb` externos (VSCode, Chrome, Discord) se descargan en paralelo.
 - `apt update` se ejecuta una vez por sesión (o se omite si el sistema lo hizo hace menos de 30 minutos).
 - Cambiar de kernel no regenera GRUB: se usa `GRUB_DEFAULT=saved` + `grub-set-default`.
