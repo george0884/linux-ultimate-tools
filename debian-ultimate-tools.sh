@@ -432,10 +432,10 @@ checklist_select() {
             printf "  ${CYAN}[%2s]${NC} [%s] %-22s - %s\n" "$i" "$status" "${entry%%|*}" "${entry#*|}"
         fi
     done
-    echo -e "\n${CYAN}([x] = marcado ahora; escribe todos los que quieras dejar marcados; Enter = cancelar)${NC}"
+    echo -e "\n${CYAN}([x] = marcado ahora; escribe todos los que quieras dejar marcados; 0 o Enter = volver)${NC}"
     read -r -p "🔢 Números separados por espacio: " input
-    # Sin respuesta no se cambia nada (no significa "desmarcar todo")
-    [ -n "${input// /}" ] || return 1
+    # Sin respuesta (o 0) no se cambia nada (no significa "desmarcar todo")
+    [ -n "${input// /}" ] && [ "${input// /}" != 0 ] || return 1
     for num in $input; do
         if [[ "$num" =~ ^[0-9]+$ ]] && [ "$num" -ge 1 ] && [ "$num" -le ${#entries[@]} ]; then
             CHOSEN+=("${entries[$((num - 1))]%%|*}")
@@ -3892,7 +3892,12 @@ grub_reinstall_to_disk() {
     echo -e "${PURPLE}[*] Discos disponibles:${NC}"
     lsblk -dpno NAME,SIZE,MODEL 2>/dev/null | grep -v "loop" | sed 's/^/  /'
     echo ""
+    echo -e "  ${PURPLE}0)${NC} 🔙 Volver (o Enter)"
     read -r -p "📌 Disco (ej: /dev/sda; el DISCO, no una partición como /dev/sda1): " target_disk
+    if [ -z "$target_disk" ] || [ "$target_disk" = 0 ]; then
+        echo -e "${YELLOW}ℹ No se cambió nada${NC}"
+        return 0
+    fi
 
     if [ ! -b "$target_disk" ] || [ "$(lsblk -dno TYPE "$target_disk" 2>/dev/null)" != "disk" ]; then
         log_error "$target_disk no es un disco"
@@ -4187,8 +4192,13 @@ grub_live_repair() {
         IFS='|' read -r root_dev disk root_fs choice <<< "$part"
         printf "  ${PURPLE}[%s]${NC} %-22s %8s  %-6s %s\n" "$i" "$root_dev" "$disk" "$root_fs" "$choice"
     done
+    echo -e "\n  ${PURPLE}[0]${NC} 🔙 Volver"
     echo ""
     read -r -p "📌 ¿Cuál es la partición del sistema (la raíz /)? " choice
+    if [ -z "$choice" ] || [ "$choice" = 0 ]; then
+        echo -e "${YELLOW}ℹ No se cambió nada${NC}"
+        return 0
+    fi
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#parts[@]} ]; then
         log_error "Opción inválida"
         sleep 1
@@ -4480,6 +4490,7 @@ uefi_boot_order_menu() {
         [ "$num" = "${order%%,*}" ] && printf " ${CYAN}(primero)${NC}"
         echo ""
     done
+    echo -e "\n  ${PURPLE}[ 0]${NC} 🔙 Volver sin cambiar nada"
     echo ""
     read -r -p "📌 Entrada: " choice
     if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#entries[@]} ]; then
@@ -4878,7 +4889,11 @@ grub_appearance_menu() {
         3) grub_set_colors light-green/black black/light-green ;;
         4) sudo rm -f "$GRUB_LOOK_FILE" ;;
         5)
-            read -r -p "🖼 Ruta de la imagen (puedes arrastrarla desde Dolphin): " file
+            read -r -p "🖼 Ruta de la imagen (puedes arrastrarla desde Dolphin; Enter = volver): " file
+            if [ -z "$file" ] || [ "$file" = 0 ]; then
+                echo -e "${YELLOW}ℹ No se cambió nada${NC}"
+                return 0
+            fi
             file=${file//\'/}
             file=${file/#\~/$HOME}
             ext=$(tr '[:upper:]' '[:lower:]' <<< "${file##*.}")
@@ -5927,8 +5942,12 @@ remove_desktop_shortcuts() {
         [ -d "$dir/$item" ] && kind="carpeta"
         printf "  ${CYAN}[%2s]${NC} %-40s ${YELLOW}(%s)${NC}\n" "$i" "$item" "$kind"
     done
-    echo -e "\n${CYAN}📝 Números separados por espacio, 't' = todos los accesos directos (.desktop y enlaces)${NC}"
+    echo -e "\n${CYAN}📝 Números separados por espacio, 't' = todos los accesos directos (.desktop y enlaces), 0 o Enter = volver${NC}"
     read -r -p "🔢 Quitar: " input
+    if [ -z "${input// /}" ] || [ "${input// /}" = 0 ]; then
+        echo -e "${YELLOW}ℹ No se quitó nada${NC}"
+        return 0
+    fi
 
     if [ "$input" = "t" ] || [ "$input" = "T" ]; then
         for item in "${items[@]}"; do
@@ -6312,9 +6331,12 @@ network_menu() {
                     i=$((i + 1))
                     echo -e "  ${BLUE}${i})${NC} $(cut -d'|' -f3 <<< "$entry")"
                 done
+                echo -e "  ${BLUE}0)${NC} 🔙 Volver"
                 echo -e "\n${YELLOW}⚠ Si usas una VPN de trabajo con nombres internos, puede que necesites el DNS automático${NC}"
                 read -r -p "📌 Proveedor: " choice
-                if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#DNS_PROVIDERS[@]} ]; then
+                if [ -z "$choice" ] || [ "$choice" = 0 ]; then
+                    continue
+                elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#DNS_PROVIDERS[@]} ]; then
                     entry=${DNS_PROVIDERS[$((choice - 1))]}
                     set_dns "${entry%%|*}"
                 else
@@ -8144,7 +8166,8 @@ usb_pick_local_iso() {
     echo -e "  ${CYAN}0)${NC} Volver"
     read -r -p "🔢 Opción: " choice
     if [ "$choice" = r ]; then
-        read -r -e -p "📁 Ruta de la ISO: " path
+        read -r -e -p "📁 Ruta de la ISO (Enter = volver): " path
+        [ -n "$path" ] && [ "$path" != 0 ] || return 1
         path=${path/#\~/$HOME}
         [ -f "$path" ] || { log_error "No existe: $path"; return 1; }
         USB_ISO="$path"
@@ -8342,7 +8365,7 @@ main_menu() {
         echo -e "\n${YELLOW}ℹ Versión beta: los números son los mismos que en Ubuntu. Snap (5 y 9) no aplica en${NC}"
         echo -e "${YELLOW}  Debian y los perfiles automáticos (18) llegan en una próxima versión.${NC}"
         echo ""
-        read -r -p "🔢 Opción: " option
+        read -r -p "🔢 Opción (0-21): " option
 
         case $option in
             1) system_update ;;
