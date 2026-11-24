@@ -9447,7 +9447,7 @@ offer_right_script() {
     name="$want-ultimate-tools.sh"
     here=$(dirname "$(readlink -f "$0")")
     path="$here/$name"
-    url="https://raw.githubusercontent.com/george0884/ubuntu-ultimate-tools/main/$name"
+    url="https://raw.githubusercontent.com/george0884/linux-ultimate-tools/main/$name"
     echo -e "${YELLOW}🐧 Detecté ${BOLD}$(os_release_value PRETTY_NAME)${NC}${YELLOW}: el script para este sistema es ${BOLD}$name${NC}"
     echo -e "${YELLOW}   Con este ($(basename "$0")) solo están el menú de arranque y crear un USB de instalación.${NC}\n"
     if [ -f "$path" ]; then
