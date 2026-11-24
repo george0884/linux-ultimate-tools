@@ -97,8 +97,18 @@ confirm() {
         echo -e "$prompt ${YELLOW}→ no (modo automático)${NC}"
         return 1
     fi
-    echo -e -n "$prompt (s/n): "
+    # Dentro de una opción del menú principal, 0 vuelve al menú en cualquier pregunta s/n
+    if [ -n "${MENU_SUBSHELL:-}" ]; then
+        echo -e -n "$prompt (s/n, 0 = volver al menú): "
+    else
+        echo -e -n "$prompt (s/n): "
+    fi
     read -r response
+    if [ "$response" = 0 ] && [ -n "${MENU_SUBSHELL:-}" ]; then
+        echo -e "${YELLOW}↩ Volviendo al menú principal (lo que ya se hizo queda hecho)${NC}"
+        sleep 1
+        exit 0
+    fi
     [[ "$response" =~ ^([sSyY]|[sS][iI]|[sS]í|[sS]Í)$ ]]
 }
 
@@ -445,7 +455,7 @@ checklist_tool() {
 checklist_select() {
     local title="$1" text="$2"
     shift 2
-    local entries=("$@") args=() entry name desc status i=0 input num tool=""
+    local entries=("$@") args=() entry name desc status i=0 input num tool="" has_sys=false
     CHOSEN=()
 
     [ -t 0 ] && [ -t 1 ] && tool=$(checklist_tool)
@@ -471,8 +481,13 @@ checklist_select() {
             [[ "$entry" == *"|ON" ]] && { status=on; entry=${entry%|ON}; }
             name=${entry%%|*}
             desc=${entry#*|}
+            local sysmark=false
+            [[ "$desc" == SYS::* ]] && { sysmark=true; desc=${desc#SYS::}; has_sys=true; }
             # Sin el emoji inicial: se calcula mal su ancho y descuadra la lista
             [[ "$desc" == *" "* ]] && [[ "${desc%% *}" != *[A-Za-z0-9]* ]] && desc=${desc#* }
+            if $sysmark; then
+                if [ "$tool" = dialog ]; then desc="\\Z1⚠ SISTEMA\\Zn $desc"; else desc="⚠ SISTEMA: $desc"; fi
+            fi
             # whiptail no se adapta: se recorta al ancho de ahora. dialog se ajusta solo (también al
             # agrandar o achicar la ventana), así que solo se limita a algo razonable
             if [ "$tool" = whiptail ]; then
@@ -491,7 +506,8 @@ checklist_select() {
             local rc_file
             rc_file=$(mktemp)
             printf '%s\n' "$DIALOG_RC" > "$rc_file"
-            out=$(DIALOGRC="${DIALOGRC:-$rc_file}" NCURSES_NO_UTF8_ACS=1 dialog --title " $title " --ok-label "Aceptar" --cancel-label "Cancelar" \
+            $has_sys && text="$text\n\Z1⚠ SISTEMA\Zn = herramienta del sistema o de tu distribución: quítala solo si sabes que no la usas"
+            out=$(DIALOGRC="${DIALOGRC:-$rc_file}" NCURSES_NO_UTF8_ACS=1 dialog --colors --title " $title " --ok-label "Aceptar" --cancel-label "Cancelar" \
                 --separate-output ${CHECKLIST_NOTAGS:+--no-tags} \
                 --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
                 0 0 0 "${args[@]}" 3>&1 1>&2 2>&3)
@@ -499,6 +515,7 @@ checklist_select() {
             rm -f "$rc_file"
             [ $rc -eq 0 ] || return 1
         else
+            $has_sys && text="$text\n⚠ SISTEMA = herramienta del sistema o de tu distribución: quítala solo si sabes que no la usas"
             out=$(NEWT_COLORS="${NEWT_COLORS:-$WHIPTAIL_COLORS}" \
                 whiptail --title "$title" --ok-button "Aceptar" --cancel-button "Cancelar" \
                 --separate-output ${CHECKLIST_NOTAGS:+--notags} \
@@ -514,6 +531,7 @@ checklist_select() {
         i=$((i + 1))
         status=" "
         [[ "$entry" == *"|ON" ]] && { status="x"; entry=${entry%|ON}; }
+        [[ "${entry#*|}" == SYS::* ]] && entry="${entry%%|*}|⚠ SISTEMA: ${entry#*|SYS::}"
         if [ -n "$CHECKLIST_NOTAGS" ]; then
             printf "  ${CYAN}[%2s]${NC} [%s] %s\n" "$i" "$status" "${entry#*|}"
         else
@@ -970,6 +988,22 @@ remove_flatpak_apps() {
     sudo flatpak uninstall -y --noninteractive --unused >> "$LOG_FILE" 2>&1
 }
 
+# Paquetes de herramientas del sistema o de la propia distro (categorías System, Settings, Security,
+# HardwareSettings o PackageManager en su .desktop, o nombre que empieza con el de la distro):
+# en "Eliminar aplicaciones" llevan la marca ⚠ SISTEMA
+system_app_pkgs() {
+    local id pkg path cats
+    id=$(os_release_value ID)
+    while read -r pkg path; do
+        [ "$pkg" != - ] && [ -f "$path" ] || continue
+        cats=$(awk '/^\[/ {main = ($0 == "[Desktop Entry]")} main && /^Categories=/ {sub(/^[^=]*=/, ""); print; exit}' "$path")
+        if [[ ";$cats;" =~ \;(System|Settings|Security|HardwareSettings|PackageManager)\; ]] \
+            || { [ -n "$id" ] && [[ "$pkg" == "$id"-* ]]; }; then
+            echo "$pkg"
+        fi
+    done < <(desktop_file_owners) | sort -u
+}
+
 select_apps_to_remove() {
     clear
     echo -e "${CYAN}${BOLD}"
@@ -1001,6 +1035,13 @@ select_apps_to_remove() {
     fi
     mapfile -t flatpaks < <(flatpak_app_entries | sort -t'|' -k2,2f)
     entries+=("${detected[@]}" "${flatpaks[@]}")
+    # Herramientas del sistema o de la distro: se marcan (se pueden quitar, pero con aviso)
+    local sys_pkgs=() n
+    mapfile -t sys_pkgs < <(system_app_pkgs)
+    for n in "${!entries[@]}"; do
+        printf '%s\n' "${sys_pkgs[@]}" | grep -qx -- "${entries[$n]%%|*}" \
+            && entries[n]="${entries[$n]%%|*}|SYS::${entries[$n]#*|}"
+    done
     if [ ${#entries[@]} -eq 0 ]; then
         echo -e "${YELLOW}ℹ No se encontraron aplicaciones para quitar${NC}"
         pause
@@ -1021,6 +1062,12 @@ select_apps_to_remove() {
         done
         echo ""
 
+        local sys_chosen=()
+        mapfile -t sys_chosen < <(printf '%s\n' "${SELECTED_APPS[@]}" | grep -xF -f <(printf '%s\n' "${sys_pkgs[@]}" | grep .))
+        if [ ${#sys_chosen[@]} -gt 0 ]; then
+            echo -e "${RED}⚠ Marcaste ${#sys_chosen[@]} herramienta(s) del sistema o de tu distribución: ${sys_chosen[*]}${NC}"
+            echo -e "${RED}  Quítalas solo si sabes que no las usas (por ejemplo, la configuración de tu tarjeta gráfica).${NC}\n"
+        fi
         if confirm "${CYAN}⚠️ ¿Confirmar eliminación de estas ${#SELECTED_APPS[@]} aplicaciones?${NC}"; then
             # Las de Flatpak se quitan con flatpak; el resto, con el gestor de paquetes
             local pkgs=() fps=()
@@ -1997,11 +2044,202 @@ advanced_kernel_tweaks() {
 # OPCIÓN 15: OPTIMIZACIÓN DE MEMORIA RAM (COLOR: AMARILLO)
 # ============================================================
 
+# ------------------------------------------------------------
+# Swap y swappiness. El archivo swap está basado en create-swap, del mismo autor
+# (https://github.com/george0884/create-swap, GPL-3.0), con más seguridad: solo toca
+# /swapfile (nunca otras particiones swap ni la ZRAM), funciona en btrfs y comprueba el espacio.
+# ------------------------------------------------------------
+SWAPFILE="/swapfile"
+FSTAB_BACKUP="/etc/fstab.antes-de-ultimate-tools"
+
+zram_swap_active() { swapon --noheadings --show=NAME 2>/dev/null | grep -q '^/dev/zram'; }
+disk_swap_active() { swapon --noheadings --show=NAME 2>/dev/null | grep -qv '^/dev/zram'; }
+swapfile_active() { swapon --noheadings --show=NAME 2>/dev/null | grep -qx "$SWAPFILE"; }
+
+# "8G (archivo /swapfile) + 15,6G (ZRAM)" o "ninguno"
+swap_summary() {
+    local out
+    out=$(swapon --noheadings --show=NAME,TYPE,SIZE 2>/dev/null | awk '{
+        kind = ($1 ~ /^\/dev\/zram/) ? "ZRAM" : ($2 == "file" ? "archivo " $1 : "partición " $1)
+        printf "%s%s (%s)", sep, $3, kind; sep = " + " }')
+    echo "${out:-ninguno}"
+}
+
+# swappiness solo tiene efecto si hay swap: con ZRAM conviene usarla antes que el disco (100);
+# con swap en disco, solo cuando hace falta (10); sin swap no se toca
+ram_swappiness_auto() {
+    if zram_swap_active; then
+        set_sysctl vm.swappiness 100
+        echo -e "  ${GREEN}✓ swappiness=100: con ZRAM conviene usar la memoria comprimida antes que el disco${NC}"
+    elif disk_swap_active; then
+        set_sysctl vm.swappiness 10
+        echo -e "  ${GREEN}✓ swappiness=10: el swap en disco se usa solo cuando la RAM se llena${NC}"
+    else
+        echo -e "  ${CYAN}ℹ No hay swap: swappiness no se cambia (sin swap no tiene efecto).${NC}"
+        echo -e "  ${CYAN}  Puedes crear un archivo swap o activar ZRAM en Optimizar RAM (opción 15).${NC}"
+    fi
+}
+
 apply_ram_tweaks() {
-    echo -e "${YELLOW}🔧 Configurando swappiness y presión de caché...${NC}"
-    set_sysctl vm.swappiness 10
+    echo -e "${YELLOW}🔧 Ajustando el uso de la memoria...${NC}"
     set_sysctl vm.vfs_cache_pressure 50
-    log_success "Memoria optimizada (swappiness=10, vfs_cache_pressure=50)"
+    echo -e "  ${GREEN}✓ Caché de archivos optimizada (vfs_cache_pressure=50)${NC}"
+    ram_swappiness_auto
+}
+
+# Tamaño sugerido en GB: el doble de la RAM si es poca, igual a la RAM hasta 8 GB, luego 4-8 GB
+suggest_swap_gb() {
+    local ram
+    ram=$(awk '/MemTotal/ {print int(($2 + 1048575) / 1048576)}' /proc/meminfo)
+    if [ "$ram" -le 2 ]; then echo $((ram * 2))
+    elif [ "$ram" -le 8 ]; then echo "$ram"
+    elif [ "$ram" -le 32 ]; then echo 4
+    else echo 8
+    fi
+}
+
+create_swapfile() {
+    local fs gb suggested free_gb current_gb=0
+    echo -e "${YELLOW}💽 ARCHIVO SWAP${NC}\n"
+    echo -e "   El swap es espacio del disco que se usa como RAM extra cuando la memoria se llena."
+    echo -e "   Sin swap, si se llena la RAM el sistema cierra programas de golpe. Para hibernar hace falta"
+    echo -e "   al menos tanto swap como RAM.\n"
+    fs=$(findmnt -no FSTYPE / 2>/dev/null)
+    case $fs in
+        zfs) log_error "ZFS no admite archivo swap: usa ZRAM (opción 4 de este menú)"; return 1 ;;
+    esac
+    if [ -f "$SWAPFILE" ]; then
+        current_gb=$(( $(stat -c %s "$SWAPFILE") / 1073741824 ))
+        echo -e "   Ya hay un archivo swap de ${BOLD}${current_gb} GB${NC} en $SWAPFILE: se puede cambiar su tamaño.\n"
+    fi
+    suggested=$(suggest_swap_gb)
+    read -r -p "📏 Tamaño en GB [Enter = $suggested, 0 = volver]: " gb
+    gb=${gb:-$suggested}
+    [ "$gb" = 0 ] && return 0
+    if ! [[ "$gb" =~ ^[0-9]+$ ]] || [ "$gb" -lt 1 ] || [ "$gb" -gt 512 ]; then
+        log_error "Tamaño no válido: escribe un número de GB entre 1 y 512"
+        return 1
+    fi
+    free_gb=$(( $(df -P --block-size=1G / | awk 'NR == 2 {print $4}') + current_gb ))
+    if [ "$free_gb" -lt $((gb + 2)) ]; then
+        log_error "No hay espacio: hacen falta $((gb + 2)) GB libres en / (hay $free_gb GB)"
+        return 1
+    fi
+    confirm "${YELLOW}¿Crear un archivo swap de $gb GB en $SWAPFILE?${NC}" || return 0
+
+    # Solo se apaga y se borra este archivo, nunca otras particiones swap ni la ZRAM
+    if [ -f "$SWAPFILE" ]; then
+        swapfile_active && { run "No se pudo desactivar el swap actual (¿poca RAM libre?)" sudo swapoff "$SWAPFILE" || return 1; }
+        sudo rm -f -- "$SWAPFILE"
+    fi
+    echo -e "${BLUE}⏳ Creando $SWAPFILE ($gb GB)...${NC}"
+    if [ "$fs" = btrfs ]; then
+        # En btrfs el archivo no puede tener copia en escritura (sin esto no funciona como swap)
+        if sudo btrfs filesystem mkswapfile --help &> /dev/null; then
+            run "No se pudo crear el archivo swap" sudo btrfs filesystem mkswapfile --size "${gb}g" "$SWAPFILE" || return 1
+        else
+            sudo truncate -s 0 "$SWAPFILE" && sudo chattr +C "$SWAPFILE" \
+                && run "No se pudo crear el archivo swap" sudo fallocate -l "${gb}G" "$SWAPFILE" || return 1
+        fi
+    elif ! sudo fallocate -l "${gb}G" "$SWAPFILE" 2>> "$LOG_FILE"; then
+        # Algunos sistemas de archivos no admiten fallocate: se escribe con dd
+        run_visible "No se pudo crear el archivo swap" sudo dd if=/dev/zero of="$SWAPFILE" bs=1M count=$((gb * 1024)) status=progress || return 1
+    fi
+    sudo chmod 600 "$SWAPFILE"
+    run "No se pudo preparar el swap" sudo mkswap "$SWAPFILE" || return 1
+    run "No se pudo activar el swap" sudo swapon "$SWAPFILE" || return 1
+    # fstab: copia una sola vez y solo se agrega la línea de /swapfile si no está
+    [ -f "$FSTAB_BACKUP" ] || sudo cp -p /etc/fstab "$FSTAB_BACKUP"
+    if ! grep -qE "^[[:space:]]*$SWAPFILE[[:space:]]" /etc/fstab; then
+        echo "$SWAPFILE none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
+    fi
+    mkdir -p "$STATE_DIR"
+    echo "$(date '+%Y-%m-%d %H:%M')|${gb}G" > "$STATE_DIR/swapfile.txt"
+    log_success "Archivo swap de $gb GB activo (se mantiene al reiniciar)"
+    ram_swappiness_auto
+}
+
+remove_swapfile() {
+    if [ ! -f "$SWAPFILE" ]; then
+        echo -e "${YELLOW}ℹ No hay archivo swap en $SWAPFILE${NC}"
+        return 0
+    fi
+    if [ ! -f "$STATE_DIR/swapfile.txt" ]; then
+        echo -e "${YELLOW}⚠ $SWAPFILE no lo creó este script (puede ser el de tu distribución)${NC}"
+    fi
+    local used avail
+    used=$(swapon --noheadings --bytes --show=NAME,USED 2>/dev/null | awk -v f="$SWAPFILE" '$1 == f {print $2}')
+    avail=$(awk '/MemAvailable/ {print $2 * 1024}' /proc/meminfo)
+    if [ -n "$used" ] && [ "$used" -gt "$avail" ]; then
+        log_error "El swap tiene más datos ($(numfmt --to=iec "$used")) que la RAM libre: cierra programas antes"
+        return 1
+    fi
+    confirm "${RED}¿Quitar el archivo swap $SWAPFILE?${NC}" || return 0
+    swapfile_active && { run "No se pudo desactivar el swap" sudo swapoff "$SWAPFILE" || return 1; }
+    [ -f "$FSTAB_BACKUP" ] || sudo cp -p /etc/fstab "$FSTAB_BACKUP"
+    # Solo la línea de /swapfile: las particiones swap quedan como estaban
+    sudo sed -i "\\#^[[:space:]]*$SWAPFILE[[:space:]]#d" /etc/fstab
+    sudo rm -f -- "$SWAPFILE"
+    rm -f "$STATE_DIR/swapfile.txt"
+    log_success "Archivo swap quitado"
+    ram_swappiness_auto
+}
+
+swappiness_manual() {
+    local value
+    echo -e "${YELLOW}🎚 swappiness: cuánto prefiere el sistema usar el swap${NC}"
+    echo -e "   Ahora: ${BOLD}$(cat /proc/sys/vm/swappiness)${NC} · Swap: $(swap_summary)"
+    echo -e "   10 = solo cuando la RAM se llena · 60 = lo normal · 100 o más = con ZRAM\n"
+    read -r -p "🔢 Nuevo valor (0 a 200; Enter = volver): " value
+    [ -n "$value" ] || return 0
+    if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -gt 200 ]; then
+        log_error "Valor no válido"
+        return 1
+    fi
+    set_sysctl vm.swappiness "$value" && log_success "swappiness=$value (se mantiene al reiniciar)"
+}
+
+ram_status() {
+    echo -e "${YELLOW}📊 Memoria${NC}"
+    free -h | sed 's/^/   /'
+    echo -e "\n${YELLOW}💽 Swap${NC}"
+    swapon --show 2>/dev/null | sed 's/^/   /' | grep . || echo "   (ninguno)"
+    echo -e "\n   swappiness=$(cat /proc/sys/vm/swappiness) · vfs_cache_pressure=$(cat /proc/sys/vm/vfs_cache_pressure)"
+}
+
+optimize_ram_menu() {
+    local option ram
+    while true; do
+        clear
+        echo -e "${YELLOW}${BOLD}"
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        echo "║                    💾 MEMORIA RAM Y SWAP                         ║"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        ram=$(free -m | awk '/^Mem:/ {printf "%.1f", $2 / 1024}')
+        echo -e "${YELLOW}📊 RAM: ${ram} GB · Swap: $(swap_summary) · swappiness=$(cat /proc/sys/vm/swappiness)${NC}\n"
+        echo -e "  ${YELLOW}1)${NC} Optimizar automáticamente (caché, y swappiness según el swap que tengas)"
+        echo -e "  ${YELLOW}2)${NC} Crear archivo swap o cambiar su tamaño ($SWAPFILE)"
+        echo -e "  ${YELLOW}3)${NC} Quitar el archivo swap"
+        echo -e "  ${YELLOW}4)${NC} Activar ZRAM (swap comprimida en la RAM: rápida, ideal con poca memoria)"
+        echo -e "  ${YELLOW}5)${NC} Desactivar ZRAM"
+        echo -e "  ${YELLOW}6)${NC} Ajustar swappiness a mano"
+        echo -e "  ${YELLOW}7)${NC} Ver el estado de la RAM y el swap"
+        echo -e "\n  ${YELLOW}0)${NC} 🔙 Volver\n"
+        read -r -p "📌 Opción (0-7): " option
+        case $option in
+            1) apply_ram_tweaks ;;
+            2) create_swapfile ;;
+            3) remove_swapfile ;;
+            4) enable_zram ;;
+            5) disable_zram && ram_swappiness_auto ;;
+            6) swappiness_manual ;;
+            7) ram_status ;;
+            0) return 0 ;;
+            *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
+        esac
+        pause
+    done
 }
 
 enable_zram() {
@@ -2011,39 +2249,9 @@ enable_zram() {
     printf 'ALGO=zstd\nPERCENT=50\n' | sudo tee /etc/default/zramswap > /dev/null
     run "No se pudo reiniciar zramswap" sudo systemctl restart zramswap.service \
         && log_success "ZRAM configurado (50% de RAM como compresión)"
+    ram_swappiness_auto
 }
 
-optimize_ram_menu() {
-    clear
-    echo -e "${YELLOW}${BOLD}"
-    echo "╔══════════════════════════════════════════════════════════════════╗"
-    echo "║                    💾 OPTIMIZACIÓN DE RAM                        ║"
-    echo "╚══════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-
-    local total_ram
-    total_ram=$(free -m | awk '/^Mem:/{printf "%.1f", $2/1024}')
-    echo -e "\n${YELLOW}📊 RAM detectada: ${total_ram}GB${NC}"
-
-    echo -e "\n${YELLOW}📋 Se aplicarán las siguientes optimizaciones:${NC}"
-    echo -e "  • Configuración de swappiness óptima"
-    echo -e "  • Gestión de caché mejorada"
-    echo -e "  • Compresión ZRAM activa"
-    echo ""
-
-    if ! confirm "${YELLOW}¿Aplicar optimización completa de RAM?${NC}"; then
-        return 0
-    fi
-
-    apply_ram_tweaks
-
-    if confirm "${YELLOW}¿Activar compresión ZRAM? (mejora rendimiento con poca RAM)${NC}"; then
-        enable_zram
-    fi
-
-    echo -e "${GREEN}✓ ¡OPTIMIZACIÓN DE RAM COMPLETADA!${NC}"
-    pause
-}
 
 # ============================================================
 # OPCIÓN 1: ACTUALIZACIÓN DEL SISTEMA (COLOR: VERDE)
@@ -3155,6 +3363,129 @@ install_chromium() {
 # OPCIÓN 7: SOFTWARE OPCIONAL (COLOR: AZUL)
 # ============================================================
 
+# ------------------------------------------------------------
+# Más navegadores: Microsoft Edge, Tor Browser y SeaMonkey
+# ------------------------------------------------------------
+EDGE_KEYRING="/usr/share/keyrings/microsoft-edge.gpg"
+EDGE_LIST="/etc/apt/sources.list.d/microsoft-edge.list"
+
+# Repositorio oficial de Microsoft para Edge (como el de Google para Chrome)
+setup_edge_repo() {
+    [ -f "$EDGE_LIST" ] && return 0
+    [ "$(dpkg --print-architecture 2>/dev/null)" = amd64 ] || { log_error "Microsoft Edge solo existe para PC de 64 bits (amd64)"; return 1; }
+    run "No se pudo descargar la clave de Microsoft" \
+        bash -c "set -o pipefail; wget -qO- https://packages.microsoft.com/keys/microsoft.asc | sudo gpg --dearmor --yes -o $EDGE_KEYRING" \
+        || return 1
+    echo "deb [arch=amd64 signed-by=$EDGE_KEYRING] https://packages.microsoft.com/repos/edge stable main" \
+        | sudo tee "$EDGE_LIST" > /dev/null
+}
+
+# Tor Browser: torbrowser-launcher (repositorios oficiales) baja el navegador del sitio de Tor y
+# verifica su firma; se actualiza solo. Si la distro no lo tiene (Debian sin contrib), desde Flathub.
+TOR_FLATPAK=org.torproject.torbrowser-launcher
+tor_installed() {
+    command -v torbrowser-launcher &> /dev/null \
+        || { command -v flatpak &> /dev/null && flatpak info "$TOR_FLATPAK" &> /dev/null; }
+}
+install_tor() {
+    echo -e "${BLUE}🧅 Tor Browser (navegar de forma anónima por la red Tor)${NC}"
+    if tor_installed; then
+        echo -e "  ${GREEN}✓ Ya está instalado${NC}"
+        return 0
+    fi
+    if declare -F available_pkgs > /dev/null && [ -n "$(available_pkgs torbrowser-launcher)" ]; then
+        apt_install_recorded torbrowser-launcher || return 1
+    elif declare -F pkg_install_recorded > /dev/null && ! declare -F apt_install_recorded > /dev/null; then
+        pkg_install_recorded torbrowser-launcher || return 1
+    else
+        echo -e "${CYAN}ℹ Tu distribución no lo trae (en Debian está en 'contrib'): se instala desde Flathub${NC}"
+        command -v flatpak &> /dev/null && flatpak remotes 2>/dev/null | grep -qw flathub || install_flatpak || return 1
+        run_visible "No se pudo instalar Tor Browser desde Flathub" \
+            sudo flatpak install -y --noninteractive flathub "$TOR_FLATPAK" || return 1
+        record_installed "flatpak:$TOR_FLATPAK" "Flathub ($TOR_FLATPAK)" 2>/dev/null
+    fi
+    log_success "Tor Browser instalado: la primera vez que lo abras, descarga y verifica el navegador"
+}
+
+# SeaMonkey (navegador, correo, editor HTML y chat de la comunidad de Mozilla): no está en los
+# repositorios de ninguna distribución, se baja la versión oficial a /opt/seamonkey
+SEAMONKEY_DIR="/opt/seamonkey"
+SEAMONKEY_PAGE="https://www.seamonkey-project.org/releases/"
+seamonkey_installed() { [ -x "$SEAMONKEY_DIR/seamonkey" ]; }
+
+install_seamonkey() {
+    echo -e "${BLUE}🐒 SeaMonkey (navegador, correo, editor HTML y chat, de la comunidad de Mozilla)${NC}"
+    if seamonkey_installed; then
+        echo -e "  ${GREEN}✓ Ya está instalado en $SEAMONKEY_DIR${NC}"
+        return 0
+    fi
+    [ "$(uname -m)" = x86_64 ] || { log_error "SeaMonkey publica versiones solo para PC de 64 bits (x86_64)"; return 1; }
+    echo -e "${CYAN}ℹ No está en los repositorios de ninguna distribución: se baja la versión oficial de${NC}"
+    echo -e "${CYAN}  seamonkey-project.org a $SEAMONKEY_DIR (se quita en 10 → 1)${NC}"
+    local page url root rel tmp sums expected got algo
+    page=$(curl -fsSL -m 30 "$SEAMONKEY_PAGE") || { log_error "No se pudo leer $SEAMONKEY_PAGE"; return 1; }
+    # Preferir la versión en castellano; si no, la en inglés
+    url=$(grep -oE 'https?://[^"'"'"' ]+linux-x86_64/es-ES/[^"'"'"' ]+\.tar\.(bz2|xz)' <<< "$page" | head -1)
+    [ -n "$url" ] || url=$(grep -oE 'https?://[^"'"'"' ]+linux-x86_64/en-US/[^"'"'"' ]+\.tar\.(bz2|xz)' <<< "$page" | head -1)
+    if [ -z "$url" ]; then
+        log_error "No se encontró la descarga para Linux en $SEAMONKEY_PAGE (puede haber cambiado la página)"
+        return 1
+    fi
+    echo -e "   ${GREEN}$(basename "$url")${NC}"
+    tmp=$(mktemp -d)
+    if ! curl -fL --progress-bar -o "$tmp/seamonkey.tar" "$url"; then
+        log_error "No se pudo descargar SeaMonkey"
+        rm -rf -- "$tmp"
+        return 1
+    fi
+    # Comprobación con la lista de sumas de la versión, si la publica
+    root=${url%%/linux-x86_64/*}
+    rel=${url#"$root/"}
+    for algo in 512 256; do
+        sums=$(curl -fsSL -m 30 "$root/SHA${algo}SUMS" 2>/dev/null) || continue
+        expected=$(awk -v f="$rel" '{n = $2; sub(/^\*/, "", n)} n == f {print $1; exit}' <<< "$sums")
+        [ -n "$expected" ] && break
+    done
+    if [ -n "$expected" ]; then
+        got=$(sha${algo}sum "$tmp/seamonkey.tar" | awk '{print $1}')
+        if [ "$got" != "$expected" ]; then
+            log_error "La descarga no coincide con la suma oficial (SHA-$algo): no se instala"
+            rm -rf -- "$tmp"
+            return 1
+        fi
+        echo -e "   ${GREEN}✓ Verificada con la suma oficial (SHA-$algo)${NC}"
+    else
+        log_warning "SeaMonkey no publica una suma de verificación para esta versión: se bajó por HTTPS de su sitio"
+        confirm "${YELLOW}¿Instalarla igualmente?${NC}" || { rm -rf -- "$tmp"; return 1; }
+    fi
+    sudo mkdir -p "$SEAMONKEY_DIR" \
+        && sudo tar -xf "$tmp/seamonkey.tar" -C "$SEAMONKEY_DIR" --strip-components=1 --no-same-owner \
+        || { log_error "No se pudo descomprimir SeaMonkey"; rm -rf -- "$tmp"; return 1; }
+    rm -rf -- "$tmp"
+    sudo ln -sf "$SEAMONKEY_DIR/seamonkey" /usr/local/bin/seamonkey
+    sudo mkdir -p /usr/local/share/applications
+    local icon=seamonkey
+    for f in "$SEAMONKEY_DIR"/chrome/icons/default/default128.png "$SEAMONKEY_DIR"/chrome/icons/default/default48.png; do
+        [ -f "$f" ] && { icon=$f; break; }
+    done
+    printf '[Desktop Entry]\nType=Application\nName=SeaMonkey\nGenericName=Navegador web\nComment=Navegador, correo, editor HTML y chat\nExec=%s %%u\nIcon=%s\nCategories=Network;WebBrowser;Email;\nMimeType=text/html;x-scheme-handler/http;x-scheme-handler/https;\n' \
+        "$SEAMONKEY_DIR/seamonkey" "$icon" | sudo tee /usr/local/share/applications/seamonkey.desktop > /dev/null
+    mkdir -p "$STATE_DIR"
+    echo "$(date '+%Y-%m-%d %H:%M')|$(basename "$url")" > "$STATE_DIR/seamonkey.txt"
+    log_success "SeaMonkey instalado (menú del escritorio o 'seamonkey' en la terminal)"
+    echo -e "${CYAN}ℹ Se actualiza solo desde su menú Ayuda → Acerca de SeaMonkey${NC}"
+}
+
+remove_seamonkey() {
+    seamonkey_installed || return 0
+    [ "$SEAMONKEY_DIR" = /opt/seamonkey ] && sudo rm -rf -- /opt/seamonkey
+    sudo rm -f /usr/local/bin/seamonkey /usr/local/share/applications/seamonkey.desktop
+    rm -f "$STATE_DIR/seamonkey.txt"
+    log_success "SeaMonkey quitado (tu perfil en ~/.mozilla/seamonkey no se toca)"
+}
+
+install_torbrowser_launcher() { install_tor; }
+
 select_optional_software() {
     clear
     echo -e "${BLUE}${BOLD}"
@@ -3164,14 +3495,19 @@ select_optional_software() {
     echo -e "${NC}"
 
     local software=(
+        "firefox|🦊 Firefox (el de Mozilla, sin Snap)"
+        "google-chrome-stable|🌐 Google Chrome"
+        "chromium|🌐 Chromium (Chrome libre, de los repositorios de Debian)"
+        "brave|🦁 Brave (con bloqueo de anuncios)"
+        "microsoft-edge-stable|🌐 Microsoft Edge (navegador de Microsoft)"
+        "torbrowser-launcher|🧅 Tor Browser (navegación anónima por la red Tor)"
+        "seamonkey|🐒 SeaMonkey (navegador, correo y editor HTML)"
+        "telegram-desktop|📱 Telegram"
+        "discord|🎮 Discord"
         "filezilla|📁 Cliente FTP/SFTP"
+        "telnet|📞 Telnet (cliente: conectarse a otros equipos o probar puertos)"
         "code|📝 Visual Studio Code"
         "virt-manager|🖥️ Máquinas virtuales (virt-manager/KVM; VirtualBox no está en Debian)"
-        "google-chrome-stable|🌐 Google Chrome"
-        "firefox|🦊 Firefox (el de Mozilla, sin Snap)"
-        "brave|🦁 Brave (con bloqueo de anuncios)"
-        "chromium|🌐 Chromium (Chrome libre, de los repositorios de Debian)"
-        "telegram-desktop|📱 Telegram"
         "python3|🐍 Python 3"
         "python3-pip|📦 PIP"
         "python3-venv|📦 Entornos virtuales"
@@ -3183,7 +3519,6 @@ select_optional_software() {
         "timeshift|⏰ Timeshift"
         "gparted|💾 GParted"
         "vim|⌨️ Vim"
-        "discord|🎮 Discord"
         "steam|🎮 Steam (con Proton para juegos de Windows)"
         "proton-ge|🍷 Proton-GE (Proton de la comunidad, más compatible)"
         "spotify|🎵 Spotify"
@@ -3207,6 +3542,8 @@ select_optional_software() {
     docker_installed && installed+=(docker)
     firefox_nosnap_installed && installed+=(firefox)
     brave_installed && installed+=(brave)
+    tor_installed && installed+=(torbrowser-launcher)
+    seamonkey_installed && installed+=(seamonkey)
     chromium_installed && installed+=(chromium)
     for app in "${software[@]}"; do
         pkg=${app%%|*}
@@ -3376,11 +3713,18 @@ install_optional_with_progress() {
                     failed+=(spotify)
                 fi ;;
             "emojier") repo+=(kdeplasma-addons) ;;
+            "microsoft-edge-stable")
+                if setup_edge_repo; then
+                    repo+=(microsoft-edge-stable)
+                    repo_changed=true
+                else
+                    failed+=(microsoft-edge)
+                fi ;;
             # Necesitan pasos propios (32 bits, verificación): se instalan al final
             "steam") want_steam=true ;;
             "proton-ge") want_ge=true ;;
             # Descargas grandes con pasos propios: van al final, en este orden
-            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium") want_extra+=("$app") ;;
+            "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium"|"torbrowser-launcher"|"seamonkey") want_extra+=("$app") ;;
             *) repo+=("$app") ;;
         esac
     done
@@ -3442,7 +3786,7 @@ install_optional_with_progress() {
 
     if $want_steam; then install_steam || failed+=(steam); fi
     if $want_ge; then install_proton_ge || failed+=(proton-ge); fi
-    for app in firefox brave chromium android-tools android-studio flatpak flatpak-builder docker; do
+    for app in firefox brave chromium torbrowser-launcher seamonkey android-tools android-studio flatpak flatpak-builder docker; do
         [[ " ${want_extra[*]} " == *" $app "* ]] || continue
         # flatpak-builder ya instala Flatpak si hace falta
         [ "$app" = flatpak ] && [[ " ${want_extra[*]} " == *" flatpak-builder "* ]] && continue
@@ -7077,7 +7421,7 @@ power_menu() {
 # Programas que el script puede instalar. Sirve para ofrecer también los que se
 # instalaron antes de que existiera el registro. No incluye paquetes del sistema
 # que Ubuntu ya trae (python3, curl, wget): quitarlos podría romper otras cosas.
-SCRIPT_PROGRAMS=(filezilla code virtualbox google-chrome-stable telegram-desktop python3-pip
+SCRIPT_PROGRAMS=(microsoft-edge-stable torbrowser-launcher telnet filezilla code virtualbox google-chrome-stable telegram-desktop python3-pip
     python3-venv git htop fastfetch timeshift gparted vim discord spotify-client obs-studio
     qrca build-essential alacritty gamemode mangohud steam-launcher steam-installer flatpak flatpak-builder
     openjdk-21-jdk-headless openjdk-17-jdk-headless android-sdk-platform-tools-common docker.io docker-buildx docker-compose-v2 brave-browser tlp tlp-rdw zram-tools corectrl
@@ -7104,6 +7448,8 @@ remove_installed_programs() {
         origin=$(install_origin "flatpak:${fp%%|*}")
         entries+=("flatpak:${fp%%|*}|${fp#*|} (Flathub) ${origin:+[$origin]}")
     done
+    # SeaMonkey no es un paquete: se instaló en /opt
+    seamonkey_installed && entries+=("opt:seamonkey|SeaMonkey (descarga oficial en $SEAMONKEY_DIR)")
     for p in "${logged[@]}"; do
         [[ "$p" == flatpak:* ]] && continue
         desc=$(dpkg-query -W -f='${binary:Summary}' "$p" 2>/dev/null)
@@ -7130,7 +7476,9 @@ remove_installed_programs() {
     # Las apps de Flathub van aparte: el resto se quita con apt
     local sel=()
     for p in "${CHOSEN[@]}"; do
-        if [[ "$p" == flatpak:* ]]; then flatpaks+=("${p#flatpak:}"); else sel+=("$p"); fi
+        if [[ "$p" == flatpak:* ]]; then flatpaks+=("${p#flatpak:}")
+        elif [ "$p" = opt:seamonkey ]; then remove_seamonkey
+        else sel+=("$p"); fi
     done
     CHOSEN=("${sel[@]}")
     for fp in "${flatpaks[@]}"; do
@@ -7154,7 +7502,7 @@ remove_installed_programs() {
     done
     if printf '%s\n' "${CHOSEN[@]}" | grep -qx firefox; then
         echo -e "\n${YELLOW}ℹ Tus marcadores y contraseñas de ~/.mozilla no se borran${NC}"
-        { [ -n "$(installed_pkgs firefox-esr brave-browser google-chrome-stable)" ] || chromium_installed || brave_installed; } || echo -e "${YELLOW}⚠ No tienes otro navegador instalado: te quedarás sin ninguno${NC}"
+        { [ -n "$(installed_pkgs firefox-esr brave-browser google-chrome-stable microsoft-edge-stable)" ] || chromium_installed || brave_installed || seamonkey_installed; } || echo -e "${YELLOW}⚠ No tienes otro navegador instalado: te quedarás sin ninguno${NC}"
     fi
     if [ ${#extra[@]} -gt 0 ]; then
         echo -e "\n${YELLOW}⚠ También se quitarán porque dependen de ellos:${NC}"
@@ -7170,6 +7518,10 @@ remove_installed_programs() {
     # Sin Brave, su repositorio ya no hace falta
     if printf '%s\n' "${CHOSEN[@]}" | grep -qx brave-browser; then
         sudo rm -f "$BRAVE_LIST" "$BRAVE_KEYRING"
+    fi
+    # Sin Edge, el repositorio de Microsoft para Edge tampoco
+    if printf '%s\n' "${CHOSEN[@]}" | grep -qx microsoft-edge-stable; then
+        sudo rm -f "$EDGE_LIST" "$EDGE_KEYRING"
     fi
     # Sin Firefox, el repositorio de Mozilla tampoco
     if printf '%s\n' "${CHOSEN[@]}" | grep -qx firefox; then
@@ -8141,6 +8493,29 @@ security_menu() {
     done
 }
 
+# Procesos en vivo: htop si está (o se ofrece instalar, ~400 KB); si no, top, que viene siempre
+info_htop() {
+    if ! command -v htop &> /dev/null && ! $INFO_QUIET; then
+        echo -e "${CYAN}ℹ htop muestra los procesos en vivo con colores, la CPU por núcleo y la memoria (~400 KB).${NC}"
+        if confirm "${CYAN}¿Instalar htop? (se quita en 10 → 1)${NC}"; then
+            if declare -F apt_install_recorded > /dev/null; then
+                apt_update
+                apt_install_recorded htop
+            else
+                pkg_install_recorded htop
+            fi
+        fi
+    fi
+    $INFO_QUIET && return 0
+    echo -e "${CYAN}ℹ Para salir pulsa q (F9 cierra un proceso, F6 cambia el orden)${NC}"
+    sleep 2
+    if command -v htop &> /dev/null; then
+        htop
+    else
+        top
+    fi
+}
+
 sysinfo_menu() {
     $INFO_QUIET || ensure_lspci > /dev/null 2>&1
     local option level
@@ -8166,13 +8541,14 @@ sysinfo_menu() {
         echo -e "\n${CYAN}🩺 Estado del sistema:${NC}"
         echo -e "  ${CYAN}11)${NC} Diagnóstico: servicios fallidos, errores, arranque y procesos"
         echo -e "  ${CYAN}12)${NC} Qué cambió este script"
+        echo -e "  ${CYAN}16)${NC} Procesos en vivo con htop (qué consume CPU y memoria)"
         echo -e "\n${CYAN}🧰 Herramientas:${NC}"
         echo -e "  ${CYAN}13)${NC} Buscar en toda la información"
         echo -e "  ${CYAN}14)${NC} Guardar informe completo para compartir (sin datos personales)"
         echo -e "  ${CYAN}15)${NC} Prueba de rendimiento (disco e internet)"
         echo -e "\n  ${CYAN} 0)${NC} 🔙 Volver"
         echo ""
-        read -r -p "📌 Opción (0-15): " option
+        read -r -p "📌 Opción (0-16): " option
         case $option in
             1) info_summary ;;
             2) info_fastfetch ;;
@@ -8191,6 +8567,7 @@ sysinfo_menu() {
             13) info_search ;;
             14) info_save_report ;;
             15) info_benchmark ;;
+            16) info_htop ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
@@ -8240,9 +8617,9 @@ boot_only_menu() {
         echo ""
         read -r -p "🔢 Opción (19, 20, 21 o 0): " option
         case $option in
-            19|1) grub_repair_menu ;;
-            20) create_usb_menu; pause ;;
-            21|2) shutdown_menu ;;
+            19|1) ( MENU_SUBSHELL=1; grub_repair_menu ) ;;
+            20) ( MENU_SUBSHELL=1; create_usb_menu; pause ) ;;
+            21|2) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
             0) echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"; exit 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
         esac
@@ -8583,24 +8960,24 @@ main_menu() {
         read -r -p "🔢 Opción (0-21): " option
 
         case $option in
-            1) system_update ;;
-            2) security_menu ;;
-            3) sysinfo_menu ;;
-            4) select_apps_to_remove ;;
-            6) remove_shortcuts_menu ;;
-            7) select_optional_software ;;
-            8) install_custom_software ;;
-            10) undo_menu ;;
-            11) revert_changes ;;
-            12) configure_system ;;
-            13) optimize_gpu_menu ;;
-            14) optimize_kernel_menu ;;
-            15) optimize_ram_menu ;;
-            16) network_menu ;;
-            17) power_menu ;;
-            19) grub_repair_menu ;;
-            20) create_usb_menu; pause ;;
-            21) shutdown_menu ;;
+            1) ( MENU_SUBSHELL=1; system_update ) ;;
+            2) ( MENU_SUBSHELL=1; security_menu ) ;;
+            3) ( MENU_SUBSHELL=1; sysinfo_menu ) ;;
+            4) ( MENU_SUBSHELL=1; select_apps_to_remove ) ;;
+            6) ( MENU_SUBSHELL=1; remove_shortcuts_menu ) ;;
+            7) ( MENU_SUBSHELL=1; select_optional_software ) ;;
+            8) ( MENU_SUBSHELL=1; install_custom_software ) ;;
+            10) ( MENU_SUBSHELL=1; undo_menu ) ;;
+            11) ( MENU_SUBSHELL=1; revert_changes ) ;;
+            12) ( MENU_SUBSHELL=1; configure_system ) ;;
+            13) ( MENU_SUBSHELL=1; optimize_gpu_menu ) ;;
+            14) ( MENU_SUBSHELL=1; optimize_kernel_menu ) ;;
+            15) ( MENU_SUBSHELL=1; optimize_ram_menu ) ;;
+            16) ( MENU_SUBSHELL=1; network_menu ) ;;
+            17) ( MENU_SUBSHELL=1; power_menu ) ;;
+            19) ( MENU_SUBSHELL=1; grub_repair_menu ) ;;
+            20) ( MENU_SUBSHELL=1; create_usb_menu; pause ) ;;
+            21) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
             4|8) echo -e "${YELLOW}ℹ Snap no se usa en Debian${NC}"; sleep 2 ;;
             18) echo -e "${YELLOW}ℹ Los perfiles automáticos llegan en una próxima versión${NC}"; sleep 2 ;;
             0)

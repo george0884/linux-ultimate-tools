@@ -211,6 +211,25 @@ o desde la terminal. Por ahora solo en el script de Ubuntu:
 
 ---
 
+## 💾 Memoria RAM y swap (opción 15)
+
+![Memoria RAM y swap](screenshots/30-ram-y-swap.png)
+
+| Opción | Qué hace |
+|---|---|
+| **1** Optimizar automáticamente | Caché de archivos (`vfs_cache_pressure=50`) y `swappiness` **según el swap que tengas**: con ZRAM, 100 (conviene usarla antes que el disco); con swap en disco, 10 (solo cuando la RAM se llena); **sin swap no se toca**, porque no tiene efecto |
+| **2** Crear archivo swap | `/swapfile` del tamaño que elijas (sugiere uno según tu RAM). Comprueba el espacio libre, funciona en **btrfs** y lo deja en `fstab` para que siga al reiniciar. También cambia el tamaño de uno existente |
+| **3** Quitar el archivo swap | Solo `/swapfile` y su línea de `fstab`: las particiones swap y la ZRAM quedan como estaban. Antes comprueba que la RAM libre alcance |
+| **4–5** ZRAM | Swap comprimida en la RAM (rápida, ideal con poca memoria); al activarla o desactivarla, `swappiness` se reajusta sola |
+| **6** swappiness a mano | Valor de 0 a 200 |
+| **7** Estado | RAM, swap y los valores actuales |
+
+El archivo swap está basado en [create-swap](https://github.com/george0884/create-swap), del mismo autor, con más
+seguridad: nunca borra otras líneas de swap de `fstab` ni apaga la ZRAM, y guarda una copia de `fstab` antes del
+primer cambio (`/etc/fstab.antes-de-ultimate-tools`).
+
+---
+
 ## 🔋 Energía y rendimiento (opción 17)
 
 Perfiles rendimiento / equilibrado / ahorro, TLP para portátiles, activar o desactivar el indexador
@@ -396,7 +415,9 @@ solo muestra las apps instaladas, y la de software marca las que ya tienes.
 
 ---
 
-En todos los menús y submenús, **0** vuelve al menú anterior (en el principal, sale del script).
+En todos los menús y submenús, **0** vuelve al menú anterior (en el principal, sale del script). En las preguntas
+**s/n** también: **0** vuelve al menú principal en ese momento, sin seguir con las demás preguntas (lo que ya se
+hizo queda hecho).
 
 ---
 
@@ -419,6 +440,7 @@ En todos los menús y submenús, **0** vuelve al menú anterior (en el principal
 | 🧰 | **13** Buscar | Escribe una palabra (nvidia, temp, wifi, error...) y la busca en **toda** la información |
 | | **14** Guardar informe | Todo en `~/informe-sistema-<fecha>.txt`, **sin datos personales** (números de serie, MAC, IP, UUID, usuario, equipo y Wi-Fi) |
 | | **15** Rendimiento | Velocidad de lectura y escritura del disco, latencia y velocidad de descarga |
+| 🩺 | **16** Procesos en vivo | **htop**: qué consume CPU y memoria, con colores y por núcleo. Si no lo tienes, ofrece instalarlo (~400 KB); si no, usa `top` |
 
 ---
 
@@ -551,16 +573,23 @@ desde la opción 10.
 
 ## 📦 Software opcional (opción 7)
 
+Los **navegadores van juntos** al principio de la lista: Firefox, Chrome, Chromium, Brave, Edge, Tor Browser y
+SeaMonkey.
+
 | Programa | Para qué sirve | Origen |
 |----------|----------------|--------|
-| FileZilla | Cliente FTP/SFTP | Ubuntu |
-| Visual Studio Code | Editor de código | `.deb` oficial de Microsoft |
-| VirtualBox | Máquinas virtuales | Ubuntu |
 | Google Chrome | Navegador web | `.deb` oficial de Google |
 | Firefox (sin Snap) | Navegador web: el de Mozilla, se actualiza con el sistema. Si tenías el snap, copia tus marcadores y contraseñas y ofrece quitarlo | Repositorio oficial de Mozilla |
 | Brave | Navegador basado en Chromium con bloqueo de anuncios y rastreadores | Repositorio oficial de Brave (si falla, Flathub) |
 | Chromium | La base libre de Chrome, sin cuenta de Google | Ubuntu: Flathub (el de apt es Snap) · Debian: repos oficiales · Arch: repos oficiales |
+| Microsoft Edge | Navegador de Microsoft | Repositorio oficial de Microsoft (`packages.microsoft.com`) · Arch: Flathub |
+| Tor Browser | Navegación anónima por la red Tor | `torbrowser-launcher` de los repositorios oficiales (baja el navegador del sitio de Tor y **verifica su firma**); si la distro no lo trae (Debian sin `contrib`), Flathub |
+| SeaMonkey | Navegador, correo, editor HTML y chat de la comunidad de Mozilla | Descarga oficial de seamonkey-project.org en `/opt/seamonkey` (no está en ningún repositorio); se verifica con su suma oficial si la publica. Se quita en 10 → 1 |
 | Telegram | Mensajería | Ubuntu |
+| Telnet | Cliente para conectarse a otros equipos o probar si un puerto responde | Ubuntu (`telnet`) · Arch: `inetutils` |
+| FileZilla | Cliente FTP/SFTP | Ubuntu |
+| Visual Studio Code | Editor de código | `.deb` oficial de Microsoft |
+| VirtualBox | Máquinas virtuales | Ubuntu |
 | Discord | Chat de voz y texto | `.deb` oficial |
 | Steam | Juegos; incluye **Proton** para jugar juegos de Windows | `.deb` oficial de Valve (o el de Ubuntu) |
 | Proton-GE | Proton de la comunidad, con arreglos para más juegos | Página oficial del proyecto (descarga verificada) |
@@ -669,6 +698,12 @@ derivadas que traen sus propias apps:
   `required` o `important`).
 - Las apps del menú que **no vienen de ningún paquete** (instaladas a mano) se nombran aparte: no se pueden quitar
   con el gestor de paquetes.
+- **⚠ SISTEMA:** las herramientas del sistema o de tu distribución (configuración de la tarjeta gráfica, de red,
+  de seguridad, gestores de particiones, terminales...) llevan esta marca en rojo. Se pueden quitar, pero si marcas
+  alguna, el script pide confirmarlo nombrándolas.
+
+  ![Advertencia de herramientas del sistema](screenshots/29-advertencia-sistema.png)
+
 - **📦 Flatpak:** las apps de Flatpak instaladas (del sistema o del usuario) se quitan con `flatpak uninstall`, y
   después se limpian los runtimes que ya no usa ninguna.
 - Al quitar, siguen valiendo las protecciones de siempre: si una app arrastrara una pieza esencial del sistema, no

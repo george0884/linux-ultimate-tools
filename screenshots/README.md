@@ -172,3 +172,15 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 ## Aviso del primer uso
 
 ![Aviso del primer uso: licencia, sin garantía y que el script modifica el sistema](28-aviso-primer-uso.png)
+
+---
+
+## Advertencia de herramientas del sistema (opción 4)
+
+![Eliminar aplicaciones: las herramientas del sistema llevan ⚠ SISTEMA](29-advertencia-sistema.png)
+
+---
+
+## Memoria RAM y swap (opción 15)
+
+![Memoria RAM y swap: optimizar, archivo swap, ZRAM y swappiness](30-ram-y-swap.png)

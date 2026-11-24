@@ -87,6 +87,9 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [Brave](https://brave.com/) | MPL-2.0 | Externo: repositorio oficial de Brave o Flathub |
 | [Google Chrome](https://www.google.com/chrome/) | **Privativo** | Externo: paquete oficial de Google (en Arch, Flathub) |
 | [Chromium](https://www.chromium.org/) | BSD-3-Clause | Instala en Debian y Arch (repos oficiales); en Ubuntu, Externo desde Flathub (sin Snap) |
+| [Microsoft Edge](https://www.microsoft.com/edge) | **Privativo** (Microsoft) | Externo: repositorio oficial de Microsoft (en Arch, Flathub) |
+| [Tor Browser](https://www.torproject.org/) y [torbrowser-launcher](https://github.com/torproject/torbrowser-launcher) | BSD-3-Clause (Tor) · MIT (lanzador) | Instala el lanzador de los repositorios oficiales (o Flathub); el lanzador baja Tor Browser y verifica su firma |
+| [SeaMonkey](https://www.seamonkey-project.org/) | MPL-2.0 | Externo: descarga oficial en `/opt/seamonkey` |
 
 ## 📦 Programas opcionales
 
@@ -100,7 +103,8 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [Git](https://git-scm.com/) | GPL-2.0 | Instala |
 | [curl](https://curl.se/) | Licencia curl (tipo MIT) | Instala |
 | [GNU Wget](https://www.gnu.org/software/wget/) | GPL-3.0-or-later | Instala |
-| [htop](https://htop.dev/) | GPL-2.0-or-later | Instala |
+| [htop](https://htop.dev/) | GPL-2.0-or-later | Instala (también desde Información del sistema → 16) |
+| [telnet](https://packages.debian.org/telnet) / [GNU inetutils](https://www.gnu.org/software/inetutils/) | BSD-4-Clause / GPL-3.0-or-later | Instala |
 | [fastfetch](https://github.com/fastfetch-cli/fastfetch) | MIT | Instala |
 | [Timeshift](https://github.com/linuxmint/timeshift) | GPL-2.0-or-later | Instala |
 | [GParted](https://gparted.org/) | GPL-2.0-or-later | Instala |
@@ -149,6 +153,12 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 
 Las ISO se descargan de los sitios oficiales de cada distribución (Ubuntu, Debian, Arch Linux), con sus propias
 licencias y marcas; el script no las modifica.
+
+## 💾 Archivo swap (opción 15)
+
+| Proyecto | Autor | Licencia | Uso |
+|---|---|---|---|
+| [create-swap](https://github.com/george0884/create-swap) | Old The One Deluxe (george0884), el mismo autor | GPL-3.0 (compatible con la AGPL-3.0 de este proyecto) | **Incluido** y mejorado: crear, cambiar y quitar el archivo swap |
 
 ## 🔒 Servicios de DNS
 
