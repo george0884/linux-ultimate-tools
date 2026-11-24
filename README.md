@@ -59,6 +59,11 @@ opción 12, se reconoce por su escritorio. Las opciones que no aplican a tu escr
 Además del script de Ubuntu hay dos hermanos, en **versión beta** (probados con sistemas simulados, todavía no
 en equipos reales: úsalos con cuidado y reporta lo que falle). Mismo menú y **mismos números** que en Ubuntu.
 
+**Cada script detecta la distribución.** Si abres el que no corresponde (por ejemplo `ubuntu-ultimate-tools.sh` en
+Debian), te dice cuál es el correcto y ofrece abrirlo; si no está en la carpeta, ofrece descargarlo del repositorio
+oficial. Linux Mint y Pop!_OS cuentan como Ubuntu; LMDE y Kali como Debian; Manjaro y EndeavourOS como Arch. La
+pestaña de la terminal muestra el script y la distribución detectada.
+
 | Script | Para | Ejecutar |
 |---|---|---|
 | `ubuntu-ultimate-tools.sh` | Ubuntu y sus sabores, Mint, Pop!_OS | `./ubuntu-ultimate-tools.sh` |

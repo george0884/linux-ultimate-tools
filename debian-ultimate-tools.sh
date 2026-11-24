@@ -8441,6 +8441,53 @@ notice_save() {
     printf 'version=%s\nfecha=%s\n' "$NOTICE_VERSION" "$(date '+%Y-%m-%d %H:%M')" > "$NOTICE_FILE"
 }
 
+SCRIPT_FAMILY=debian
+# ¿Cuál de los tres scripts corresponde a este sistema? (ubuntu, debian o arch; vacío si ninguno)
+# Linux Mint y Pop!_OS cuentan como Ubuntu; LMDE y Kali como Debian; Manjaro y EndeavourOS como Arch.
+right_script_family() {
+    local ids=" $(os_release_value ID) $(os_release_value ID_LIKE) "
+    if [[ "$ids" == *" ubuntu "* ]]; then
+        echo ubuntu
+    elif [[ "$ids" == *" debian "* ]]; then
+        echo debian
+    elif [[ "$ids" == *" arch "* || "$ids" == *" archlinux "* || "$ids" == *" manjaro "* ]]; then
+        echo arch
+    fi
+}
+
+# Si se abrió el script de otra distribución, lo dice y ofrece abrir (o descargar) el correcto
+offer_right_script() {
+    local want name here path url answer
+    want=$(right_script_family)
+    [ -n "$want" ] && [ "$want" != "$SCRIPT_FAMILY" ] || return 0
+    name="$want-ultimate-tools.sh"
+    here=$(dirname "$(readlink -f "$0")")
+    path="$here/$name"
+    url="https://raw.githubusercontent.com/george0884/ubuntu-ultimate-tools/main/$name"
+    echo -e "${YELLOW}🐧 Detecté ${BOLD}$(os_release_value PRETTY_NAME)${NC}${YELLOW}: el script para este sistema es ${BOLD}$name${NC}"
+    echo -e "${YELLOW}   Con este ($(basename "$0")) solo están el menú de arranque y crear un USB de instalación.${NC}\n"
+    if [ -f "$path" ]; then
+        read -r -p "¿Abrir $name ahora? (s/n): " answer
+    else
+        echo -e "${CYAN}   No está en esta carpeta. Se puede bajar del repositorio oficial del proyecto:${NC}"
+        echo -e "${CYAN}   $url${NC}"
+        [ -w "$here" ] || path="$HOME/$name"
+        read -r -p "¿Descargarlo en $(dirname "$path") y abrirlo? (s/n): " answer
+        if [[ "$answer" =~ ^([sSyY]|[sS][iIíÍ])$ ]]; then
+            if ! curl -fsSL -o "$path" "$url"; then
+                echo -e "${RED}❌ No se pudo descargar: sigue con este script${NC}\n"
+                return 0
+            fi
+            chmod +x "$path"
+        fi
+    fi
+    if [[ "$answer" =~ ^([sSyY]|[sS][iIíÍ])$ ]]; then
+        # El aviso del primer uso ya se leyó en este script
+        exec bash "$path" --entiendo
+    fi
+    echo -e "${YELLOW}ℹ Sigues con $(basename "$0")${NC}\n"
+}
+
 # ============================================================
 # INICIO
 # ============================================================
@@ -8458,10 +8505,11 @@ case ${1:-} in
     *) echo -e "${RED}❌ Opción desconocida: $1${NC} (en la beta no hay perfiles automáticos)"; exit 1 ;;
 esac
 
-set_terminal_title "Debian Ultimate Tools (beta)"
+set_terminal_title "Debian Ultimate Tools (beta) · $(os_release_value PRETTY_NAME)"
 
 # Antes de pedir la contraseña o tocar nada
 first_run_notice
+offer_right_script
 if ! command -v sudo &> /dev/null; then
     echo -e "${RED}❌ Falta sudo. Instálalo como root (su -c 'apt install sudo') y agrega tu usuario:${NC}"
     echo -e "${RED}   su -c 'usermod -aG sudo $USER'  (después cierra sesión y vuelve a entrar)${NC}"
