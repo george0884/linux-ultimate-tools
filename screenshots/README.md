@@ -160,3 +160,9 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 ## Menú de auditoría de seguridad (opción 2)
 
 ![Auditoría de seguridad: Lynis y registro de auditoría (auditd)](26-registro-auditoria.png)
+
+---
+
+## Crear USB de instalación (opción 20)
+
+![Crear USB de instalación: elige o descarga la ISO, elige el pendrive y confirma escribiendo BORRAR](27-crear-usb.png)
