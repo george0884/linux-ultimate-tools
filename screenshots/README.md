@@ -166,3 +166,9 @@ sabor y el escritorio detectados, y las listas muestran solo lo que está instal
 ## Crear USB de instalación (opción 20)
 
 ![Crear USB de instalación: elige o descarga la ISO, elige el pendrive y confirma escribiendo BORRAR](27-crear-usb.png)
+
+---
+
+## Aviso del primer uso
+
+![Aviso del primer uso: licencia, sin garantía y que el script modifica el sistema](28-aviso-primer-uso.png)

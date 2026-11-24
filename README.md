@@ -723,6 +723,18 @@ En resumen: puedes usar, copiar, modificar y compartir el script libremente. Si 
 versión modificada, o la ofreces como servicio por red, debes publicar su código fuente bajo la
 misma licencia AGPL v3.
 
+### Aviso del primer uso
+
+![Aviso del primer uso](screenshots/28-aviso-primer-uso.png)
+
+La primera vez que se ejecuta, el script muestra un aviso **antes de pedir la contraseña o tocar nada**: la licencia,
+que no tiene garantía, que **modifica el sistema** (y que casi todo se deshace con las opciones 10 y 11) y dónde están
+los créditos. Si respondes que no, se cierra sin cambiar nada. Si respondes que sí, no vuelve a aparecer.
+
+No es una condición para usar el programa: la AGPL permite ejecutarlo sin aceptar la licencia (sección 9), así que
+el aviso solo confirma que entiendes lo que hace. Para servidores o tareas programadas, después de leerlo, agrega
+`--entiendo`.
+
 ## 🙏 Créditos
 
 El script instala software de muchos proyectos, cada uno con su propia licencia (algunos son
