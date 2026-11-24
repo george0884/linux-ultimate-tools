@@ -382,42 +382,121 @@ helpline=white,black
 roottext=white,black
 '
 
+# Colores de dialog iguales a los del script: fondo oscuro y la línea del cursor resaltada en celeste
+DIALOG_RC='use_shadow = OFF
+use_colors = ON
+screen_color = (WHITE,BLACK,OFF)
+dialog_color = (WHITE,BLACK,OFF)
+title_color = (CYAN,BLACK,ON)
+border_color = (CYAN,BLACK,OFF)
+border2_color = (CYAN,BLACK,OFF)
+button_active_color = (BLACK,CYAN,ON)
+button_inactive_color = (WHITE,BLACK,OFF)
+button_key_active_color = (BLACK,CYAN,ON)
+button_key_inactive_color = (WHITE,BLACK,ON)
+button_label_active_color = (BLACK,CYAN,ON)
+button_label_inactive_color = (WHITE,BLACK,ON)
+menubox_color = (WHITE,BLACK,OFF)
+menubox_border_color = (CYAN,BLACK,OFF)
+menubox_border2_color = (CYAN,BLACK,OFF)
+item_color = (WHITE,BLACK,OFF)
+item_selected_color = (BLACK,CYAN,ON)
+tag_color = (CYAN,BLACK,OFF)
+tag_selected_color = (BLACK,CYAN,ON)
+tag_key_color = (CYAN,BLACK,OFF)
+tag_key_selected_color = (BLACK,CYAN,ON)
+check_color = (WHITE,BLACK,OFF)
+check_selected_color = (BLACK,CYAN,ON)
+uarrow_color = (CYAN,BLACK,ON)
+darrow_color = (CYAN,BLACK,ON)
+position_indicator_color = (CYAN,BLACK,ON)'
+
+# whiptail (viene en todas las distros) solo marca la casilla del cursor, no la línea; dialog sí
+# resalta la línea entera. Si no está dialog, se ofrece instalarlo una vez (~300 KB).
+checklist_tool() {
+    if command -v dialog &> /dev/null; then
+        echo dialog
+        return
+    fi
+    if ! $AUTO_MODE && [ ! -f "$STATE_DIR/dialog-preguntado" ]; then
+        mkdir -p "$STATE_DIR"
+        touch "$STATE_DIR/dialog-preguntado"
+        echo -e "${CYAN}ℹ Las listas con casillas se ven mejor con 'dialog': resalta la línea donde está el cursor${NC}" >&2
+        echo -e "${CYAN}  (~300 KB, de los repositorios oficiales; se quita en 10 → 1).${NC}" >&2
+        if confirm "${CYAN}¿Instalar dialog?${NC}" >&2; then
+            if declare -F apt_install_recorded > /dev/null; then
+                { apt_update; apt_install_recorded dialog; } >&2
+            else
+                pkg_install_recorded dialog >&2
+            fi
+            command -v dialog &> /dev/null && { echo dialog; return; }
+        fi
+    fi
+    command -v whiptail &> /dev/null && echo whiptail
+}
+
 # Lista con casillas: barra espaciadora para marcar, Enter para aceptar.
 # Entradas "paquete|descripción" o "paquete|descripción|ON" (casilla ya marcada);
 # deja lo elegido en CHOSEN. Devuelve 1 si se cancela.
 # Con CHECKLIST_NOTAGS=true no se muestra la columna de nombres internos.
-# Si no hay whiptail (o no es una terminal interactiva) se elige escribiendo números.
+# Si no hay dialog ni whiptail (o no es una terminal interactiva) se elige escribiendo números.
 checklist_select() {
     local title="$1" text="$2"
     shift 2
-    local entries=("$@") args=() entry name desc status i=0 input num
+    local entries=("$@") args=() entry name desc status i=0 input num tool=""
     CHOSEN=()
 
-    if command -v whiptail &> /dev/null && [ -t 0 ] && [ -t 1 ]; then
+    [ -t 0 ] && [ -t 1 ] && tool=$(checklist_tool)
+    if [ -n "$tool" ]; then
+        local cols lines w h lh tagw=0 max_desc out
+        cols=$(tput cols 2>/dev/null || echo 80)
+        lines=$(tput lines 2>/dev/null || echo 24)
+        # Ancho según la terminal (entre 60 y 120 columnas) y alto justo para la lista
+        w=$((cols - 4))
+        [ "$w" -gt 120 ] && w=120
+        [ "$w" -lt 60 ] && w=60
+        if [ -z "$CHECKLIST_NOTAGS" ]; then
+            for entry in "${entries[@]}"; do
+                name=${entry%%|*}
+                [ ${#name} -gt "$tagw" ] && tagw=${#name}
+            done
+            [ "$tagw" -gt 28 ] && tagw=28
+        fi
+        # Lo que queda para la descripción: así ningún renglón se sale del recuadro
+        max_desc=$((w - tagw - 14))
         for entry in "${entries[@]}"; do
-            status=OFF
-            [[ "$entry" == *"|ON" ]] && { status=ON; entry=${entry%|ON}; }
+            status=off
+            [[ "$entry" == *"|ON" ]] && { status=on; entry=${entry%|ON}; }
             name=${entry%%|*}
             desc=${entry#*|}
-            # Sin el emoji inicial: whiptail calcula mal su ancho y descuadra la lista
-            [[ "$desc" == *" "* ]] && [[ "${desc%% *}" != *[[:alnum:]]* ]] && desc=${desc#* }
+            # Sin el emoji inicial: se calcula mal su ancho y descuadra la lista
+            [[ "$desc" == *" "* ]] && [[ "${desc%% *}" != *[A-Za-z0-9]* ]] && desc=${desc#* }
+            [ ${#desc} -gt "$max_desc" ] && desc="${desc:0:$((max_desc - 1))}…"
             args+=("$name" "$desc" "$status")
         done
-        local h w lh max_h out
-        # Alto justo para la lista (sin hueco vacío), limitado al tamaño de la terminal
-        max_h=$(( $(tput lines 2>/dev/null || echo 24) - 2 ))
-        [ "$max_h" -lt 15 ] && max_h=15
         lh=${#entries[@]}
-        [ "$lh" -gt $((max_h - 10)) ] && lh=$((max_h - 10))
+        [ "$lh" -gt $((lines - 12)) ] && lh=$((lines - 12))
+        [ "$lh" -lt 3 ] && lh=3
         h=$((lh + 10))
-        w=$(( $(tput cols 2>/dev/null || echo 80) - 4 ))
-        [ "$w" -gt 90 ] && w=90
-        out=$(NEWT_COLORS="${NEWT_COLORS:-$WHIPTAIL_COLORS}" \
-            whiptail --title "$title" --ok-button "Aceptar" --cancel-button "Cancelar" \
-            ${CHECKLIST_NOTAGS:+--notags} \
-            --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
-            "$h" "$w" "$lh" "${args[@]}" 3>&1 1>&2 2>&3) || return 1
-        read -r -a CHOSEN <<< "$(tr -d '"' <<< "$out")"
+        if [ "$tool" = dialog ]; then
+            local rc_file
+            rc_file=$(mktemp)
+            printf '%s\n' "$DIALOG_RC" > "$rc_file"
+            out=$(DIALOGRC="${DIALOGRC:-$rc_file}" NCURSES_NO_UTF8_ACS=1 dialog --title " $title " --ok-label "Aceptar" --cancel-label "Cancelar" \
+                --separate-output ${CHECKLIST_NOTAGS:+--no-tags} \
+                --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
+                "$h" "$w" "$lh" "${args[@]}" 3>&1 1>&2 2>&3)
+            local rc=$?
+            rm -f "$rc_file"
+            [ $rc -eq 0 ] || return 1
+        else
+            out=$(NEWT_COLORS="${NEWT_COLORS:-$WHIPTAIL_COLORS}" \
+                whiptail --title "$title" --ok-button "Aceptar" --cancel-button "Cancelar" \
+                --separate-output ${CHECKLIST_NOTAGS:+--notags} \
+                --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
+                "$h" "$w" "$lh" "${args[@]}" 3>&1 1>&2 2>&3) || return 1
+        fi
+        [ -n "$out" ] && mapfile -t CHOSEN <<< "$out"
         return 0
     fi
 

@@ -348,8 +348,14 @@ bash ubuntu-ultimate-tools.sh      # opción 19 → 10
 
 En "Eliminar aplicaciones" (opción 4) y "Software opcional" (opción 7) las listas usan casillas:
 **Espacio** marca o desmarca, **flechas** para moverse, **Enter** para aceptar. La lista de eliminación
-solo muestra las apps instaladas, y la de software marca las que ya tienes. Si `whiptail` no está
-disponible, se vuelve a la selección escribiendo números.
+solo muestra las apps instaladas, y la de software marca las que ya tienes.
+
+- Con **`dialog`** la **línea donde está el cursor se resalta** al moverte con las flechas. La primera vez que se
+  usa una lista, si no está instalado, el script ofrece instalarlo (~300 KB, repositorios oficiales; se quita en
+  10 → 1). Si no lo quieres, se usa `whiptail`, que viene en todas las distros pero solo marca la casilla del cursor.
+- El recuadro se ajusta al ancho de la terminal y las descripciones largas se recortan con "…": nada se sale del
+  borde.
+- Si no hay ninguno de los dos, o no es una terminal interactiva, se elige escribiendo números (0 o Enter = volver).
 
 ---
 
