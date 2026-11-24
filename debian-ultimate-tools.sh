@@ -847,6 +847,21 @@ flavor_app_list() {
 }
 
 
+# Qué es cada paquete (así "python3-uno" o "libreoffice-core-nogui" no asustan)
+pkg_summary() { dpkg-query -W -f='${binary:Summary}' "$1" 2>/dev/null; }
+print_pkgs_described() {
+    local p d
+    for p in "$@"; do
+        d=$(pkg_summary "$p")
+        if [ -n "$d" ]; then
+            [ ${#d} -gt 70 ] && d="${d:0:69}…"
+            echo -e "  ${YELLOW}•${NC} $p ${CYAN}— $d${NC}"
+        else
+            echo -e "  ${YELLOW}•${NC} $p"
+        fi
+    done
+}
+
 # Piezas sin las que el escritorio o el sistema dejan de funcionar: si quitar una app
 # las arrastraría por dependencias, esa app no se quita
 CORE_PKGS=(plasma-desktop plasma-workspace kwin-x11 kwin-wayland systemsettings dolphin sddm
@@ -856,7 +871,8 @@ CORE_PKGS=(plasma-desktop plasma-workspace kwin-x11 kwin-wayland systemsettings 
     mate-session-manager mate-panel marco caja
     budgie-desktop nemo cinnamon cinnamon-session unity unity-session ukui-session-manager
     network-manager pipewire wireplumber pulseaudio xorg xserver-xorg-core xwayland
-    sudo systemd policykit-1 polkitd grub-common linux-image-amd64 network-manager-gnome)
+    sudo systemd policykit-1 polkitd grub-common linux-image-amd64 network-manager-gnome
+    python3 python3-minimal perl perl-base bash coreutils apt dpkg libc6)
 
 # ============================================================
 # OPCIÓN 4: ELIMINAR APLICACIONES (COLOR: CIAN)
@@ -3285,7 +3301,7 @@ remove_apps_with_progress() {
             | awk '/^(Purg|Remv) / {print $2}' | grep -vxF -f <(printf '%s\n' "${installed[@]}"))
         if [ ${#extra[@]} -gt 0 ]; then
             echo -e "${YELLOW}⚠ También se quitarán porque dependen de ellas:${NC}"
-            printf "  ${YELLOW}•${NC} %s\n" "${extra[@]}"
+            print_pkgs_described "${extra[@]}"
             if ! $AUTO_MODE && ! confirm "${CYAN}¿Continuar igualmente?${NC}"; then
                 echo -e "${YELLOW}ℹ Cancelado: no se eliminó nada${NC}"
                 return 0
@@ -7142,7 +7158,7 @@ remove_installed_programs() {
     fi
     if [ ${#extra[@]} -gt 0 ]; then
         echo -e "\n${YELLOW}⚠ También se quitarán porque dependen de ellos:${NC}"
-        printf "  ${YELLOW}•${NC} %s\n" "${extra[@]}"
+        print_pkgs_described "${extra[@]}"
     fi
     echo ""
     if ! confirm "${RED}¿Desinstalar?${NC}"; then

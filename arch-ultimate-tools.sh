@@ -991,6 +991,21 @@ flavor_app_list() {
 }
 
 
+# Qué es cada paquete (así un nombre suelto no asusta)
+pkg_summary() { pkg_description "$1"; }
+print_pkgs_described() {
+    local p d
+    for p in "$@"; do
+        d=$(pkg_summary "$p")
+        if [ -n "$d" ]; then
+            [ ${#d} -gt 70 ] && d="${d:0:69}…"
+            echo -e "  ${YELLOW}•${NC} $p ${CYAN}— $d${NC}"
+        else
+            echo -e "  ${YELLOW}•${NC} $p"
+        fi
+    done
+}
+
 # Piezas sin las que el escritorio o el sistema dejan de funcionar: si quitar una app
 # las arrastraría por dependencias, esa app no se quita
 CORE_PKGS=(plasma-desktop plasma-workspace kwin systemsettings dolphin sddm
@@ -1000,7 +1015,8 @@ CORE_PKGS=(plasma-desktop plasma-workspace kwin systemsettings dolphin sddm
     mate-session-manager mate-panel marco caja
     budgie-desktop nemo cinnamon cinnamon-session
     networkmanager pipewire wireplumber pulseaudio xorg-server xorg-xwayland
-    sudo systemd polkit grub base linux linux-lts linux-zen linux-firmware pacman)
+    sudo systemd polkit grub base linux linux-lts linux-zen linux-firmware pacman
+    python perl bash coreutils glibc)
 
 # ============================================================
 # OPCIÓN 4: ELIMINAR APLICACIONES (COLOR: CIAN)
@@ -3062,7 +3078,7 @@ remove_apps_with_progress() {
         mapfile -t extra < <(pkg_removal_set "${installed[@]}" | grep -vxF -f <(printf '%s\n' "${installed[@]}"))
         if [ ${#extra[@]} -gt 0 ]; then
             echo -e "${YELLOW}⚠ También se quitarán porque dependen de ellas:${NC}"
-            printf "  ${YELLOW}•${NC} %s\n" "${extra[@]}"
+            print_pkgs_described "${extra[@]}"
             if ! $AUTO_MODE && ! confirm "${CYAN}¿Continuar igualmente?${NC}"; then
                 echo -e "${YELLOW}ℹ Cancelado: no se eliminó nada${NC}"
                 return 0
