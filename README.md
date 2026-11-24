@@ -1,12 +1,14 @@
 <div align="center">
   
-# 🚀 Ubuntu Ultimate Tools
+# 🐧 Linux Ultimate Tools
 
-### Limpia, optimiza y repara cualquier sabor de Ubuntu desde un solo menú
+### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
+[![Debian](https://img.shields.io/badge/Debian-12%2B%20(beta)-A81D33?logo=debian&logoColor=white)](https://www.debian.org/)
+[![Arch](https://img.shields.io/badge/Arch-beta-1793D1?logo=archlinux&logoColor=white)](https://archlinux.org/)
 
 </div>
 
@@ -14,8 +16,20 @@
 
 ## 📖 Descripción
 
-**Ubuntu Ultimate Tools** es un script interactivo para dejar tu Ubuntu más liviano, rápido y a tu gusto,
-sin importar el sabor. Al iniciar **detecta qué sabor y qué escritorio tienes** y adapta sus opciones:
+**Linux Ultimate Tools** reúne en un solo repositorio un script interactivo para cada familia de distribuciones:
+
+| Script | Para |
+|---|---|
+| `ubuntu-ultimate-tools.sh` — **Ubuntu Ultimate Tools** | Ubuntu y todos sus sabores, Linux Mint, Pop!_OS... |
+| `debian-ultimate-tools.sh` — **Debian Ultimate Tools** (beta) | Debian 12/13 y derivadas (LMDE, MX Linux, Kali, GoldenDog...) |
+| `arch-ultimate-tools.sh` — **Arch Ultimate Tools** (beta) | Arch, Manjaro, EndeavourOS, CachyOS, Garuda... |
+
+Los tres tienen el **mismo menú y los mismos números**. Cada uno **detecta la distribución**, y si abres el que no
+corresponde te dice cuál usar y ofrece abrirlo. El menú de arranque (GRUB y EFI) y crear un USB de instalación
+sirven también en Fedora, openSUSE y otras.
+
+Sirven para dejar tu sistema más liviano, rápido y a tu gusto. Al iniciar **detectan la distribución, el sabor y
+el escritorio** y adaptan sus opciones:
 
 - 🗑️ **Eliminar** las apps preinstaladas de tu sabor (con un seguro que nunca quita piezas del escritorio)
 - ⚡ **Cambiar de kernel** (Liquorix, XanMod, oficial LTS/HWE) y **reparar o personalizar GRUB**
@@ -70,7 +84,7 @@ pestaña de la terminal muestra el script y la distribución detectada.
 | `debian-ultimate-tools.sh` (beta) | Debian 12/13 y derivadas (MX Linux, LMDE...) | `./debian-ultimate-tools.sh` |
 | `arch-ultimate-tools.sh` (beta) | Arch, Manjaro, EndeavourOS (y CachyOS, Garuda...) | `./arch-ultimate-tools.sh` |
 
-Si abres un script en una distribución que no es la suya, solo muestra el menú de arranque (18), que sirve en
+Si abres un script en una distribución que no es la suya, solo muestra el menú de arranque (19) y crear un USB (20), que sirven en
 todas, y te dice cuál usar.
 
 **Qué traen las betas:** actualizar, información del sistema, eliminar apps y accesos directos, software
@@ -80,13 +94,13 @@ energía (incluidos Steam, Proton y herramientas de juego) y el menú de arranqu
 
 ### Debian (beta)
 
-- **Repositorios (11):** activa `contrib`, `non-free` y `non-free-firmware` (drivers de NVIDIA, firmware de Wi-Fi,
+- **Repositorios (12):** activa `contrib`, `non-free` y `non-free-firmware` (drivers de NVIDIA, firmware de Wi-Fi,
   Steam) en el formato clásico y en el nuevo (`*.sources`). Desactiva el DVD/USB de instalación como fuente.
   Activa **backports**. Antes guarda una copia y, si `apt update` falla, vuelve atrás solo.
-- **GPU (12):** NVIDIA con `nvidia-detect` (elige el driver correcto; avisa del paso de Secure Boot/MOK); AMD e
+- **GPU (13):** NVIDIA con `nvidia-detect` (elige el driver correcto; avisa del paso de Secure Boot/MOK); AMD e
   Intel con su firmware y los drivers de vídeo.
-- **Kernel (13):** oficial, **backports** (más nuevo y firmado), Liquorix y XanMod.
-- **Eliminar apps (3):** en Debian los metapaquetes del escritorio dependen de las apps; antes de quitar una, se
+- **Kernel (14):** oficial, **backports** (más nuevo y firmado), Liquorix y XanMod.
+- **Eliminar apps (4):** en Debian los metapaquetes del escritorio dependen de las apps; antes de quitar una, se
   protege lo que quedaría huérfano para que `apt autoremove` no se lleve medio escritorio.
 - **Si falta `sudo`** (instalaste con contraseña de root) explica cómo agregarlo.
 
@@ -95,17 +109,17 @@ energía (incluidos Steam, Proton y herramientas de juego) y el menú de arranqu
 - **Paquetes:** nunca hace actualizaciones parciales. Si la base de paquetes está vieja (error 404) ofrece
   actualizar todo y reintentar; si fallan las firmas, actualiza el llavero; si `pacman` quedó bloqueado por un
   corte (y no hay nada instalándose), ofrece desbloquearlo.
-- **Software opcional (6):** solo **repositorios oficiales** y **Flathub** (preguntando antes). Chrome, Brave, Spotify y
+- **Software opcional (7):** solo **repositorios oficiales** y **Flathub** (preguntando antes). Chrome, Brave, Spotify y
   el VS Code de Microsoft salen de Flathub; Firefox, Chromium y la versión libre de VS Code, de los oficiales.
 - **Sin AUR:** el script no lo usa (cualquiera puede subir paquetes y ya hubo casos con malware). Tampoco
   actualiza paquetes del AUR que tengas instalados por tu cuenta.
-- **Configurar (11):** multilib (con vuelta atrás si falla), descargas en paralelo, servidores más rápidos
+- **Configurar (12):** multilib (con vuelta atrás si falla), descargas en paralelo, servidores más rápidos
   (`reflector`; en Manjaro, `pacman-mirrors`) y limpieza automática de la caché.
-- **GPU (12):** NVIDIA según la tarjeta (`nvidia-open`, o DKMS si tienes otros kernels); en Manjaro usa `mhwd`.
+- **GPU (13):** NVIDIA según la tarjeta (`nvidia-open`, o DKMS si tienes otros kernels); en Manjaro usa `mhwd`.
   Las anteriores a la serie 16/RTX necesitan un driver que solo está en el AUR: el script lo explica y deja el
   driver libre (nouveau). AMD e Intel con lib32 si hay
   multilib. Regenera la imagen de arranque con `mkinitcpio` o `dracut` (EndeavourOS).
-- **Kernel (13):** `linux`, `linux-lts` y `linux-zen` (con sus headers); en Manjaro, `mhwd-kernel`. Nunca quita
+- **Kernel (14):** `linux`, `linux-lts` y `linux-zen` (con sus headers); en Manjaro, `mhwd-kernel`. Nunca quita
   el kernel en uso. Microcódigo del procesador.
 - **ZRAM** con `zram-generator`; **TLP** quita antes `power-profiles-daemon` (en Arch chocan); **Steam** desde
   multilib (o Flathub si no lo quieres activar).
@@ -117,7 +131,8 @@ Si faltan `wget` o `lspci`, se instalan solos cuando hacen falta.
 
 ## 📋 Requisitos
 
-- **Ubuntu 22.04 LTS o superior**, cualquier sabor
+- **Ubuntu 22.04 LTS o superior** (cualquier sabor y derivadas), **Debian 12 o superior** (y derivadas) o
+  **Arch** y derivadas; el menú de arranque y crear un USB también en Fedora, openSUSE y otras
 - Conexión a internet
 - Usuario con privilegios `sudo`
 
@@ -125,36 +140,39 @@ Si faltan `wget` o `lspci`, se instalan solos cuando hacen falta.
 
 ## 🔧 Instalación
 
-### 1. Descargar el script
+### 1. Descargar
 
-El repositorio es **privado**: para descargarlo hay que iniciar sesión en GitHub
-(`wget` o un `git clone` sin sesión no funcionan).
-
-**Opción A: con Git** (inicia sesión una sola vez con GitHub CLI)
+**Opción A: todo el repositorio con Git** (recomendado: se actualiza con `git pull`)
 
 ```bash
-sudo apt install gh
-gh auth login          # GitHub.com → HTTPS → Yes → Login with a web browser
-git clone https://github.com/george0884/ubuntu-ultimate-tools.git
-cd ubuntu-ultimate-tools
+git clone https://github.com/george0884/linux-ultimate-tools.git
+cd linux-ultimate-tools
 ```
 
-Para actualizar más adelante: `git pull`
+**Opción B: solo el script de tu distribución**
 
-**Opción B: desde la web**
+```bash
+wget https://raw.githubusercontent.com/george0884/linux-ultimate-tools/main/ubuntu-ultimate-tools.sh
+# o debian-ultimate-tools.sh / arch-ultimate-tools.sh
+```
 
-En la página del repositorio: **Code → Download ZIP**, y descomprímelo.
+**Opción C: desde la web**: en la página del repositorio, **Code → Download ZIP**, y descomprímelo.
+
+💡 El repositorio antes se llamaba `ubuntu-ultimate-tools`: los enlaces viejos y `git pull` en copias anteriores
+siguen funcionando (GitHub redirige al nombre nuevo).
 
 ### 2. Dar permisos de ejecución
 
 ```bash
-chmod +x ubuntu-ultimate-tools.sh
+chmod +x *-ultimate-tools.sh
 ```
 
 ### 3. Ejecutar
 
 ```bash
-./ubuntu-ultimate-tools.sh
+./ubuntu-ultimate-tools.sh     # Ubuntu, Mint, Pop!_OS...
+./debian-ultimate-tools.sh     # Debian y derivadas (beta)
+./arch-ultimate-tools.sh       # Arch, Manjaro, EndeavourOS... (beta)
 ```
 
 💡 No es necesario ejecutarlo como root. El script solicitará sudo cuando sea necesario.
