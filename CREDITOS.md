@@ -146,13 +146,28 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 
 | Proyecto | Licencia | Uso |
 |---|---|---|
-| [GNU coreutils](https://www.gnu.org/software/coreutils/) (`dd`, `sha256sum`) | GPL-3.0-or-later | Sistema: grabar el pendrive y verificar las descargas |
+| [GNU coreutils](https://www.gnu.org/software/coreutils/) (`dd`, `sha256sum`, `sha512sum`) | GPL-3.0-or-later | Sistema: grabar el pendrive y verificar las descargas |
 | [util-linux](https://github.com/util-linux/util-linux) (`lsblk`, `findmnt`) | GPL-2.0-or-later | Sistema: detectar los pendrives y lo que tienen montado |
 | [udisks](https://github.com/storaged-project/udisks) (`udisksctl`) | GPL-2.0-or-later | Sistema: desmontar y expulsar el pendrive |
 | [curl](https://curl.se/) | Licencia curl | Sistema: descargar las ISO oficiales |
 
-Las ISO se descargan de los sitios oficiales de cada distribución (Ubuntu y sus sabores, [KDE neon](https://neon.kde.org/), Debian, Arch Linux), con sus propias
-licencias y marcas; el script no las modifica.
+Las ISO y sus sumas se descargan de los sitios oficiales de cada distribución o de sus espejos oficiales, con sus
+propias licencias y marcas; el script no las modifica:
+
+| Distribución | De dónde se baja la ISO y su suma |
+|---|---|
+| [Ubuntu](https://ubuntu.com/) y sus sabores (Kubuntu, Xubuntu, Lubuntu, Ubuntu MATE, Ubuntu Budgie, Server) | releases.ubuntu.com y cdimage.ubuntu.com (`SHA256SUMS`) |
+| [KDE neon](https://neon.kde.org/) | files.kde.org (`.sha256sum`) |
+| [Linux Mint](https://linuxmint.com/) y [LMDE](https://linuxmint.com/download_lmde.php) | espejo de kernel.org (`sha256sum.txt`) |
+| [Zorin OS](https://zorin.com/os/) | espejo de kernel.org; la suma, de la [página oficial de ayuda de Zorin](https://help.zorin.com/docs/getting-started/check-the-integrity-of-your-copy-of-zorin-os/) |
+| [Pop!_OS](https://system76.com/pop/) | API de descargas de System76 (api.pop-os.org, trae la suma) |
+| [Debian](https://www.debian.org/) estable y testing | cdimage.debian.org (`SHA256SUMS`) |
+| [MX Linux](https://mxlinux.org/), [Manjaro](https://manjaro.org/) y [CachyOS](https://cachyos.org/) | sus proyectos oficiales en SourceForge (`.sha256` de cada ISO) |
+| [Kali Linux](https://www.kali.org/) | cdimage.kali.org (`SHA256SUMS`) |
+| [Arch Linux](https://archlinux.org/) | geo.mirror.pkgbuild.com (`sha256sums.txt`) |
+| [EndeavourOS](https://endeavouros.com/) | espejo principal mirror.alpix.eu (`.sha512sum`) |
+| [Fedora](https://fedoraproject.org/) | `releases.json` oficial (el que usa Fedora Media Writer) |
+| [openSUSE Tumbleweed](https://www.opensuse.org/) | download.opensuse.org (`.sha256`) |
 
 ## 💾 Archivo swap (opción 15)
 
