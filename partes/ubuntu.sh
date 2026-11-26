@@ -62,7 +62,7 @@ print_header() {
 AUTO_MODE=false
 ASSUME_YES=false
 ACTIVE_PROFILE=""
-#@parte comun: clear pause confirm run progress_wanted progress_draw run_with_progress set_terminal_title run_visible
+#@parte comun: clear pause confirm submenu_run menu_pause run progress_wanted progress_draw run_with_progress set_terminal_title run_visible
 
 # Las salidas que el script interpreta se piden en inglés: con el sistema en español,
 # apt-cache escribe "Candidato:" o "Depende:" en lugar de "Candidate:" o "Depends:",
@@ -690,15 +690,15 @@ optimize_kernel_menu() {
         read -r -p "📌 Opción (0-5): " kernel_option
 
         case $kernel_option in
-            1) install_liquorix_kernel ;;
-            2) install_xanmod_kernel ;;
-            3) optimize_standard_kernel ;;
-            4) install_standard_livepatch_kernel ;;
-            5) advanced_kernel_tweaks ;;
+            1) submenu_run install_liquorix_kernel ;;
+            2) submenu_run install_xanmod_kernel ;;
+            3) submenu_run optimize_standard_kernel ;;
+            4) submenu_run install_standard_livepatch_kernel ;;
+            5) submenu_run advanced_kernel_tweaks ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
         return 0
     done
 }
@@ -1109,7 +1109,7 @@ install_standard_livepatch_kernel() {
 }
 #@parte comun: enable_trim
 #@parte apt: advanced_kernel_tweaks
-#@parte comun: datos_swapfile zram_swap_active disk_swap_active swapfile_active swap_summary ram_swappiness_auto apply_ram_tweaks suggest_swap_gb create_swapfile remove_swapfile swappiness_manual ram_status optimize_ram_menu
+#@parte comun: datos_swapfile zram_swap_active disk_swap_active swapfile_active swap_summary ram_swappiness_auto apply_ram_tweaks suggest_swap_gb create_swapfile remove_swapfile swappiness_manual ram_status disable_zram_auto optimize_ram_menu
 #@parte apt: enable_zram
 
 
@@ -3238,7 +3238,7 @@ HOOK
 #@parte comun: shutdown_menu datos_plasma_appletsrc desktop_dir stop_plasmashell start_plasmashell taskmanager_applets remove_desktop_shortcuts
 
 GNOME_FAVORITES_BACKUP="$SHORTCUTS_BACKUP/gnome-favoritas"
-#@parte comun: remove_gnome_favorites restore_gnome_favorites remove_panel_launchers restore_desktop_shortcuts restore_panel_launchers remove_shortcuts_menu
+#@parte comun: remove_gnome_favorites restore_gnome_favorites remove_panel_launchers restore_desktop_shortcuts restore_panel_launchers restore_all_shortcuts remove_shortcuts_menu
 
 # ============================================================
 # OPCIÓN 16: RED, DNS Y DRIVERS (COLOR: AZUL)
@@ -3315,7 +3315,7 @@ install_recommended_drivers() {
         && log_success "Drivers recomendados instalados (requiere reinicio)"
 }
 #@parte apt: update_firmware
-#@parte comun: network_menu is_laptop current_power_profile power_profiles_available set_gaming_power
+#@parte comun: toggle_bbr toggle_wifi_powersave network_menu is_laptop current_power_profile power_profiles_available set_gaming_power
 #@parte apt: set_power_profile install_tlp
 #@parte comun: enable_power_saving baloo_cmd disable_baloo gnome_indexer_unit indexer_disabled disable_indexer enable_indexer enable_baloo
 #@parte apt: install_gaming_tools
@@ -3436,7 +3436,7 @@ install_steam() {
 }
 #@parte comun: enable_steam_play steam_play_vdf
 #@parte apt: install_proton_ge
-#@parte comun: remove_proton_ge power_menu
+#@parte comun: remove_proton_ge install_tlp_confirm toggle_indexer install_gaming_set power_menu
 
 # ============================================================
 # OPCIÓN 18: PERFILES AUTOMÁTICOS (COLOR: PÚRPURA)
@@ -3935,6 +3935,17 @@ restore_all_tweaks() {
     remove_extreme_gaming
 }
 
+# Deshacer → 5: muestra qué ajustes están cambiados y ofrece restaurarlos todos
+restore_all_tweaks_menu() {
+    if ! show_tweaks_status; then
+        echo -e "${GREEN}✓ No hay ajustes cambiados: todo está como de fábrica${NC}"
+    elif confirm "${RED}¿Restaurar a fábrica los ajustes marcados con ⚙?${NC}"; then
+        restore_all_tweaks
+    else
+        echo -e "${YELLOW}ℹ Cancelado: no se cambió nada${NC}"
+    fi
+}
+
 undo_menu() {
     while true; do
         clear
@@ -3965,32 +3976,24 @@ undo_menu() {
         read -r -p "📌 Opción (0-14): " undo_option
 
         case $undo_option in
-            1) remove_installed_programs ;;
-            2) restore_sysctl_defaults ;;
-            3) disable_zram ;;
-            4) remove_tlp ;;
-            6) remove_proton_ge ;;
-            7) remove_android ;;
-            8) remove_flatpak_sdks ;;
-            9) remove_docker ;;
-            10) dev_nuclear ;;
-            11) remove_installed_desktop ;;
-            12) remove_extra_desktop ;;
-            13) disable_audit ;;
-            14) remove_extreme_gaming ;;
-            5)
-                if ! show_tweaks_status; then
-                    echo -e "${GREEN}✓ No hay ajustes cambiados: todo está como de fábrica${NC}"
-                elif confirm "${RED}¿Restaurar a fábrica los ajustes marcados con ⚙?${NC}"; then
-                    restore_all_tweaks
-                else
-                    echo -e "${YELLOW}ℹ Cancelado: no se cambió nada${NC}"
-                fi
-                ;;
+            1) submenu_run remove_installed_programs ;;
+            2) submenu_run restore_sysctl_defaults ;;
+            3) submenu_run disable_zram ;;
+            4) submenu_run remove_tlp ;;
+            6) submenu_run remove_proton_ge ;;
+            7) submenu_run remove_android ;;
+            8) submenu_run remove_flatpak_sdks ;;
+            9) submenu_run remove_docker ;;
+            10) submenu_run dev_nuclear ;;
+            11) submenu_run remove_installed_desktop ;;
+            12) submenu_run remove_extra_desktop ;;
+            13) submenu_run disable_audit ;;
+            14) submenu_run remove_extreme_gaming ;;
+            5) submenu_run restore_all_tweaks_menu ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
 #@parte comun: datos_info_quiet info_title cpu_temperature info_summary
@@ -4158,28 +4161,28 @@ sysinfo_menu() {
         echo ""
         read -r -p "📌 Opción (0-16): " option
         case $option in
-            1) info_summary ;;
-            2) info_fastfetch ;;
+            1) submenu_run info_summary ;;
+            2) submenu_run info_fastfetch ;;
             3)
                 read -r -p "  Nivel: 1) normal  2) muy detallado [1]: " level
                 if [ "$level" = 2 ]; then info_inxi "-Fxxx"; else info_inxi "-F"; fi ;;
-            4) info_cpu_ram ;;
-            5) info_gpu ;;
-            6) info_disks ;;
-            7) info_temps ;;
-            8) info_network ;;
-            9) info_battery ;;
-            10) info_usb ;;
-            11) info_diagnostics ;;
-            12) info_script_changes ;;
-            13) info_search ;;
-            14) info_save_report ;;
-            15) info_benchmark ;;
-            16) info_htop ;;
+            4) submenu_run info_cpu_ram ;;
+            5) submenu_run info_gpu ;;
+            6) submenu_run info_disks ;;
+            7) submenu_run info_temps ;;
+            8) submenu_run info_network ;;
+            9) submenu_run info_battery ;;
+            10) submenu_run info_usb ;;
+            11) submenu_run info_diagnostics ;;
+            12) submenu_run info_script_changes ;;
+            13) submenu_run info_search ;;
+            14) submenu_run info_save_report ;;
+            15) submenu_run info_benchmark ;;
+            16) submenu_run info_htop ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
 
@@ -4279,7 +4282,7 @@ boot_only_menu() {
         read -r -p "🔢 Opción (19, 20, 21 o 0): " option
         case $option in
             19|1) ( MENU_SUBSHELL=1; grub_repair_menu ) ;;
-            20) ( MENU_SUBSHELL=1; create_usb_menu; pause ) ;;
+            20) ( MENU_SUBSHELL=1; create_usb_menu ) ;;
             21|2) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
@@ -4357,7 +4360,7 @@ main_menu() {
             17) ( MENU_SUBSHELL=1; power_menu ) ;;
             18) ( MENU_SUBSHELL=1; profiles_menu ) ;;
             19) ( MENU_SUBSHELL=1; grub_repair_menu ) ;;
-            20) ( MENU_SUBSHELL=1; create_usb_menu; pause ) ;;
+            20) ( MENU_SUBSHELL=1; create_usb_menu ) ;;
             21) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"

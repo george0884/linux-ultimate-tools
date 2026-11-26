@@ -447,7 +447,7 @@ usb_choose_distro() {
         done
         echo -e "  ${CYAN}0)${NC} Volver"
         read -r -p "🔢 Familia: " choice
-        [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#groups[@]} ] || return 1
+        [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#groups[@]} ] || return 2
         group=${groups[$((choice - 1))]}
         shown=()
         echo -e "\n${CYAN}💿 ${group%%|*}${NC}\n"
@@ -477,7 +477,7 @@ usb_choose_distro() {
 # archivo con la suma oficial, para poder comprobarla después sin internet
 usb_download_iso() {
     local entry dir size_mb free_mb target="${1:-}"
-    usb_choose_distro || return 1
+    usb_choose_distro || return
     entry=$USB_CHOSEN
     IFS='|' read -r _ USB_CHOSEN_NAME _ <<< "$entry"
     command -v curl &> /dev/null || { log_error "Falta curl para descargar"; return 1; }
@@ -500,7 +500,8 @@ usb_download_iso() {
     fi
     local head
     if ! head=$(curl -sSfLI -m 30 "$USB_ISO_URL" 2>&1); then
-        log_error "La ISO no está en el servidor (${head##*: }): la distribución pudo cambiarla de lugar."
+        head=${head##*: }
+        log_error "La ISO no está en el servidor${head:+ ($head)}: la distribución pudo cambiarla de lugar."
         echo -e "   Avísanos en el repositorio para corregirlo; mientras, bájala de su página y usa la opción 3."
         return 1
     fi
@@ -510,7 +511,7 @@ usb_download_iso() {
         log_error "No hay espacio en $dir: la ISO ocupa ~${size_mb} MB y hay ${free_mb} MB libres"
         return 1
     fi
-    confirm "${CYAN}¿Descargar ($([ "$size_mb" -gt 0 ] && echo "~${size_mb} MB" || echo "tamaño desconocido"))?${NC}" || return 1
+    confirm "${CYAN}¿Descargar ($([ "$size_mb" -gt 0 ] && echo "~${size_mb} MB" || echo "tamaño desconocido"))?${NC}" || return 2
     echo -e "${BLUE}⬇ Descargando (si se corta, vuelve a elegirla y sigue donde quedó)...${NC}"
     if ! curl -fL -C - --progress-bar -o "$USB_ISO" "$USB_ISO_URL"; then
         log_error "La descarga se cortó: vuelve a elegirla para continuar"
@@ -603,13 +604,16 @@ usb_pick_local_iso() {
     read -r -p "🔢 Opción: " choice
     if [ "$choice" = r ]; then
         read -r -e -p "📁 Ruta de la ISO (Enter = volver): " path
-        [ -n "$path" ] && [ "$path" != 0 ] || return 1
+        [ -n "$path" ] && [ "$path" != 0 ] || return 2
         path=${path/#\~/$HOME}
         [ -f "$path" ] || { log_error "No existe: $path"; return 1; }
         USB_ISO="$path"
     elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#isos[@]} ]; then
         USB_ISO=${isos[$((choice - 1))]}
+    elif [ -z "$choice" ] || [ "$choice" = 0 ]; then
+        return 2
     else
+        log_error "Opción inválida: $choice"
         return 1
     fi
     USB_ISO_SHA=""
@@ -733,7 +737,7 @@ usb_verify_local_iso() {
         echo -e "   ${BOLD}$got${NC}"
         echo -e "   Compárala con la que publica la página de descarga de tu distribución."
         read -r -p "📋 Pega aquí la suma oficial (Enter = grabar sin comprobar, 0 = volver): " answer
-        [ "$answer" = 0 ] && return 1
+        [ "$answer" = 0 ] && return 2
         if [ -z "$answer" ]; then
             log_warning "Se graba sin comprobar la suma"
             return 0
@@ -819,7 +823,11 @@ usb_pick_device() {
     else
         read -r -p "🔢 Opción: " choice
     fi
-    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#devs[@]} ] || return 1
+    [ -z "$choice" ] || [ "$choice" = 0 ] && return 2
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt ${#devs[@]} ]; then
+        log_error "Opción inválida: $choice"
+        return 1
+    fi
     IFS='|' read -r USB_DEV USB_DEV_SIZE USB_DEV_DESC <<< "${devs[$((choice - 1))]}"
     if [ "$USB_DEV_SIZE" -lt "$min_bytes" ]; then
         log_error "El pendrive es chico: tiene $(numfmt --to=iec "$USB_DEV_SIZE") y la ISO necesita $(numfmt --to=iec "$min_bytes")"
@@ -841,47 +849,65 @@ usb_unmount_dev() {
 }
 #@@ create_usb_menu
 
+# Opción 20: el menú se repite hasta elegir 0; si cancelas un paso (0 o una pregunta s/n), vuelves aquí
 create_usb_menu() {
-    clear
-    echo -e "${BLUE}${BOLD}"
-    echo "╔══════════════════════════════════════════════════════════════════╗"
-    echo "║       💿 DESCARGAR SISTEMAS Y CREAR USB DE INSTALACIÓN           ║"
-    echo "╚══════════════════════════════════════════════════════════════════╝"
-    echo -e "${NC}"
-    echo -e "Descarga la imagen (ISO) oficial de más de 40 sistemas, verificada, y grábala en un pendrive"
-    echo -e "para instalarla o probarla en cualquier PC. También sirve para solo descargarla."
-    echo -e "${YELLOW}⚠ Al grabar, se borra todo lo que tenga el pendrive.${NC} El disco de tu sistema nunca aparece.\n"
-    echo -e "  ${BLUE}1)${NC} 💿 Descargar un sistema y grabarlo en un pendrive"
-    echo -e "  ${BLUE}2)${NC} ⬇  Solo descargar la imagen ISO (para grabarla después, Ventoy o una máquina virtual)"
-    echo -e "  ${BLUE}3)${NC} 🔥 Grabar en un pendrive una ISO que ya tengo (la busco sola)"
-    echo -e "  ${BLUE}4)${NC} 🧰 VENTOY: varios sistemas en un solo pendrive (live, con persistencia)"
-    echo -e "  ${BLUE}5)${NC} 🧪 Probar que todas las descargas funcionen (no baja nada)"
-    echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
     local option
-    read -r -p "📌 Opción (0-5): " option
+    while true; do
+        clear
+        echo -e "${BLUE}${BOLD}"
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        echo "║       💿 DESCARGAR SISTEMAS Y CREAR USB DE INSTALACIÓN           ║"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        echo -e "Descarga la imagen (ISO) oficial de más de 40 sistemas, verificada, y grábala en un pendrive"
+        echo -e "para instalarla o probarla en cualquier PC. También sirve para solo descargarla."
+        echo -e "${YELLOW}⚠ Al grabar, se borra todo lo que tenga el pendrive.${NC} El disco de tu sistema nunca aparece.\n"
+        echo -e "  ${BLUE}1)${NC} 💿 Descargar un sistema y grabarlo en un pendrive"
+        echo -e "  ${BLUE}2)${NC} ⬇  Solo descargar la imagen ISO (para grabarla después, Ventoy o una máquina virtual)"
+        echo -e "  ${BLUE}3)${NC} 🔥 Grabar en un pendrive una ISO que ya tengo (la busco sola)"
+        echo -e "  ${BLUE}4)${NC} 🧰 VENTOY: varios sistemas en un solo pendrive (live, con persistencia)"
+        echo -e "  ${BLUE}5)${NC} 🧪 Probar que todas las descargas funcionen (no baja nada)"
+        echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
+        read -r -p "📌 Opción (0-5): " option
+        case $option in
+            1|3) submenu_run usb_burn "$option" ;;
+            2) submenu_run usb_download_only ;;
+            4) ventoy_menu; continue ;;
+            5) submenu_run usb_test_all ;;
+            0|"") return 0 ;;
+            *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
+        esac
+        menu_pause
+    done
+}
+
+# 20 → 2: solo descargar la ISO
+usb_download_only() {
     USB_ISO="" USB_ISO_SHA=""
-    case $option in
-        1) usb_download_iso || return 1 ;;
-        2)
-            usb_download_iso || return 1
-            echo -e "\n${GREEN}✓ Lista: ${BOLD}$USB_ISO${NC}"
-            echo -e "${CYAN}💡 Para grabarla en un pendrive más tarde: opción 20 → 3.${NC}"
-            return 0 ;;
-        3) usb_pick_local_iso || return 1 ;;
-        4) ventoy_menu; return 0 ;;
-        5) usb_test_all; return 0 ;;
-        *) return 0 ;;
-    esac
+    usb_download_iso || return
+    echo -e "\n${GREEN}✓ Lista: ${BOLD}$USB_ISO${NC}"
+    echo -e "${CYAN}💡 Para grabarla en un pendrive más tarde: opción 20 → 3.${NC}"
+}
+
+# 20 → 1 (descargar y grabar) o 20 → 3 (grabar una ISO que ya tienes)
+usb_burn() {
+    local option="$1"
+    USB_ISO="" USB_ISO_SHA=""
+    if [ "$option" = 1 ]; then
+        usb_download_iso || return
+    else
+        usb_pick_local_iso || return
+    fi
 
     echo -e "\n${CYAN}💿 ISO:${NC} $USB_ISO"
     usb_check_iso "$USB_ISO" || return 1
     # Las descargadas ya se comprobaron; las que ya tenías, ahora
     if [ "$option" = 3 ]; then
-        usb_verify_local_iso "$USB_ISO" || return 1
+        usb_verify_local_iso "$USB_ISO" || return
     fi
     local iso_bytes
     iso_bytes=$(stat -c %s "$USB_ISO")
-    usb_pick_device "$iso_bytes" || return 1
+    usb_pick_device "$iso_bytes" || return
 
     # Qué se va a borrar, para que no haya dudas
     echo -e "\n${RED}${BOLD}⚠ SE VA A BORRAR TODO ESTE PENDRIVE:${NC}"
@@ -1076,7 +1102,7 @@ ventoy_pick_and_mount() {
         return 1
     fi
     echo -e "\n${CYAN}Pendrive con Ventoy:${NC}"
-    usb_pick_device 0 ventoy_candidates || return 1
+    usb_pick_device 0 ventoy_candidates || return
     part=$(ventoy_find_part "$USB_DEV" Ventoy)
     VENTOY_MNT=$(findmnt -rno TARGET -S "$part" 2>/dev/null | head -1)
     if [ -z "$VENTOY_MNT" ]; then
@@ -1169,7 +1195,7 @@ ventoy_install() {
     fi
     ventoy_need_partitioner || return 1
     ventoy_get_tool || return 1
-    usb_pick_device $((1024 * 1024 * 1024)) || return 1
+    usb_pick_device $((1024 * 1024 * 1024)) || return
     if ventoy_candidates | grep -q "^$USB_DEV|"; then
         echo -e "${YELLOW}ℹ Este pendrive ya tiene Ventoy. Para actualizarlo sin borrar las ISO usa la opción 5.${NC}"
     fi
@@ -1220,10 +1246,52 @@ ventoy_install() {
 }
 #@@ ventoy_add
 
+# Ventoy → Agregar → 1: baja un sistema de la lista directo al pendrive, con su nombre en el menú
+ventoy_add_download() {
+    local img
+    usb_download_iso "$VENTOY_MNT/iso" || return
+    img=${USB_ISO#"$VENTOY_MNT"}
+    ventoy_conf_set alias "$img" "$(ventoy_alias_for "$USB_CHOSEN_NAME" "$USB_ISO_FILE")"
+    ventoy_write_json
+    sync
+    log_success "Agregado: $(basename "$USB_ISO")"
+}
+
+# Ventoy → Agregar → 2: copia una ISO que ya tienes, comprobada antes y después de copiar
+ventoy_add_copy() {
+    local src dest need free
+    USB_ISO=""
+    usb_pick_local_iso || return
+    src=$USB_ISO
+    case $(realpath "$src") in
+        "$(realpath "$VENTOY_MNT")"/*) log_warning "Esa ISO ya está en el pendrive"; return 1 ;;
+    esac
+    usb_verify_local_iso "$src" || return
+    dest="$VENTOY_MNT/iso/$(basename "$src")"
+    need=$(stat -c %s "$src")
+    free=$(df -PB1 "$VENTOY_MNT" | awk 'NR == 2 {print $4}')
+    if [ "$need" -gt "$free" ]; then
+        log_error "No entra: la ISO ocupa $(numfmt --to=iec "$need") y quedan $(numfmt --to=iec "$free")"
+        return 1
+    fi
+    echo -e "${BLUE}📁 Copiando al pendrive...${NC}"
+    if ! dd if="$src" of="$dest" bs=4M status=progress conv=fsync \
+        || ! { echo -e "${BLUE}🔍 Comprobando la copia...${NC}"; cmp -s "$src" "$dest"; }; then
+        rm -f -- "$dest"
+        log_error "La copia no salió bien (¿pendrive lleno o dañado?): se borró"
+        return 1
+    fi
+    usb_write_sum_file "$dest" "$USB_VERIFIED_SUM"
+    ventoy_conf_set alias "${dest#"$VENTOY_MNT"}" "$(ventoy_alias_for "$(ventoy_guess_name "$dest")" "$(basename "$dest")")"
+    ventoy_write_json
+    sync
+    log_success "Copiada y comprobada: $(basename "$dest")"
+}
+
 # 2. Agregar sistemas: descargarlos directo al pendrive o copiar ISOs que ya tienes
 ventoy_add() {
-    local option src dest free need img
-    ventoy_pick_and_mount || return 1
+    local option
+    ventoy_pick_and_mount || return
     mkdir -p "$VENTOY_MNT/iso"
     while true; do
         echo -e "\n${CYAN}➕ Agregar al pendrive Ventoy${NC} (libre: ${GREEN}$(df -h --output=avail "$VENTOY_MNT" | tail -1 | tr -d ' ')${NC})"
@@ -1232,42 +1300,10 @@ ventoy_add() {
         echo -e "  ${CYAN}0)${NC} Terminar"
         read -r -p "🔢 Opción: " option
         case $option in
-            1)
-                if usb_download_iso "$VENTOY_MNT/iso"; then
-                    img=${USB_ISO#"$VENTOY_MNT"}
-                    ventoy_conf_set alias "$img" "$(ventoy_alias_for "$USB_CHOSEN_NAME" "$USB_ISO_FILE")"
-                    ventoy_write_json
-                    sync
-                    log_success "Agregado: $(basename "$USB_ISO")"
-                fi ;;
-            2)
-                USB_ISO=""
-                usb_pick_local_iso || continue
-                src=$USB_ISO
-                case $(realpath "$src") in
-                    "$(realpath "$VENTOY_MNT")"/*) log_warning "Esa ISO ya está en el pendrive"; continue ;;
-                esac
-                usb_verify_local_iso "$src" || continue
-                dest="$VENTOY_MNT/iso/$(basename "$src")"
-                need=$(stat -c %s "$src")
-                free=$(df -PB1 "$VENTOY_MNT" | awk 'NR == 2 {print $4}')
-                if [ "$need" -gt "$free" ]; then
-                    log_error "No entra: la ISO ocupa $(numfmt --to=iec "$need") y quedan $(numfmt --to=iec "$free")"
-                    continue
-                fi
-                echo -e "${BLUE}📁 Copiando al pendrive...${NC}"
-                if ! dd if="$src" of="$dest" bs=4M status=progress conv=fsync \
-                    || ! { echo -e "${BLUE}🔍 Comprobando la copia...${NC}"; cmp -s "$src" "$dest"; }; then
-                    rm -f -- "$dest"
-                    log_error "La copia no salió bien (¿pendrive lleno o dañado?): se borró"
-                    continue
-                fi
-                usb_write_sum_file "$dest" "$USB_VERIFIED_SUM"
-                ventoy_conf_set alias "${dest#"$VENTOY_MNT"}" "$(ventoy_alias_for "$(ventoy_guess_name "$dest")" "$(basename "$dest")")"
-                ventoy_write_json
-                sync
-                log_success "Copiada y comprobada: $(basename "$dest")" ;;
-            *) break ;;
+            1) submenu_run ventoy_add_download ;;
+            2) submenu_run ventoy_add_copy ;;
+            0|"") break ;;
+            *) echo -e "${RED}❌ Opción inválida${NC}" ;;
         esac
     done
     sync
@@ -1292,10 +1328,29 @@ ventoy_guess_name() {
 }
 #@@ ventoy_manage
 
+# Quita una imagen del pendrive Ventoy, con su suma, su nombre en el menú y (si quieres) su persistencia
+ventoy_remove_image() {
+    local img="$1" f
+    confirm "${YELLOW}¿Quitar $img del pendrive?${NC}" || return 2
+    rm -f -- "$VENTOY_MNT$img"
+    for f in "$VENTOY_MNT$img".sha256 "$VENTOY_MNT$img".sha512 "$VENTOY_MNT$img".md5; do
+        rm -f -- "$f"
+    done
+    f=$(grep "^persist|$img|" "$VENTOY_MNT/ventoy/linux-ultimate-tools.conf" 2>/dev/null | cut -d'|' -f3)
+    if [ -n "$f" ] && [ -f "$VENTOY_MNT$f" ] && confirm "${YELLOW}¿Borrar también sus cambios guardados (persistencia, $(du -h "$VENTOY_MNT$f" | cut -f1))?${NC}"; then
+        rm -f -- "$VENTOY_MNT$f"
+    fi
+    ventoy_conf_set alias "$img" ""
+    ventoy_conf_set persist "$img" ""
+    ventoy_write_json
+    sync
+    log_success "Quitada: $img"
+}
+
 # 3. Ver, comprobar y quitar las imágenes del pendrive
 ventoy_manage() {
     local imgs=() i img choice expected got ok bad unknown f
-    ventoy_pick_and_mount || return 1
+    ventoy_pick_and_mount || return
     while true; do
         mapfile -t imgs < <(ventoy_list_images)
         echo -e "\n${CYAN}💿 Sistemas en el pendrive:${NC}"
@@ -1337,21 +1392,7 @@ ventoy_manage() {
             q|Q)
                 read -r -p "🔢 ¿Cuál quitar? (número, 0 = volver): " i
                 [[ "$i" =~ ^[0-9]+$ ]] && [ "$i" -ge 1 ] && [ "$i" -le ${#imgs[@]} ] || continue
-                img=${imgs[$((i - 1))]}
-                confirm "${YELLOW}¿Quitar $img del pendrive?${NC}" || continue
-                rm -f -- "$VENTOY_MNT$img"
-                for f in "$VENTOY_MNT$img".sha256 "$VENTOY_MNT$img".sha512 "$VENTOY_MNT$img".md5; do
-                    rm -f -- "$f"
-                done
-                f=$(grep "^persist|$img|" "$VENTOY_MNT/ventoy/linux-ultimate-tools.conf" 2>/dev/null | cut -d'|' -f3)
-                if [ -n "$f" ] && [ -f "$VENTOY_MNT$f" ] && confirm "${YELLOW}¿Borrar también sus cambios guardados (persistencia, $(du -h "$VENTOY_MNT$f" | cut -f1))?${NC}"; then
-                    rm -f -- "$VENTOY_MNT$f"
-                fi
-                ventoy_conf_set alias "$img" ""
-                ventoy_conf_set persist "$img" ""
-                ventoy_write_json
-                sync
-                log_success "Quitada: $img" ;;
+                submenu_run ventoy_remove_image "${imgs[$((i - 1))]}" ;;
             *) return 0 ;;
         esac
     done
@@ -1372,7 +1413,7 @@ ventoy_persistence_kind() {
 ventoy_persistence() {
     local imgs=() cands=() img i choice kind size free dat label opts
     ventoy_get_tool || return 1
-    ventoy_pick_and_mount || return 1
+    ventoy_pick_and_mount || return
     mapfile -t imgs < <(ventoy_list_images)
     for img in "${imgs[@]}"; do
         [ -n "$(ventoy_persistence_kind "$img")" ] && cands+=("$img")
@@ -1442,7 +1483,7 @@ ventoy_update() {
         log_error "Ningún pendrive conectado tiene Ventoy"
         return 1
     fi
-    usb_pick_device 0 ventoy_candidates || return 1
+    usb_pick_device 0 ventoy_candidates || return
     info=$(ventoy_run Ventoy2Disk.sh -l "$USB_DEV" 2>/dev/null)
     old=$(grep 'Ventoy Version in Disk' <<< "$info" | cut -d: -f2 | tr -d ' ')
     new=$(cat "$VENTOY_TOOL/ventoy/version" 2>/dev/null)
@@ -1485,13 +1526,13 @@ ventoy_menu() {
         echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
         read -r -p "📌 Opción (0-5): " option
         case $option in
-            1) ventoy_install ;;
-            2) ventoy_add ;;
-            3) ventoy_manage ;;
-            4) ventoy_persistence ;;
-            5) ventoy_update ;;
+            1) submenu_run ventoy_install ;;
+            2) submenu_run ventoy_add ;;
+            3) submenu_run ventoy_manage ;;
+            4) submenu_run ventoy_persistence ;;
+            5) submenu_run ventoy_update ;;
             *) return 0 ;;
         esac
-        pause
+        menu_pause
     done
 }

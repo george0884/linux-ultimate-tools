@@ -49,7 +49,7 @@ confirm() {
         echo -e "$prompt ${YELLOW}→ no (modo automático)${NC}"
         return 1
     fi
-    # Dentro de una opción del menú principal, 0 vuelve al menú en cualquier pregunta s/n
+    # Dentro de una opción de un menú, 0 vuelve a ese menú en cualquier pregunta s/n
     if [ -n "${MENU_SUBSHELL:-}" ]; then
         echo -e -n "$prompt (s/n, 0 = volver al menú): "
     else
@@ -57,11 +57,31 @@ confirm() {
     fi
     read -r response
     if [ "$response" = 0 ] && [ -n "${MENU_SUBSHELL:-}" ]; then
-        echo -e "${YELLOW}↩ Volviendo al menú principal (lo que ya se hizo queda hecho)${NC}"
+        echo -e "${YELLOW}↩ Volviendo al menú (lo que ya se hizo queda hecho)${NC}"
         sleep 1
-        exit 0
+        exit 2
     fi
     [[ "$response" =~ ^([sSyY]|[sS][iI]|[sS]í|[sS]Í)$ ]]
+}
+#@@ submenu_run
+
+# Corre una opción de un submenú en su propio subshell: si en una pregunta s/n respondes 0, se
+# vuelve a ESE submenú (no al menú principal). Devuelve 2 si se canceló con 0
+submenu_run() {
+    ( MENU_SUBSHELL=1; "$@" )
+    MENU_RC=$?
+    return $MENU_RC
+}
+#@@ menu_pause
+
+# Pausa después de una opción, salvo que se haya cancelado con 0 (no hay nada que leer)
+menu_pause() {
+    if [ "${MENU_RC:-0}" = 2 ]; then
+        MENU_RC=0
+        return 0
+    fi
+    MENU_RC=0
+    pause
 }
 #@@ run
 
@@ -574,14 +594,14 @@ optimize_gpu_menu() {
         read -r -p "📌 Opción (0-4): " gpu_option
 
         case $gpu_option in
-            1) optimize_nvidia ;;
-            2) optimize_amd ;;
-            3) optimize_intel ;;
-            4) auto_detect_gpu ;;
+            1) submenu_run optimize_nvidia ;;
+            2) submenu_run optimize_amd ;;
+            3) submenu_run optimize_intel ;;
+            4) submenu_run auto_detect_gpu ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
         return 0
     done
 }
@@ -770,6 +790,10 @@ ram_status() {
     swapon --show 2>/dev/null | sed 's/^/   /' | grep . || echo "   (ninguno)"
     echo -e "\n   swappiness=$(cat /proc/sys/vm/swappiness) · vfs_cache_pressure=$(cat /proc/sys/vm/vfs_cache_pressure)"
 }
+#@@ disable_zram_auto
+
+# Opción 15 → 5: quita ZRAM y ajusta el swappiness a lo que quede
+disable_zram_auto() { disable_zram && ram_swappiness_auto; }
 #@@ optimize_ram_menu
 
 optimize_ram_menu() {
@@ -793,17 +817,17 @@ optimize_ram_menu() {
         echo -e "\n  ${YELLOW}0)${NC} 🔙 Volver\n"
         read -r -p "📌 Opción (0-7): " option
         case $option in
-            1) apply_ram_tweaks ;;
-            2) create_swapfile ;;
-            3) remove_swapfile ;;
-            4) enable_zram ;;
-            5) disable_zram && ram_swappiness_auto ;;
-            6) swappiness_manual ;;
-            7) ram_status ;;
+            1) submenu_run apply_ram_tweaks ;;
+            2) submenu_run create_swapfile ;;
+            3) submenu_run remove_swapfile ;;
+            4) submenu_run enable_zram ;;
+            5) submenu_run disable_zram_auto ;;
+            6) submenu_run swappiness_manual ;;
+            7) submenu_run ram_status ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
 #@@ tokyo_color_group
@@ -1463,6 +1487,10 @@ restore_panel_launchers() {
     fi
     start_plasmashell
 }
+#@@ restore_all_shortcuts
+
+# Opción 6 → 3
+restore_all_shortcuts() { restore_desktop_shortcuts; restore_panel_launchers; }
 #@@ remove_shortcuts_menu
 
 remove_shortcuts_menu() {
@@ -1488,13 +1516,13 @@ remove_shortcuts_menu() {
         read -r -p "📌 Opción (0-3): " shortcut_option
 
         case $shortcut_option in
-            1) remove_desktop_shortcuts ;;
-            2) remove_panel_launchers ;;
-            3) restore_desktop_shortcuts; restore_panel_launchers ;;
+            1) submenu_run remove_desktop_shortcuts ;;
+            2) submenu_run remove_panel_launchers ;;
+            3) submenu_run restore_all_shortcuts ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
 #@@ dns_provider_field
@@ -1606,6 +1634,26 @@ enable_wifi_powersave() {
     run "No se pudo recargar NetworkManager" sudo systemctl reload NetworkManager \
         && log_success "Ahorro de energía del Wi-Fi restaurado"
 }
+#@@ toggle_bbr
+
+# Opción 16 → 4: activa BBR, o lo desactiva si ya está activo
+toggle_bbr() {
+    if [[ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)" == bbr* ]]; then
+        confirm "${BLUE}BBR ya está activo. ¿Desactivarlo?${NC}" && disable_bbr
+    else
+        enable_bbr
+    fi
+}
+#@@ toggle_wifi_powersave
+
+# Opción 16 → 5: quita el ahorro de energía del Wi-Fi, o lo restaura si ya estaba quitado
+toggle_wifi_powersave() {
+    if [ -f "$NM_WIFI_CONF" ]; then
+        confirm "${BLUE}El ahorro del Wi-Fi ya está desactivado. ¿Restaurarlo?${NC}" && enable_wifi_powersave
+    else
+        disable_wifi_powersave
+    fi
+}
 #@@ network_menu
 
 network_menu() {
@@ -1646,33 +1694,21 @@ network_menu() {
                     continue
                 elif [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#DNS_PROVIDERS[@]} ]; then
                     entry=${DNS_PROVIDERS[$((choice - 1))]}
-                    set_dns "${entry%%|*}"
+                    submenu_run set_dns "${entry%%|*}"
                 else
                     log_error "Opción inválida"
                 fi
                 ;;
-            2) set_fastest_dns ;;
-            3) reset_dns ;;
-            4)
-                if [[ "$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)" == bbr* ]]; then
-                    confirm "${BLUE}BBR ya está activo. ¿Desactivarlo?${NC}" && disable_bbr
-                else
-                    enable_bbr
-                fi
-                ;;
-            5)
-                if [ -f "$NM_WIFI_CONF" ]; then
-                    confirm "${BLUE}El ahorro del Wi-Fi ya está desactivado. ¿Restaurarlo?${NC}" && enable_wifi_powersave
-                else
-                    disable_wifi_powersave
-                fi
-                ;;
-            6) install_recommended_drivers ;;
-            7) update_firmware ;;
+            2) submenu_run set_fastest_dns ;;
+            3) submenu_run reset_dns ;;
+            4) submenu_run toggle_bbr ;;
+            5) submenu_run toggle_wifi_powersave ;;
+            6) submenu_run install_recommended_drivers ;;
+            7) submenu_run update_firmware ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
 #@@ is_laptop
@@ -1883,6 +1919,34 @@ remove_proton_ge() {
     rm -f "$PROTON_GE_LIST"
     log_success "Proton-GE quitado"
 }
+#@@ install_tlp_confirm
+
+# Opción 17 → 4
+install_tlp_confirm() { confirm "${YELLOW}¿Instalar TLP?${NC}" && install_tlp; }
+#@@ toggle_indexer
+
+# Opción 17 → 5: desactiva el indexador de archivos, o lo vuelve a activar
+toggle_indexer() {
+    if indexer_disabled; then
+        enable_indexer
+    else
+        disable_indexer
+    fi
+}
+#@@ install_gaming_set
+
+# Opción 17 → 6: GameMode y MangoHud, y si quieres Steam y Proton-GE
+install_gaming_set() {
+    install_gaming_tools
+    if steam_installed; then
+        enable_steam_play
+    elif has_desktop && confirm "${YELLOW}¿Instalar Steam (incluye Proton para juegos de Windows)?${NC}"; then
+        install_steam
+    fi
+    if has_desktop && confirm "${YELLOW}¿Instalar Proton-GE (versión de la comunidad, más compatible)?${NC}"; then
+        install_proton_ge
+    fi
+}
 #@@ power_menu
 
 power_menu() {
@@ -1908,33 +1972,16 @@ power_menu() {
         read -r -p "📌 Opción (0-6): " power_option
 
         case $power_option in
-            1) set_power_profile performance ;;
-            2) set_power_profile balanced ;;
-            3) set_power_profile power-saver ;;
-            4) confirm "${YELLOW}¿Instalar TLP?${NC}" && install_tlp ;;
-            5)
-                local cmd
-                if indexer_disabled; then
-                    enable_indexer
-                else
-                    disable_indexer
-                fi
-                ;;
-            6)
-                install_gaming_tools
-                if steam_installed; then
-                    enable_steam_play
-                elif has_desktop && confirm "${YELLOW}¿Instalar Steam (incluye Proton para juegos de Windows)?${NC}"; then
-                    install_steam
-                fi
-                if has_desktop && confirm "${YELLOW}¿Instalar Proton-GE (versión de la comunidad, más compatible)?${NC}"; then
-                    install_proton_ge
-                fi
-                ;;
+            1) submenu_run set_power_profile performance ;;
+            2) submenu_run set_power_profile balanced ;;
+            3) submenu_run set_power_profile power-saver ;;
+            4) submenu_run install_tlp_confirm ;;
+            5) submenu_run toggle_indexer ;;
+            6) submenu_run install_gaming_set ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
 #@@ sysctl_default

@@ -421,8 +421,9 @@ solo muestra las apps instaladas, y la de software marca las que ya tienes.
 ---
 
 En todos los menús y submenús, **0** vuelve al menú anterior (en el principal, sale del script). En las preguntas
-**s/n** también: **0** vuelve al menú principal en ese momento, sin seguir con las demás preguntas (lo que ya se
-hizo queda hecho).
+**s/n** también: **0** vuelve **al menú donde elegiste esa opción** (por ejemplo, de una descarga en 20 → Ventoy →
+Agregar, vuelve a "Agregar"), sin seguir con las demás preguntas; lo que ya se hizo queda hecho. Después de volver
+con 0 no se pide "Presiona Enter".
 
 ---
 
