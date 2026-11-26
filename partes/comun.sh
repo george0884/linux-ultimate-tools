@@ -335,13 +335,20 @@ checklist_tool() {
 # deja lo elegido en CHOSEN. Devuelve 1 si se cancela.
 # Con CHECKLIST_NOTAGS=true no se muestra la columna de nombres internos.
 # Si no hay dialog ni whiptail (o no es una terminal interactiva) se elige escribiendo números.
+# En pantallas angostas (un celular en vertical, por ejemplo con Termux) también se usan números:
+# no hacen falta flechas ni barra espaciadora. LISTAS=numeros o LISTAS=casillas lo fuerza.
 checklist_select() {
     local title="$1" text="$2"
     shift 2
-    local entries=("$@") args=() entry name desc status i=0 input num tool="" has_sys=false
+    local entries=("$@") args=() entry name desc status i=0 input num tool="" has_sys=false width
     CHOSEN=()
+    width=$(tput cols 2>/dev/null || echo 80)
 
-    [ -t 0 ] && [ -t 1 ] && tool=$(checklist_tool)
+    if [ -t 0 ] && [ -t 1 ] && [ "${LISTAS:-}" != numeros ]; then
+        if [ "$width" -ge 70 ] || [ "${LISTAS:-}" = casillas ]; then
+            tool=$(checklist_tool)
+        fi
+    fi
     if [ -n "$tool" ]; then
         local cols lines w h lh tagw=0 max_desc out
         cols=$(tput cols 2>/dev/null || echo 80)
@@ -390,7 +397,8 @@ checklist_select() {
             rc_file=$(mktemp)
             printf '%s\n' "$DIALOG_RC" > "$rc_file"
             $has_sys && text="$text\n\Z1⚠ SISTEMA\Zn = herramienta del sistema o de tu distribución: quítala solo si sabes que no la usas"
-            out=$(DIALOGRC="${DIALOGRC:-$rc_file}" NCURSES_NO_UTF8_ACS=1 dialog --colors --title " $title " --ok-label "Aceptar" --cancel-label "Cancelar" \
+            # --no-mouse: con el ratón activado, en Termux tocar la pantalla ya no abre el teclado
+            out=$(DIALOGRC="${DIALOGRC:-$rc_file}" NCURSES_NO_UTF8_ACS=1 dialog --no-mouse --colors --title " $title " --ok-label "Aceptar" --cancel-label "Cancelar" \
                 --separate-output ${CHECKLIST_NOTAGS:+--no-tags} \
                 --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
                 0 0 0 "${args[@]}" 3>&1 1>&2 2>&3)
@@ -415,7 +423,12 @@ checklist_select() {
         status=" "
         [[ "$entry" == *"|ON" ]] && { status="x"; entry=${entry%|ON}; }
         [[ "${entry#*|}" == SYS::* ]] && entry="${entry%%|*}|⚠ SISTEMA: ${entry#*|SYS::}"
-        if [ -n "$CHECKLIST_NOTAGS" ]; then
+        if [ "$width" -lt 70 ]; then
+            # Pantalla angosta: solo la descripción, recortada para que no se parta en dos renglones
+            desc=${entry#*|}
+            [ ${#desc} -gt $((width - 12)) ] && desc="${desc:0:$((width - 13))}…"
+            printf "${CYAN}%2s)${NC} [%s] %s\n" "$i" "$status" "$desc"
+        elif [ -n "$CHECKLIST_NOTAGS" ]; then
             printf "  ${CYAN}[%2s]${NC} [%s] %s\n" "$i" "$status" "${entry#*|}"
         else
             printf "  ${CYAN}[%2s]${NC} [%s] %-22s - %s\n" "$i" "$status" "${entry%%|*}" "${entry#*|}"

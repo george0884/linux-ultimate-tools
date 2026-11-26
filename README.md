@@ -390,6 +390,10 @@ solo muestra las apps instaladas, y la de software marca las que ya tienes.
 - El recuadro se ajusta al ancho de la terminal y las descripciones largas se recortan con "…": nada se sale del
   borde.
 - Si no hay ninguno de los dos, o no es una terminal interactiva, se elige escribiendo números (0 o Enter = volver).
+- **En el celular** (por ejemplo, conectado por SSH desde **Termux**), con la pantalla angosta (menos de 70
+  columnas) la lista es **con números**: no hacen falta flechas ni barra espaciadora. Con la pantalla ancha se usa
+  `dialog`, sin ratón, para que tocar la pantalla siga abriendo el teclado de Termux. Para elegir siempre uno:
+  `LISTAS=numeros ./ubuntu-ultimate-tools.sh` o `LISTAS=casillas ./ubuntu-ultimate-tools.sh`.
 
 ---
 
