@@ -8628,30 +8628,64 @@ boot_only_menu() {
 
 # ============================================================
 # CREAR USB DE INSTALACIÓN (con dd), fácil y a prueba de errores
-# - La ISO: una que ya tengas (la busca sola) o la descarga oficial con verificación SHA-256
+# - La ISO: una que ya tengas (la busca sola) o la descarga oficial, siempre verificada con
+#   la suma (SHA-256 o SHA-512) que publica la propia distribución: sin suma, no se descarga
 # - El pendrive: solo discos USB (o tarjetas SD), nunca el disco del sistema; si no hay,
 #   espera a que lo conectes y lo detecta solo
 # - Muestra qué tiene el pendrive y pide escribir BORRAR antes de grabar
 # - Graba con dd, comprueba que se copió bien y lo expulsa
 # ============================================================
 
-# Distribuciones que se pueden descargar: clave|nombre|tipo|dato
-#   tipo ubuntu: dato = "carpeta|patrón" (la última LTS se detecta sola)
-#   tipo lista:  dato = "url de la carpeta|archivo de sumas|patrón del nombre"
-#   tipo fijo:   dato = "url de la carpeta|nombre de la ISO|archivo con su suma" (KDE neon)
+# Distribuciones que se pueden descargar: clave|nombre|tipo|datos del tipo
+# (las líneas que empiezan con "#" son los títulos de cada grupo en el menú)
+#   ubuntu:  carpeta|patrón (la última LTS se detecta sola)
+#   lista:   url de la carpeta|archivo de sumas|patrón
+#   fijo:    url de la carpeta|nombre de la ISO|archivo con su suma
+#   carpeta: url|patrón de la subcarpeta de la versión (- = ninguna)|patrón|archivo de sumas,
+#            o ".extensión" si cada ISO tiene su propio archivo de suma al lado
+#   sf:      proyecto de SourceForge|carpeta|patrón|extensión del archivo de suma de cada ISO
+#   pop:     variante (intel o nvidia)|patrón (API oficial de System76)
+#   fedora:  subvariante|patrón (releases.json oficial de Fedora)
+#   zorin:   edición|patrón (sumas de la página oficial de ayuda de Zorin)
 USB_DISTROS=(
+    "#Ubuntu y sus derivadas"
     "ubuntu|Ubuntu (GNOME), última LTS|ubuntu|releases|ubuntu-[0-9.]+-desktop-amd64\\.iso"
     "kubuntu|Kubuntu (KDE Plasma), última LTS|ubuntu|kubuntu|kubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "xubuntu|Xubuntu (Xfce, liviano), última LTS|ubuntu|xubuntu|xubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "lubuntu|Lubuntu (LXQt, el más liviano), última LTS|ubuntu|lubuntu|lubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "ubuntu-mate|Ubuntu MATE (escritorio clásico), última LTS|ubuntu|ubuntu-mate|ubuntu-mate-[0-9.]+-desktop-amd64\\.iso"
+    "ubuntu-budgie|Ubuntu Budgie (moderno y sencillo), última LTS|ubuntu|ubuntu-budgie|ubuntu-budgie-[0-9.]+-desktop-amd64\\.iso"
+    "server|Ubuntu Server, última LTS|ubuntu|releases|ubuntu-[0-9.]+-live-server-amd64\\.iso"
     "kdeneon|KDE neon User (el KDE Plasma más nuevo y estable, sobre Ubuntu LTS)|fijo|https://files.kde.org/neon/images/user/current|neon-user-current.iso|neon-user-current.iso.sha256sum"
     "kdeneon-testing|KDE neon Testing (Plasma en prueba, antes de salir: para probar)|fijo|https://files.kde.org/neon/images/testing/current|neon-testing-current.iso|neon-testing-current.iso.sha256sum"
     "kdeneon-unstable|KDE neon Unstable (lo último en desarrollo: puede fallar)|fijo|https://files.kde.org/neon/images/unstable/current|neon-unstable-current.iso|neon-unstable-current.iso.sha256sum"
-    "xubuntu|Xubuntu (Xfce, liviano), última LTS|ubuntu|xubuntu|xubuntu-[0-9.]+-desktop-amd64\\.iso"
-    "lubuntu|Lubuntu (LXQt, el más liviano), última LTS|ubuntu|lubuntu|lubuntu-[0-9.]+-desktop-amd64\\.iso"
-    "server|Ubuntu Server, última LTS|ubuntu|releases|ubuntu-[0-9.]+-live-server-amd64\\.iso"
-    "debian-kde|Debian con KDE Plasma (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-kde\\.iso"
-    "debian-gnome|Debian con GNOME (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-gnome\\.iso"
-    "debian-net|Debian netinst (instalador mínimo, baja el resto de internet)|lista|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd|SHA256SUMS|debian-[0-9.]+-amd64-netinst\\.iso"
+    "mint|Linux Mint Cinnamon (la más fácil si vienes de Windows)|carpeta|https://mirrors.kernel.org/linuxmint/stable|[0-9.]+|linuxmint-[0-9.]+-cinnamon-64bit\\.iso|sha256sum.txt"
+    "mint-xfce|Linux Mint Xfce (liviano)|carpeta|https://mirrors.kernel.org/linuxmint/stable|[0-9.]+|linuxmint-[0-9.]+-xfce-64bit\\.iso|sha256sum.txt"
+    "mint-mate|Linux Mint MATE (clásico)|carpeta|https://mirrors.kernel.org/linuxmint/stable|[0-9.]+|linuxmint-[0-9.]+-mate-64bit\\.iso|sha256sum.txt"
+    "zorin|Zorin OS Core (se parece a Windows o macOS)|zorin|Core|Zorin-OS-[0-9.]+-Core-64-bit(-r[0-9]+)?\\.iso"
+    "pop|Pop!_OS (de System76, escritorio COSMIC)|pop|intel|pop-os_[0-9.]+_amd64_intel_[0-9]+\\.iso"
+    "pop-nvidia|Pop!_OS para placas NVIDIA (trae el driver)|pop|nvidia|pop-os_[0-9.]+_amd64_nvidia_[0-9]+\\.iso"
+    "#Debian y sus derivadas"
+    "debian-kde|Debian estable con KDE Plasma (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-kde\\.iso"
+    "debian-gnome|Debian estable con GNOME (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-gnome\\.iso"
+    "debian-net|Debian estable netinst (instalador mínimo, baja el resto de internet)|lista|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd|SHA256SUMS|debian-[0-9.]+-amd64-netinst\\.iso"
+    "debian-testing-kde|Debian testing con KDE Plasma (live: la próxima versión, se arma cada semana)|lista|https://cdimage.debian.org/cdimage/weekly-live-builds/amd64/iso-hybrid|SHA256SUMS|debian-live-testing-amd64-kde\\.iso"
+    "debian-testing-net|Debian testing netinst (la próxima versión, se arma cada semana)|lista|https://cdimage.debian.org/cdimage/weekly-builds/amd64/iso-cd|SHA256SUMS|debian-testing-amd64-netinst\\.iso"
+    "lmde|LMDE: Linux Mint sobre Debian (Cinnamon)|lista|https://mirrors.kernel.org/linuxmint/debian|sha256sum.txt|lmde-[0-9.]+-cinnamon-64bit\\.iso"
+    "mx|MX Linux Xfce (liviano y muy estable)|sf|mx-linux|Final/Xfce|MX-[0-9.]+_Xfce_x64\\.iso|sha256"
+    "mx-kde|MX Linux KDE Plasma|sf|mx-linux|Final/KDE|MX-[0-9.]+_KDE_x64\\.iso|sha256"
+    "kali|Kali Linux (seguridad y pruebas de intrusión, instalador)|lista|https://cdimage.kali.org/current|SHA256SUMS|kali-linux-[0-9.]+[a-z]?-installer-amd64\\.iso"
+    "#Arch y sus derivadas"
     "arch|Arch Linux (instalación por terminal)|lista|https://geo.mirror.pkgbuild.com/iso/latest|sha256sums.txt|archlinux-[0-9.]+-x86_64\\.iso"
+    "manjaro-kde|Manjaro KDE Plasma (Arch fácil, con instalador gráfico)|sf|manjarolinux|kde|manjaro-kde-[0-9.]+-[0-9]+-linux[0-9]+\\.iso|sha256"
+    "manjaro-gnome|Manjaro GNOME|sf|manjarolinux|gnome|manjaro-gnome-[0-9.]+-[0-9]+-linux[0-9]+\\.iso|sha256"
+    "manjaro-xfce|Manjaro Xfce (liviano)|sf|manjarolinux|xfce|manjaro-xfce-[0-9.]+-[0-9]+-linux[0-9]+\\.iso|sha256"
+    "cachyos|CachyOS (Arch optimizado para velocidad, instalador gráfico)|sf|cachyos-arch|gui-installer/desktop|cachyos-desktop-linux-[0-9]+\\.iso|sha256"
+    "endeavouros|EndeavourOS (Arch casi puro, con instalador gráfico)|carpeta|https://mirror.alpix.eu/endeavouros/iso|-|EndeavourOS_[A-Za-z_-]+-[0-9.]+\\.iso|.sha512sum"
+    "#Otras"
+    "fedora|Fedora Workstation (GNOME)|fedora|Workstation|Fedora-Workstation-Live-.+\\.iso"
+    "fedora-kde|Fedora KDE Plasma|fedora|KDE|Fedora-KDE-.+\\.iso"
+    "opensuse|openSUSE Tumbleweed (siempre al día)|fijo|https://download.opensuse.org/tumbleweed/iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso.sha256"
 )
 
 usb_download_dir() {
@@ -8670,63 +8704,178 @@ usb_pick_from_sums() {
         | sort -k2,2V | tail -1
 }
 
+# Primera suma SHA-256 o SHA-512 de un archivo de suma (lo lee por la entrada)
+usb_first_hash() {
+    grep -oiE '^[0-9a-f]+' | awk 'length($0) == 64 || length($0) == 128 {print; exit}'
+}
+
+# Suma de un archivo: SHA-512 si la oficial tiene 128 caracteres, si no SHA-256
+usb_hash_of() {
+    if [ "${2:-64}" -eq 128 ]; then sha512sum "$1"; else sha256sum "$1"; fi | awk '{print $1}'
+}
+
+# Nombres de los enlaces de una página índice de un servidor (las carpetas sin la "/" final)
+usb_index_names() {
+    curl -sSfL -m 30 "$1/" 2>/dev/null | grep -oiE 'href="[^"?#]+"' \
+        | sed -E 's/^href="//I; s/"$//; s#/$##; s#.*/##'
+}
+
+# De los nombres o rutas que llegan por la entrada, los que coinciden con el patrón (en su
+# último tramo), ordenados de la versión más vieja a la más nueva según los números del nombre
+usb_sorted() {
+    local re="^$1\$" n base
+    sort -u | while IFS= read -r n; do
+        base=${n##*/}
+        [[ "$base" =~ $re ]] && printf '%s\t%s\n' "$(sed 's/[^0-9.]//g' <<< "$base")" "$n"
+    done | sort -t$'\t' -k1,1V | cut -f2
+}
+
 # Deja en USB_ISO_URL, USB_ISO_FILE y USB_ISO_SHA la descarga elegida
 usb_resolve_download() {
-    local entry="$1" key name type a b c dist sums base picked
-    IFS='|' read -r key name type a b c <<< "$entry"
-    if [ "$type" = ubuntu ]; then
-        dist=$(curl -sSfL -m 30 https://changelogs.ubuntu.com/meta-release-lts | awk '/^Dist:/ {d = $2} END {print d}')
-        [ -n "$dist" ] || { log_error "No se pudo saber cuál es la última versión LTS de Ubuntu"; return 1; }
-        if [ "$a" = releases ]; then
-            base="https://releases.ubuntu.com/$dist"
-        else
-            base="https://cdimage.ubuntu.com/$a/releases/$dist/release"
-        fi
-        sums=$(curl -sSfL -m 30 "$base/SHA256SUMS") || { log_error "No se pudo leer la lista de $name"; return 1; }
-        picked=$(usb_pick_from_sums "$sums" "$b")
-    elif [ "$type" = fijo ]; then
-        # Una sola ISO con su archivo de suma (que puede nombrarla con la fecha en vez de "current")
-        base="$a"
-        sums=$(curl -sSfL -m 30 "$base/$c" 2>/dev/null) || sums=$(curl -sSfL -m 30 "$base/SHA256SUMS" 2>/dev/null)
-        picked=$(grep -oiE '^[0-9a-f]{64}' <<< "$sums" | head -1)
-        if [ -z "$picked" ]; then
-            log_error "$name no publicó la suma de su ISO: no se descarga sin poder comprobarla"
-            return 1
-        fi
-        picked="$picked $b"
-    else
-        base="$a"
-        sums=$(curl -sSfL -m 30 "$base/$b") || { log_error "No se pudo leer la lista de $name"; return 1; }
-        picked=$(usb_pick_from_sums "$sums" "$c")
+    local entry="$1" key name type a b c d dist sums base="" picked="" url="" dirs=() iso rel json ver h
+    local tokens=() i
+    IFS='|' read -r key name type a b c d <<< "$entry"
+    case $type in
+        ubuntu)
+            # Las LTS de la más nueva a la más vieja: si un sabor todavía no sacó (o no saca)
+            # la última LTS, se usa la anterior
+            mapfile -t dirs < <(curl -sSfL -m 30 https://changelogs.ubuntu.com/meta-release-lts 2>/dev/null \
+                | awk '/^Dist:/ {print $2}' | tac | head -2)
+            [ ${#dirs[@]} -gt 0 ] || { log_error "No se pudo saber cuál es la última versión LTS de Ubuntu"; return 1; }
+            for dist in "${dirs[@]}"; do
+                if [ "$a" = releases ]; then
+                    base="https://releases.ubuntu.com/$dist"
+                else
+                    base="https://cdimage.ubuntu.com/$a/releases/$dist/release"
+                fi
+                sums=$(curl -sSfL -m 30 "$base/SHA256SUMS" 2>/dev/null) || continue
+                picked=$(usb_pick_from_sums "$sums" "$b")
+                [ -n "$picked" ] && break
+            done ;;
+        fijo)
+            # Una sola ISO con su archivo de suma (que puede nombrarla con la fecha en vez de "current")
+            base="$a"
+            sums=$(curl -sSfL -m 30 "$base/$c" 2>/dev/null) || sums=$(curl -sSfL -m 30 "$base/SHA256SUMS" 2>/dev/null)
+            h=$(usb_first_hash <<< "$sums")
+            [ -n "$h" ] && picked="$h $b" ;;
+        lista)
+            base="$a"
+            sums=$(curl -sSfL -m 30 "$base/$b") || { log_error "No se pudo leer la lista de $name"; return 1; }
+            picked=$(usb_pick_from_sums "$sums" "$c") ;;
+        carpeta)
+            # La subcarpeta de la versión más nueva (si recién salió y aún no tiene la lista
+            # de sumas, se prueba con la anterior)
+            if [ "$b" = - ]; then
+                dirs=("$a")
+            else
+                mapfile -t dirs < <(usb_index_names "$a" | usb_sorted "$b" | tail -3 | tac | sed "s#^#$a/#")
+            fi
+            for base in "${dirs[@]}"; do
+                if [[ "$d" == .* ]]; then
+                    iso=$(usb_index_names "$base" | usb_sorted "$c" | tail -1)
+                    [ -n "$iso" ] || continue
+                    h=$(curl -sSfL -m 30 "$base/$iso$d" 2>/dev/null | usb_first_hash)
+                    [ -n "$h" ] && picked="$h $iso"
+                else
+                    sums=$(curl -sSfL -m 30 "$base/$d" 2>/dev/null) || continue
+                    picked=$(usb_pick_from_sums "$sums" "$c")
+                fi
+                [ -n "$picked" ] && break
+            done ;;
+        sf)
+            # La lista de archivos de SourceForge (RSS) trae también las subcarpetas de versión
+            rel=$(curl -sSfL -m 30 "https://sourceforge.net/projects/$a/rss?path=/$b&limit=100" 2>/dev/null \
+                | grep -oE "https://sourceforge\\.net/projects/$a/files/[^<\"]+/download" \
+                | sed -E "s#^https://sourceforge\\.net/projects/$a/files/##; s#/download\$##" \
+                | usb_sorted "$c" | tail -1)
+            if [ -n "$rel" ]; then
+                base="https://downloads.sourceforge.net/project/$a/${rel%/*}"
+                iso=${rel##*/}
+                h=$(curl -sSfL -m 30 "$base/$iso.$d" 2>/dev/null | usb_first_hash)
+                [ -n "$h" ] && picked="$h $iso"
+            fi ;;
+        pop)
+            # La API de System76 da la ISO y su suma; se prueba de la versión más nueva a la más vieja
+            for ver in 26.04 24.04 22.04; do
+                json=$(curl -sSfL -m 30 "https://api.pop-os.org/builds/$ver/$a" 2>/dev/null) || continue
+                url=$(grep -oE '"url" *: *"[^"]+\.iso"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | head -1)
+                h=$(grep -oE '"sha_sum" *: *"[0-9a-fA-F]+"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | usb_first_hash)
+                if [ -n "$url" ] && [ -n "$h" ]; then
+                    picked="$h ${url##*/}"
+                    break
+                fi
+                url=""
+            done ;;
+        fedora)
+            # releases.json (el que usa Fedora Media Writer): la ISO x86_64 de la versión estable más nueva
+            json=$(curl -sSfL -m 60 https://fedoraproject.org/releases.json 2>/dev/null)
+            picked=$(tr -d '\n' <<< "$json" | sed 's/}[[:space:]]*,[[:space:]]*{/}\n{/g' \
+                | grep -E '"arch" *: *"x86_64"' | grep -E "\"subvariant\" *: *\"$a\"" \
+                | while IFS= read -r i; do
+                    ver=$(grep -oE '"version" *: *"[^"]+"' <<< "$i" | sed -E 's/.*"([^"]+)"$/\1/')
+                    url=$(grep -oE '"link" *: *"[^"]+\.iso"' <<< "$i" | sed -E 's/.*"([^"]+)"$/\1/')
+                    h=$(grep -oE '"sha256" *: *"[0-9a-fA-F]{64}"' <<< "$i" | sed -E 's/.*"([^"]+)"$/\1/')
+                    # Solo versiones estables (las Beta dicen "43 Beta")
+                    [[ "$ver" =~ ^[0-9]+$ ]] && [ -n "$url" ] && [ -n "$h" ] && printf '%s %s %s\n' "$ver" "$h" "$url"
+                done | sort -k1,1n | tail -1)
+            if [ -n "$picked" ]; then
+                url=${picked##* }
+                picked="$(cut -d' ' -f2 <<< "$picked") ${url##*/}"
+            fi ;;
+        zorin)
+            # Zorin publica las sumas en su página de ayuda, junto al nombre de cada ISO
+            mapfile -t tokens < <(curl -sSfL -m 30 https://help.zorin.com/docs/getting-started/check-the-integrity-of-your-copy-of-zorin-os/ 2>/dev/null \
+                | sed 's/<[^>]*>/\n/g' | grep -oiE "Zorin-OS-[0-9.]+-$a-64-bit(-r[0-9]+)?\\.iso|\\b[0-9a-f]{64}\\b")
+            iso=$(printf '%s\n' "${tokens[@]}" | usb_sorted "$b" | tail -1)
+            for i in "${!tokens[@]}"; do
+                [ "${tokens[$i]}" = "$iso" ] || continue
+                if [[ "${tokens[$((i + 1))]:-}" =~ ^[0-9a-fA-F]{64}$ ]]; then h=${tokens[$((i + 1))]}
+                elif [ "$i" -gt 0 ] && [[ "${tokens[$((i - 1))]}" =~ ^[0-9a-fA-F]{64}$ ]]; then h=${tokens[$((i - 1))]}
+                fi
+                break
+            done
+            if [ -n "$iso" ] && [ -n "$h" ]; then
+                picked="$h $iso"
+                # Espejo oficial de kernel.org, carpeta de la versión principal (17, 18...)
+                url="https://mirrors.edge.kernel.org/zorinos-isos/$(cut -d. -f1 <<< "${iso#Zorin-OS-}" | cut -d- -f1)/$iso"
+            fi ;;
+    esac
+    if [ -z "$picked" ]; then
+        log_error "No se encontró la ISO de $name con su suma oficial: no se descarga sin poder comprobarla"
+        return 1
     fi
-    [ -n "$picked" ] || { log_error "No se encontró la ISO de $name en $base"; return 1; }
     USB_ISO_SHA=${picked%% *}
     USB_ISO_FILE=${picked#* }
-    USB_ISO_URL="$base/$USB_ISO_FILE"
+    USB_ISO_URL=${url:-$base/$USB_ISO_FILE}
 }
 
 # Descarga (se puede retomar si se corta) y verifica; deja la ruta en USB_ISO
 usb_download_iso() {
-    local i entry name choice dir size_mb free_mb
-    echo -e "\n${CYAN}💿 ¿Qué sistema quieres en el pendrive?${NC} (descarga oficial, se verifica sola)\n"
+    local i entry name choice dir size_mb free_mb shown=()
+    echo -e "\n${CYAN}💿 ¿Qué sistema quieres en el pendrive?${NC} (descarga oficial, se verifica sola)"
     i=1
     for entry in "${USB_DISTROS[@]}"; do
+        if [[ "$entry" == "#"* ]]; then
+            echo -e "\n  ${YELLOW}${BOLD}${entry#\#}${NC}"
+            continue
+        fi
         IFS='|' read -r _ name _ <<< "$entry"
-        printf "  ${CYAN}%d)${NC} %s\n" "$i" "$name"
+        printf "  ${CYAN}%2d)${NC} %s\n" "$i" "$name"
+        shown+=("$entry")
         i=$((i + 1))
     done
-    echo -e "  ${CYAN}0)${NC} Volver"
+    echo -e "\n  ${CYAN} 0)${NC} Volver"
     read -r -p "🔢 Opción: " choice
-    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#USB_DISTROS[@]} ] || return 1
-    entry=${USB_DISTROS[$((choice - 1))]}
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#shown[@]} ] || return 1
+    entry=${shown[$((choice - 1))]}
     command -v curl &> /dev/null || { log_error "Falta curl para descargar"; return 1; }
-    echo -e "${BLUE}🔍 Buscando la última versión...${NC}"
+    echo -e "${BLUE}🔍 Buscando la última versión y su suma oficial...${NC}"
     usb_resolve_download "$entry" || return 1
     dir=$(usb_download_dir)
     USB_ISO="$dir/$USB_ISO_FILE"
     echo -e "   ${GREEN}$USB_ISO_FILE${NC}\n   desde $USB_ISO_URL\n   se guarda en $dir"
     # Si ya está bajada y entera, no se vuelve a bajar
-    if [ -f "$USB_ISO" ] && [ "$(sha256sum "$USB_ISO" | awk '{print $1}')" = "$USB_ISO_SHA" ]; then
+    if [ -f "$USB_ISO" ] && [ "$(usb_hash_of "$USB_ISO" ${#USB_ISO_SHA})" = "${USB_ISO_SHA,,}" ]; then
         log_success "Ya la tenías descargada y está entera"
         return 0
     fi
@@ -8742,8 +8891,8 @@ usb_download_iso() {
         log_error "La descarga se cortó: vuelve a elegirla para continuar"
         return 1
     fi
-    echo -e "${BLUE}🔐 Comprobando que llegó entera (SHA-256)...${NC}"
-    if [ "$(sha256sum "$USB_ISO" | awk '{print $1}')" != "$USB_ISO_SHA" ]; then
+    echo -e "${BLUE}🔐 Comprobando que llegó entera ($([ ${#USB_ISO_SHA} -eq 128 ] && echo SHA-512 || echo SHA-256))...${NC}"
+    if [ "$(usb_hash_of "$USB_ISO" ${#USB_ISO_SHA})" != "${USB_ISO_SHA,,}" ]; then
         log_error "La ISO no coincide con la suma oficial: está dañada, no se usa (se borra)"
         rm -f -- "$USB_ISO"
         return 1
@@ -8785,16 +8934,27 @@ usb_pick_local_iso() {
     USB_ISO_SHA=""
 }
 
-# ¿Se puede grabar con dd? Las ISO de Linux son "híbridas" (arrancan desde un USB);
-# las de Windows no (necesitan otra herramienta, por ejemplo WoeUSB)
+# Patrón del nombre de las ISO de una distribución de la lista
+usb_entry_pattern() {
+    local key dname type a b c d
+    IFS='|' read -r key dname type a b c d <<< "$1"
+    case $type in
+        lista|carpeta) echo "$c" ;;
+        sf) echo "$c" ;;
+        # fijo: neon-user-current.iso también reconoce las fechadas (neon-user-20261101-0700.iso)
+        fijo) sed -e 's/[.]/\\./g' -e 's/[Cc]urrent/.*/' <<< "$b" ;;
+        *) echo "$b" ;;
+    esac
+}
+
 # Suma oficial de una ISO que ya tienes, si es de una distribución de la lista (vacío si no se encuentra)
 usb_official_sum_for() {
-    local entry="$1" name="$2" key dname type a b c ver major sums base url
-    IFS='|' read -r key dname type a b c <<< "$entry"
+    local entry="$1" name="$2" key dname type a b c d ver major sums base url
+    IFS='|' read -r key dname type a b c d <<< "$entry"
     case $type in
         ubuntu)
             # ubuntu-24.04.3-desktop-amd64.iso → carpeta de esa versión (o de la serie, o de old-releases)
-            ver=$(sed -E 's/^[a-z]+-([0-9]+\.[0-9]+(\.[0-9]+)*)-.*/\1/' <<< "$name")
+            ver=$(sed -E 's/^[a-z-]+-([0-9]+\.[0-9]+(\.[0-9]+)*)-.*/\1/' <<< "$name")
             major=$(cut -d. -f1,2 <<< "$ver")
             for base in "$ver" "$major"; do
                 if [ "$a" = releases ]; then
@@ -8812,7 +8972,20 @@ usb_official_sum_for() {
             sums=$(curl -sSfL -m 30 "$a/$c" 2>/dev/null) || return 1
             usb_sum_lookup "$sums" "$name" && return 0
             # Bajada con el nombre "current": su suma está en el archivo con el nombre fechado
-            [ "$name" = "$b" ] && grep -oiE '^[0-9a-f]{64}' <<< "$sums" | head -1 | grep . && return 0 ;;
+            [ "$name" = "$b" ] && usb_first_hash <<< "$sums" | grep . && return 0 ;;
+        sf)
+            # Cualquier versión que siga publicada: su archivo de suma está al lado
+            url=$(curl -sSfL -m 30 "https://sourceforge.net/projects/$a/rss?path=/$b&limit=100" 2>/dev/null \
+                | grep -oE "https://sourceforge\\.net/projects/$a/files/[^<\"]+/$name/download" | head -1)
+            if [ -n "$url" ]; then
+                url=${url#https://sourceforge.net/projects/$a/files/}
+                curl -sSfL -m 30 "https://downloads.sourceforge.net/project/$a/${url%/download}.$d" 2>/dev/null \
+                    | usb_first_hash | grep . && return 0
+            fi ;;
+        *)
+            # El resto: solo si es la versión que se descargaría hoy
+            ( usb_resolve_download "$entry" > /dev/null 2>&1 && [ "$USB_ISO_FILE" = "$name" ] && echo "$USB_ISO_SHA" ) \
+                && return 0 ;;
     esac
     return 1
 }
@@ -8828,38 +9001,35 @@ usb_sum_lookup() {
 # ¿Coincide la ISO que ya tienes con su suma oficial? Busca la suma junto a la ISO, en la lista
 # oficial de su distribución o te deja pegarla; si no coincide, no se graba
 usb_verify_local_iso() {
-    local iso="$1" dir name got expected="" src="" f entry pattern key dname type a b c answer
+    local iso="$1" dir name got expected="" src="" f entry pattern key dname answer
     dir=$(dirname "$iso")
     name=$(basename "$iso")
-    echo -e "\n${BLUE}🔐 Comprobando que la ISO esté entera (calculando su SHA-256, puede tardar un minuto)...${NC}"
-    got=$(sha256sum "$iso" | awk '{print $1}')
     # 1. Un archivo de sumas al lado de la ISO
-    for f in "$dir/$name.sha256" "$dir/$name.sha256sum" "$dir/SHA256SUMS" "$dir/sha256sums.txt" "$dir/SHA256SUMS.txt"; do
+    for f in "$dir/$name.sha256" "$dir/$name.sha256sum" "$dir/$name.sha512" "$dir/$name.sha512sum" \
+             "$dir/SHA256SUMS" "$dir/sha256sums.txt" "$dir/SHA256SUMS.txt" "$dir/sha256sum.txt"; do
         [ -f "$f" ] || continue
         expected=$(usb_sum_lookup "$(cat "$f")" "$name")
-        # Los .sha256 de un solo archivo a veces traen solo el hash
-        [ -z "$expected" ] && [[ "$f" == *"$name".sha256* ]] && expected=$(grep -oiE '^[0-9a-f]{64}' "$f" | head -1)
+        # Los archivos de un solo archivo a veces traen solo el hash
+        [ -z "$expected" ] && [[ "$f" == *"$name".sha* ]] && expected=$(usb_first_hash < "$f")
         [ -n "$expected" ] && { src="$(basename "$f"), junto a la ISO"; break; }
     done
     # 2. La lista oficial, si es de una distribución que el script conoce
     if [ -z "$expected" ]; then
         for entry in "${USB_DISTROS[@]}"; do
-            IFS='|' read -r key dname type a b c <<< "$entry"
-            case $type in
-                ubuntu) pattern=$b ;;
-                lista) pattern=$c ;;
-                # fijo: neon-user-current.iso también reconoce las fechadas (neon-user-20261101-0700.iso)
-                *) pattern=$(sed -e 's/[.]/\\./g' -e 's/current/.*/' <<< "$b") ;;
-            esac
+            [[ "$entry" == "#"* ]] && continue
+            pattern=$(usb_entry_pattern "$entry")
             if [[ "$name" =~ ^${pattern}$ ]]; then
+                IFS='|' read -r key dname _ <<< "$entry"
                 dname=${dname%%, última LTS}
                 dname=${dname%% (*}
-                echo -e "   Es una ISO de ${BOLD}$dname${NC}: busco su suma oficial..."
+                echo -e "\n   Es una ISO de ${BOLD}$dname${NC}: busco su suma oficial..."
                 expected=$(usb_official_sum_for "$entry" "$name") && src="lista oficial de $dname"
                 break
             fi
         done
     fi
+    echo -e "\n${BLUE}🔐 Comprobando que la ISO esté entera (calculando su suma, puede tardar un minuto)...${NC}"
+    got=$(usb_hash_of "$iso" ${#expected})
     # 3. La suma que publica el sitio de la distribución, pegada a mano
     if [ -z "$expected" ]; then
         echo -e "${YELLOW}ℹ No encontré la suma oficial de esta ISO. Su SHA-256 es:${NC}"
@@ -8871,8 +9041,9 @@ usb_verify_local_iso() {
             log_warning "Se graba sin comprobar la suma"
             return 0
         fi
-        expected=$(grep -oiE '[0-9a-f]{64}' <<< "$answer" | head -1)
-        [ -n "$expected" ] || { log_error "Eso no es una suma SHA-256 (64 caracteres hexadecimales)"; return 1; }
+        expected=$(grep -oiE '[0-9a-f]+' <<< "$answer" | awk 'length($0) == 64 || length($0) == 128 {print; exit}')
+        [ -n "$expected" ] || { log_error "Eso no es una suma SHA-256 ni SHA-512 (64 o 128 caracteres hexadecimales)"; return 1; }
+        [ ${#expected} -eq 128 ] && got=$(usb_hash_of "$iso" 128)
         src="la que pegaste"
     fi
     if [ "${got,,}" = "${expected,,}" ]; then
@@ -8883,6 +9054,8 @@ usb_verify_local_iso() {
     return 1
 }
 
+# ¿Se puede grabar con dd? Las ISO de Linux son "híbridas" (arrancan desde un USB);
+# las de Windows no (necesitan otra herramienta, por ejemplo WoeUSB)
 usb_check_iso() {
     local iso="$1" label sig
     label=$(dd if="$iso" bs=1 skip=32808 count=32 2>/dev/null | tr -d '\0' | sed 's/ *$//')

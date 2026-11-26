@@ -37,7 +37,7 @@ el escritorio** y adaptan sus opciones:
 - ⚡ **Cambiar de kernel** (Liquorix, XanMod, oficial LTS/HWE, backports...) y **reparar o personalizar GRUB**
 - 🎮 **Optimizar** GPU, RAM, red, DNS y energía, o aplicar un **perfil automático** (gaming, productividad...)
 - 📦 **Instalar** software popular, la terminal Alacritty con tema Tokyo Night o **un escritorio completo**
-- 💿 **Crear un USB de instalación**: descarga la ISO oficial, la verifica y la graba sin riesgo de borrar otro disco
+- 💿 **Crear un USB de instalación**: descarga la ISO oficial de más de 30 sistemas (Ubuntu, Mint, Zorin, Pop!_OS, Debian, MX, Kali, Arch, Manjaro, CachyOS, Fedora...), la verifica y la graba sin riesgo de borrar otro disco
 - ↩️ **Deshacer** cualquier cambio o **revertir** a la distribución original
 - 🖥️ **Ver** toda la información del sistema y del hardware, con fastfetch e inxi sin instalar
 
@@ -490,13 +490,24 @@ Graba un sistema en un pendrive con `dd`, pensado para que lo use cualquiera y s
 Funciona en todas las distribuciones (también en el modo arranque de Arch, Fedora, openSUSE...).
 
 1. **Elige la ISO:**
-   - **Descargarla**: Ubuntu, Kubuntu, **KDE neon** (User, Testing o Unstable), Xubuntu, Lubuntu y Ubuntu Server (la **última LTS se detecta
-     sola**), Debian con KDE o GNOME, Debian netinst o Arch. Se baja de la página oficial a tu carpeta de Descargas, se puede **retomar si
-     se corta** y se **verifica con su SHA-256 oficial** (si está dañada, se borra y no se usa). Si ya la tenías
-     descargada y entera, no se baja de nuevo.
+   - **Descargarla**: más de 30 sistemas, agrupados por su base. Siempre se baja **la versión más nueva** de su
+     sitio oficial (o de un espejo oficial) y **nunca sin su suma oficial**: si la distribución no publica la suma,
+     no se descarga.
+
+     | Base | Sistemas |
+     |---|---|
+     | **Ubuntu** | Ubuntu, Kubuntu, Xubuntu, Lubuntu, Ubuntu MATE, Ubuntu Budgie y Ubuntu Server (la **última LTS se detecta sola**; si un sabor todavía no sacó la nueva, se usa la anterior), **KDE neon** (User, Testing o Unstable), **Linux Mint** (Cinnamon, Xfce o MATE), **Zorin OS** Core y **Pop!_OS** (normal o NVIDIA) |
+     | **Debian** | Debian **estable** (KDE o GNOME live, o netinst), Debian **testing** (KDE live o netinst, se arma cada semana), **LMDE**, **MX Linux** (Xfce o KDE) y **Kali Linux** |
+     | **Arch** | Arch Linux, **Manjaro** (KDE, GNOME o Xfce), **CachyOS** y **EndeavourOS** |
+     | **Otras** | **Fedora** (Workstation o KDE) y **openSUSE Tumbleweed** |
+
+     ![Sistemas para descargar](screenshots/31-usb-distros.png)
+
+     Se baja a tu carpeta de Descargas, se puede **retomar si se corta** y se **verifica con su SHA-256 o SHA-512
+     oficial** (si está dañada, se borra y no se usa). Si ya la tenías descargada y entera, no se baja de nuevo.
    - **Una que ya tengas**: la busca sola en Descargas, tu carpeta personal, el Escritorio y discos conectados, o
-     escribes la ruta. **También se comprueba su SHA-256**: con un archivo de sumas que esté al lado (`SHA256SUMS`,
-     `.sha256`...), con la **lista oficial** si es de una distribución de la lista (también versiones anteriores de
+     escribes la ruta. **También se comprueba su suma**: con un archivo de sumas que esté al lado (`SHA256SUMS`,
+     `.sha256`, `.sha512sum`...), con la **lista oficial** si es de una distribución de la lista (también versiones anteriores de
      Ubuntu), o pegando la suma que publica el sitio de tu distribución. Si no coincide, no se graba; si no hay
      suma, puedes grabarla igual (avisa) o volver.
    - Revisa que sirva para `dd`: las ISO de **Windows** no arrancan así (avisa que uses WoeUSB o Ventoy) y las que no
