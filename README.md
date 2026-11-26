@@ -490,12 +490,15 @@ Graba un sistema en un pendrive con `dd`, pensado para que lo use cualquiera y s
 Funciona en todas las distribuciones (también en el modo arranque de Arch, Fedora, openSUSE...).
 
 1. **Elige la ISO:**
-   - **Descargarla**: Ubuntu, Kubuntu, Xubuntu, Lubuntu y Ubuntu Server (la **última LTS se detecta sola**), Debian con
-     KDE o GNOME, Debian netinst o Arch. Se baja de la página oficial a tu carpeta de Descargas, se puede **retomar si
+   - **Descargarla**: Ubuntu, Kubuntu, **KDE neon**, Xubuntu, Lubuntu y Ubuntu Server (la **última LTS se detecta
+     sola**), Debian con KDE o GNOME, Debian netinst o Arch. Se baja de la página oficial a tu carpeta de Descargas, se puede **retomar si
      se corta** y se **verifica con su SHA-256 oficial** (si está dañada, se borra y no se usa). Si ya la tenías
      descargada y entera, no se baja de nuevo.
    - **Una que ya tengas**: la busca sola en Descargas, tu carpeta personal, el Escritorio y discos conectados, o
-     escribes la ruta.
+     escribes la ruta. **También se comprueba su SHA-256**: con un archivo de sumas que esté al lado (`SHA256SUMS`,
+     `.sha256`...), con la **lista oficial** si es de una distribución de la lista (también versiones anteriores de
+     Ubuntu), o pegando la suma que publica el sitio de tu distribución. Si no coincide, no se graba; si no hay
+     suma, puedes grabarla igual (avisa) o volver.
    - Revisa que sirva para `dd`: las ISO de **Windows** no arrancan así (avisa que uses WoeUSB o Ventoy) y las que no
      son "híbridas" piden confirmación.
 2. **Elige el pendrive:** solo aparecen **discos USB y tarjetas SD**. **Nunca** el disco del sistema, ni uno con algo

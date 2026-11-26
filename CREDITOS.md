@@ -151,7 +151,7 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [udisks](https://github.com/storaged-project/udisks) (`udisksctl`) | GPL-2.0-or-later | Sistema: desmontar y expulsar el pendrive |
 | [curl](https://curl.se/) | Licencia curl | Sistema: descargar las ISO oficiales |
 
-Las ISO se descargan de los sitios oficiales de cada distribución (Ubuntu, Debian, Arch Linux), con sus propias
+Las ISO se descargan de los sitios oficiales de cada distribución (Ubuntu y sus sabores, [KDE neon](https://neon.kde.org/), Debian, Arch Linux), con sus propias
 licencias y marcas; el script no las modifica.
 
 ## 💾 Archivo swap (opción 15)
