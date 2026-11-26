@@ -37,7 +37,7 @@ el escritorio** y adaptan sus opciones:
 - ⚡ **Cambiar de kernel** (Liquorix, XanMod, oficial LTS/HWE, backports...) y **reparar o personalizar GRUB**
 - 🎮 **Optimizar** GPU, RAM, red, DNS y energía, o aplicar un **perfil automático** (gaming, productividad...)
 - 📦 **Instalar** software popular, la terminal Alacritty con tema Tokyo Night o **un escritorio completo**
-- 💿 **Crear un USB de instalación**: descarga la ISO oficial de más de 30 sistemas (Ubuntu, Mint, Zorin, Pop!_OS, Debian, MX, Kali, Arch, Manjaro, CachyOS, Fedora...), la verifica y la graba sin riesgo de borrar otro disco
+- 💿 **Descargar sistemas y crear un USB de instalación**: descarga la imagen ISO oficial de más de 40 sistemas (Ubuntu, Mint, Zorin, Pop!_OS, Debian, MX, Kali, Arch, Manjaro, CachyOS, Fedora, AlmaLinux, Rocky, openSUSE, Slackware, Gentoo, NixOS...), la verifica y la graba en un pendrive sin riesgo de borrar otro disco, o solo la descarga
 - ↩️ **Deshacer** cualquier cambio o **revertir** a la distribución original
 - 🖥️ **Ver** toda la información del sistema y del hardware, con fastfetch e inxi sin instalar
 
@@ -276,7 +276,7 @@ Todo lo hace el propio script, sin instalar programas externos.
 - El script detecta la distribución, la carpeta de GRUB (`/boot/grub` o `/boot/grub2`), dónde está montada la
   partición EFI y cómo se llama su carpeta (`ubuntu`, `debian`, `GRUB`, `manjaro`, `fedora`...).
 - **En Ubuntu y sus derivadas** (Kubuntu, Mint, Pop!_OS...) está todo el script. **En las demás distribuciones**
-  el menú principal muestra solo **19) Arranque**, **20) Crear USB de instalación** y **21) Apagar**, con los mismos números, así la tarjeta de
+  el menú principal muestra solo **19) Arranque**, **20) Descargar sistemas y crear USB de instalación** y **21) Apagar**, con los mismos números, así la tarjeta de
   rescate y las guías sirven igual.
 - Desde el USB de cualquiera de estas distribuciones, la **reparación desde Live USB (19 → 10)** detecta qué
   sistema hay en el disco y usa sus comandos (también con btrfs, `/boot` aparte y discos cifrados).
@@ -350,7 +350,7 @@ Con el sistema funcionando, usa la opción 19 → 14 y la 19 → 15. Son tres pa
      quitarlo vuelve como estaba.
    - La reparación completa (19 → 3) también lo ofrece.
 
-Ten a mano también un **USB de instalación de tu distribución** (el Live USB): lo puedes crear con la opción 20.
+Ten a mano también un **USB de instalación de tu distribución** (el Live USB): lo puedes descargar y crear con la opción 20.
 
 #### Cuando el sistema no arranca
 
@@ -482,32 +482,39 @@ hizo queda hecho).
 
 ---
 
-## 💿 Crear USB de instalación (opción 20)
+## 💿 Descargar sistemas y crear USB de instalación (opción 20)
 
-![Crear USB de instalación](screenshots/27-crear-usb.png)
+![Descargar sistemas y crear USB de instalación](screenshots/27-crear-usb.png)
 
-Graba un sistema en un pendrive con `dd`, pensado para que lo use cualquiera y sin riesgo de borrar el disco equivocado.
-Funciona en todas las distribuciones (también en el modo arranque de Arch, Fedora, openSUSE...).
+Descarga la imagen (ISO) oficial de un sistema y la graba en un pendrive con `dd`, pensado para que lo use cualquiera y
+sin riesgo de borrar el disco equivocado. Funciona en todas las distribuciones (también en el modo arranque de Arch,
+Fedora, openSUSE...). Tiene tres opciones:
+
+- **1) Descargar un sistema y grabarlo en un pendrive.**
+- **2) Solo descargar la imagen ISO**, para grabarla después, usarla con Ventoy o en una máquina virtual.
+- **3) Grabar en un pendrive una ISO que ya tengo.**
 
 1. **Elige la ISO:**
-   - **Descargarla**: más de 30 sistemas, agrupados por su base. Siempre se baja **la versión más nueva** de su
-     sitio oficial (o de un espejo oficial) y **nunca sin su suma oficial**: si la distribución no publica la suma,
-     no se descarga.
+   - **Descargarla**: más de 40 sistemas. Primero eliges la familia y después el sistema. Siempre se baja **la
+     versión más nueva** de su sitio oficial (o de un espejo oficial) y **nunca sin su suma oficial**: si la
+     distribución no publica la suma, no se descarga.
 
      | Base | Sistemas |
      |---|---|
      | **Ubuntu** | Ubuntu, Kubuntu, Xubuntu, Lubuntu, Ubuntu MATE, Ubuntu Budgie y Ubuntu Server (la **última LTS se detecta sola**; si un sabor todavía no sacó la nueva, se usa la anterior), **KDE neon** (User, Testing o Unstable), **Linux Mint** (Cinnamon, Xfce o MATE), **Zorin OS** Core y **Pop!_OS** (normal o NVIDIA) |
      | **Debian** | Debian **estable** (KDE o GNOME live, o netinst), Debian **testing** (KDE live o netinst, se arma cada semana), **LMDE**, **MX Linux** (Xfce o KDE) y **Kali Linux** |
      | **Arch** | Arch Linux, **Manjaro** (KDE, GNOME o Xfce), **CachyOS** y **EndeavourOS** |
-     | **Otras** | **Fedora** (Workstation o KDE) y **openSUSE Tumbleweed** |
+     | **Fedora y Red Hat** | **Fedora** (Workstation o KDE), **CentOS Stream**, **AlmaLinux** y **Rocky Linux** (compatibles con Red Hat, gratis). **Red Hat Enterprise Linux** pide iniciar sesión con una cuenta gratuita: el script explica cómo bajarla, abre la página y después la comprueba con la opción 3 |
+     | **openSUSE** | **Tumbleweed** (siempre al día) y **Leap** (estable) |
+     | **Independientes e históricas** | **Slackware** (la más antigua que sigue viva: se comprueba con MD5 y además con la **firma GPG oficial**), **Gentoo** (LiveGUI o mínima), **Void Linux** y **NixOS** |
 
      ![Sistemas para descargar](screenshots/31-usb-distros.png)
 
      Se baja a tu carpeta de Descargas, se puede **retomar si se corta** y se **verifica con su SHA-256 o SHA-512
-     oficial** (si está dañada, se borra y no se usa). Si ya la tenías descargada y entera, no se baja de nuevo.
+     oficial** (MD5 y firma GPG en Slackware). Si está dañada, se borra y no se usa. Si ya la tenías descargada y entera, no se baja de nuevo.
    - **Una que ya tengas**: la busca sola en Descargas, tu carpeta personal, el Escritorio y discos conectados, o
      escribes la ruta. **También se comprueba su suma**: con un archivo de sumas que esté al lado (`SHA256SUMS`,
-     `.sha256`, `.sha512sum`...), con la **lista oficial** si es de una distribución de la lista (también versiones anteriores de
+     `.sha256`, `.sha512sum`, `CHECKSUM`...), con la **lista oficial** si es de una distribución de la lista (también versiones anteriores de
      Ubuntu), o pegando la suma que publica el sitio de tu distribución. Si no coincide, no se graba; si no hay
      suma, puedes grabarla igual (avisa) o volver.
    - Revisa que sirva para `dd`: las ISO de **Windows** no arrancan así (avisa que uses WoeUSB o Ventoy) y las que no
@@ -785,7 +792,7 @@ funciona, pero está menos probado.
 
 Debian y sus derivadas tienen `debian-ultimate-tools.sh`, y Arch, Manjaro y EndeavourOS, `arch-ultimate-tools.sh`
 (los dos en beta). En Fedora, openSUSE y otras sirven el menú de **arranque** (19: reparar y personalizar GRUB,
-tarjeta de rescate, arranque de respaldo UEFI, reparación desde Live USB) y **crear un USB de instalación** (20).
+tarjeta de rescate, arranque de respaldo UEFI, reparación desde Live USB) y **descargar sistemas y crear un USB de instalación** (20).
 
 **¿Qué pasa si elimino Snap?**
 
