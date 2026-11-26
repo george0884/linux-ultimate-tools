@@ -165,6 +165,7 @@ propias licencias y marcas; el script no las modifica:
 | [Debian](https://www.debian.org/) estable y testing | cdimage.debian.org (`SHA256SUMS`) |
 | [MX Linux](https://mxlinux.org/), [Manjaro](https://manjaro.org/) y [CachyOS](https://cachyos.org/) | sus proyectos oficiales en SourceForge (`.sha256` de cada ISO) |
 | [Kali Linux](https://www.kali.org/) | cdimage.kali.org (`SHA256SUMS`) |
+| [GoldenDog Linux](https://goldendoglinux.org/) | cdn.goldendoglinux.org; la versión y su SHA-256 salen del `release.json` del [sitio oficial](https://github.com/goldendoglinux/goldendoglinux.github.io) y se comparan con el `.sha256` del CDN |
 | [Arch Linux](https://archlinux.org/) | geo.mirror.pkgbuild.com (`sha256sums.txt`) |
 | [EndeavourOS](https://endeavouros.com/) | espejo principal mirror.alpix.eu (`.sha512sum`) |
 | [Fedora](https://fedoraproject.org/) | `releases.json` oficial (el que usa Fedora Media Writer) |

@@ -504,7 +504,7 @@ Fedora, openSUSE...). Tiene cinco opciones:
      | Base | Sistemas |
      |---|---|
      | **Ubuntu** | Ubuntu, Kubuntu, Xubuntu, Lubuntu, Ubuntu MATE, Ubuntu Budgie y Ubuntu Server (la **última LTS se detecta sola**; si un sabor todavía no sacó la nueva, se usa la anterior), **KDE neon** (User, Testing o Unstable; sigue a KDE aunque cambie la carpeta de sus descargas), **Linux Mint** (Cinnamon, Xfce o MATE), **Zorin OS** Core y **Pop!_OS** (normal o NVIDIA) |
-     | **Debian** | Debian **estable** (KDE o GNOME live, o netinst), Debian **testing** (KDE live o netinst, se arma cada semana), **LMDE**, **MX Linux** (Xfce o KDE) y **Kali Linux** |
+     | **Debian** | Debian **estable** (KDE o GNOME live, o netinst), Debian **testing** (KDE live o netinst, se arma cada semana), **LMDE**, **MX Linux** (Xfce o KDE), **GoldenDog Linux** y **Kali Linux** |
      | **Arch** | Arch Linux, **Manjaro** (KDE, GNOME o Xfce), **CachyOS** y **EndeavourOS** |
      | **Fedora y Red Hat** | **Fedora** (Workstation o KDE), **CentOS Stream**, **AlmaLinux** y **Rocky Linux** (compatibles con Red Hat, gratis). **Red Hat Enterprise Linux** pide iniciar sesión con una cuenta gratuita: el script explica cómo bajarla, abre la página y después la comprueba con la opción 3 |
      | **openSUSE** | **Tumbleweed** (siempre al día) y **Leap** (estable) |
