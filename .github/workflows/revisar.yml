@@ -1,0 +1,20 @@
+name: Revisar scripts
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Los scripts coinciden con las piezas de partes/
+        run: bash armar.sh --comprobar
+
+      - name: Sintaxis de bash
+        run: for f in *-ultimate-tools.sh armar.sh; do bash -n "$f"; done
+
+      - name: ShellCheck (errores)
+        run: shellcheck -S error *-ultimate-tools.sh armar.sh

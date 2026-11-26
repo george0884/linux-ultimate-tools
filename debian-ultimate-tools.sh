@@ -2150,7 +2150,7 @@ create_swapfile() {
     run "No se pudo activar el swap" sudo swapon "$SWAPFILE" || return 1
     # fstab: copia una sola vez y solo se agrega la línea de /swapfile si no está
     [ -f "$FSTAB_BACKUP" ] || sudo cp -p /etc/fstab "$FSTAB_BACKUP"
-    if ! grep -qE "^[[:space:]]*$SWAPFILE[[:space:]]" /etc/fstab; then
+    if ! grep -qE "^[[:space:]]*${SWAPFILE}[[:space:]]" /etc/fstab; then
         echo "$SWAPFILE none swap sw 0 0" | sudo tee -a /etc/fstab > /dev/null
     fi
     mkdir -p "$STATE_DIR"
@@ -2178,7 +2178,7 @@ remove_swapfile() {
     swapfile_active && { run "No se pudo desactivar el swap" sudo swapoff "$SWAPFILE" || return 1; }
     [ -f "$FSTAB_BACKUP" ] || sudo cp -p /etc/fstab "$FSTAB_BACKUP"
     # Solo la línea de /swapfile: las particiones swap quedan como estaban
-    sudo sed -i "\\#^[[:space:]]*$SWAPFILE[[:space:]]#d" /etc/fstab
+    sudo sed -i "\\#^[[:space:]]*${SWAPFILE}[[:space:]]#d" /etc/fstab
     sudo rm -f -- "$SWAPFILE"
     rm -f "$STATE_DIR/swapfile.txt"
     log_success "Archivo swap quitado"
