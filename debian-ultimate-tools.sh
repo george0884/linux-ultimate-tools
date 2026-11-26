@@ -8644,7 +8644,8 @@ boot_only_menu() {
 #   carpeta: url|patrón de la subcarpeta de la versión (- = ninguna)|patrón|archivo de sumas,
 #            o ".extensión" si cada ISO tiene su propio archivo de suma al lado
 #   sf:      proyecto de SourceForge|carpeta|patrón|extensión del archivo de suma de cada ISO
-#   pop:     variante (intel o nvidia)|patrón (API oficial de System76)
+#   pop:     variantes a probar, separadas por coma (generic, intel, nvidia)|patrón (API oficial de System76)
+#   neon:    edición (user, testing o unstable)|patrón (files.kde.org; KDE cambió de carpeta en 2026)
 #   fedora:  subvariante|patrón (releases.json oficial de Fedora)
 #   zorin:   edición|patrón (sumas de la página oficial de ayuda de Zorin)
 #   gentoo:  carpeta de autobuilds|patrón (latest-iso.txt dice cuál es la última)
@@ -8661,14 +8662,14 @@ USB_DISTROS=(
     "ubuntu-mate|Ubuntu MATE (escritorio clásico), última LTS|ubuntu|ubuntu-mate|ubuntu-mate-[0-9.]+-desktop-amd64\\.iso"
     "ubuntu-budgie|Ubuntu Budgie (moderno y sencillo), última LTS|ubuntu|ubuntu-budgie|ubuntu-budgie-[0-9.]+-desktop-amd64\\.iso"
     "server|Ubuntu Server, última LTS|ubuntu|releases|ubuntu-[0-9.]+-live-server-amd64\\.iso"
-    "kdeneon|KDE neon User (el KDE Plasma más nuevo y estable, sobre Ubuntu LTS)|fijo|https://files.kde.org/neon/images/user/current|neon-user-current.iso|neon-user-current.iso.sha256sum"
-    "kdeneon-testing|KDE neon Testing (Plasma en prueba, antes de salir: para probar)|fijo|https://files.kde.org/neon/images/testing/current|neon-testing-current.iso|neon-testing-current.iso.sha256sum"
-    "kdeneon-unstable|KDE neon Unstable (lo último en desarrollo: puede fallar)|fijo|https://files.kde.org/neon/images/unstable/current|neon-unstable-current.iso|neon-unstable-current.iso.sha256sum"
+    "kdeneon|KDE neon User (el KDE Plasma más nuevo y estable, sobre Ubuntu LTS)|neon|user|neon-user(-desk(top)?)?-.+\\.iso"
+    "kdeneon-testing|KDE neon Testing (Plasma en prueba, antes de salir: para probar)|neon|testing|neon-testing(-desk(top)?)?-.+\\.iso"
+    "kdeneon-unstable|KDE neon Unstable (lo último en desarrollo: puede fallar)|neon|unstable|neon-unstable(-desk(top)?)?-.+\\.iso"
     "mint|Linux Mint Cinnamon (la más fácil si vienes de Windows)|carpeta|https://mirrors.kernel.org/linuxmint/stable|[0-9.]+|linuxmint-[0-9.]+-cinnamon-64bit\\.iso|sha256sum.txt"
     "mint-xfce|Linux Mint Xfce (liviano)|carpeta|https://mirrors.kernel.org/linuxmint/stable|[0-9.]+|linuxmint-[0-9.]+-xfce-64bit\\.iso|sha256sum.txt"
     "mint-mate|Linux Mint MATE (clásico)|carpeta|https://mirrors.kernel.org/linuxmint/stable|[0-9.]+|linuxmint-[0-9.]+-mate-64bit\\.iso|sha256sum.txt"
     "zorin|Zorin OS Core (se parece a Windows o macOS)|zorin|Core|Zorin-OS-[0-9.]+-Core-64-bit(-r[0-9]+)?\\.iso"
-    "pop|Pop!_OS (de System76, escritorio COSMIC)|pop|intel|pop-os_[0-9.]+_amd64_intel_[0-9]+\\.iso"
+    "pop|Pop!_OS (de System76, escritorio COSMIC)|pop|generic,intel|pop-os_[0-9.]+_amd64_[gi][a-z]+_[0-9]+\\.iso"
     "pop-nvidia|Pop!_OS para placas NVIDIA (trae el driver)|pop|nvidia|pop-os_[0-9.]+_amd64_nvidia_[0-9]+\\.iso"
     "#Debian y sus derivadas|Debian estable y testing, LMDE, MX Linux, Kali"
     "debian-kde|Debian estable con KDE Plasma (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-kde\\.iso"
@@ -8693,7 +8694,7 @@ USB_DISTROS=(
     "centos|CentOS Stream (lo que será la próxima Red Hat, instalador completo ~10 GB)|carpeta|https://mirror.stream.centos.org|[0-9]+-stream/BaseOS/x86_64/iso|CentOS-Stream-[0-9]+-[0-9.]+-x86_64-dvd1\\.iso|.SHA256SUM"
     "alma|AlmaLinux (compatible con Red Hat, gratis; instalador completo ~10 GB)|carpeta|https://repo.almalinux.org/almalinux|[0-9]+/isos/x86_64|AlmaLinux-[0-9]+\\.[0-9]+-x86_64-dvd\\.iso|CHECKSUM"
     "rocky|Rocky Linux (compatible con Red Hat, gratis; instalador completo ~10 GB)|carpeta|https://download.rockylinux.org/pub/rocky|[0-9]+/isos/x86_64|Rocky-[0-9]+\\.[0-9]+-x86_64-dvd1?\\.iso|CHECKSUM"
-    "rhel|Red Hat Enterprise Linux (pide iniciar sesión: te explico cómo)|enlace|https://developers.redhat.com/products/rhel/download|rhel-[0-9.]+-x86_64-(dvd|boot)\\.iso"
+    "rhel|Red Hat Enterprise Linux (pide iniciar sesión: te explico cómo)|enlace|https://developers.redhat.com/products/rhel/download|rhel-[0-9.]+-x86_64-[a-z]+\\.iso"
     "#openSUSE|Tumbleweed y Leap"
     "opensuse|openSUSE Tumbleweed (siempre al día)|fijo|https://download.opensuse.org/tumbleweed/iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso.sha256"
     "leap|openSUSE Leap (estable, versión fija)|carpeta|https://download.opensuse.org/distribution/openSUSE-stable/offline|-|Leap-[0-9.]+-offline-installer-x86_64\\.install\\.iso|.sha256"
@@ -8861,15 +8862,19 @@ usb_resolve_download() {
             fi ;;
         pop)
             # La API de System76 da la ISO y su suma; se prueba de la versión más nueva a la más vieja
+            # (desde 24.04 la de Intel/AMD se llama "generic"; antes "intel")
+            local var
             for ver in 26.04 24.04 22.04; do
-                json=$(curl -sSfL -m 30 "https://api.pop-os.org/builds/$ver/$a" 2>/dev/null) || continue
-                url=$(grep -oE '"url" *: *"[^"]+\.iso"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | head -1)
-                h=$(grep -oE '"sha_sum" *: *"[0-9a-fA-F]+"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | usb_first_hash)
-                if [ -n "$url" ] && [ -n "$h" ]; then
-                    picked="$h ${url##*/}"
-                    break
-                fi
-                url=""
+                for var in ${a//,/ }; do
+                    json=$(curl -sSfL -m 30 "https://api.pop-os.org/builds/$ver/$var" 2>/dev/null) || continue
+                    url=$(grep -oE '"url" *: *"[^"]+\.iso"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | head -1)
+                    h=$(grep -oE '"sha_sum" *: *"[0-9a-fA-F]+"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | usb_first_hash)
+                    if [ -n "$url" ] && [ -n "$h" ]; then
+                        picked="$h ${url##*/}"
+                        break 2
+                    fi
+                    url=""
+                done
             done ;;
         fedora)
             # releases.json (el que usa Fedora Media Writer): la ISO x86_64 de la versión estable más nueva
@@ -8900,10 +8905,49 @@ usb_resolve_download() {
                 break
             done
             if [ -n "$iso" ] && [ -n "$h" ]; then
-                picked="$h $iso"
-                # Espejo oficial de kernel.org, carpeta de la versión principal (17, 18...)
-                url="https://mirrors.edge.kernel.org/zorinos-isos/$(cut -d. -f1 <<< "${iso#Zorin-OS-}" | cut -d- -f1)/$iso"
+                # Espejos oficiales de la lista de Zorin, carpeta de la versión principal (17, 18...):
+                # se usa el primero que la tenga
+                local major m
+                major=$(cut -d. -f1 <<< "${iso#Zorin-OS-}" | cut -d- -f1)
+                for m in https://mirrors.edge.kernel.org/zorinos-isos https://ftp.nluug.nl/os/Linux/distr/zorin; do
+                    if curl -sSfLI -m 30 -o /dev/null "$m/$major/$iso" 2>/dev/null; then
+                        url="$m/$major/$iso"
+                        picked="$h $iso"
+                        break
+                    fi
+                done
             fi ;;
+        neon)
+            # KDE neon: primero la carpeta nueva (desktop/<edición>/current), después la carpeta con la
+            # fecha más nueva y por último la vieja (<edición>/current). Las ISO con fecha se prefieren a
+            # la "current", y la suma está en el .sha256sum de al lado
+            local cands=() cand names newest sumf
+            newest=$(usb_index_names "https://files.kde.org/neon/images/desktop/$a" | usb_sorted '[0-9]{8}-[0-9]{4}' | tail -1)
+            cands=("https://files.kde.org/neon/images/desktop/$a/current")
+            [ -n "$newest" ] && cands+=("https://files.kde.org/neon/images/desktop/$a/$newest")
+            cands+=("https://files.kde.org/neon/images/$a/current")
+            for cand in "${cands[@]}"; do
+                names=$(usb_index_names "$cand")
+                [ -n "$names" ] || continue
+                iso=$(usb_sorted "neon-$a(-desk(top)?)?-[0-9]{8}-[0-9]{4}\\.iso" <<< "$names" | tail -1)
+                [ -n "$iso" ] || iso=$(usb_sorted "neon-$a(-desk(top)?)?-current\\.iso" <<< "$names" | tail -1)
+                [ -n "$iso" ] || continue
+                h=$(curl -sSfL -m 30 "$cand/$iso.sha256sum" 2>/dev/null | usb_first_hash)
+                if [ -z "$h" ]; then
+                    # La "current" a veces solo tiene la suma con el nombre fechado: un único .sha256sum
+                    for sumf in $(grep -E '\.sha256sum$' <<< "$names"); do
+                        sums=$(curl -sSfL -m 30 "$cand/$sumf" 2>/dev/null) || continue
+                        h=$(usb_sum_lookup "$sums" "$iso") || h=""
+                        [ -z "$h" ] && [ "$(grep -cE '\.sha256sum$' <<< "$names")" -eq 1 ] && h=$(usb_first_hash <<< "$sums")
+                        [ -n "$h" ] && break
+                    done
+                fi
+                if [ -n "$h" ]; then
+                    base=$cand
+                    picked="$h $iso"
+                    break
+                fi
+            done ;;
         gentoo)
             # latest-iso.txt: "20261124T170000Z/livegui-amd64-20261124T170000Z.iso tamaño"
             rel=$(curl -sSfL -m 30 "$a/latest-iso.txt" 2>/dev/null | grep -v '^#' | awk '{print $1}' | usb_sorted "$b" | tail -1)
@@ -9039,7 +9083,13 @@ usb_download_iso() {
         [ -n "$target" ] && usb_write_sum_file "$USB_ISO" "$USB_ISO_SHA"
         return 0
     fi
-    size_mb=$(( $(curl -sSfLI -m 30 "$USB_ISO_URL" | awk 'tolower($1) == "content-length:" {n = $2} END {print n + 0}') / 1048576 ))
+    local head
+    if ! head=$(curl -sSfLI -m 30 "$USB_ISO_URL" 2>&1); then
+        log_error "La ISO no está en el servidor (${head##*: }): la distribución pudo cambiarla de lugar."
+        echo -e "   Avísanos en el repositorio para corregirlo; mientras, bájala de su página y usa la opción 3."
+        return 1
+    fi
+    size_mb=$(( $(awk 'tolower($1) == "content-length:" {n = $2} END {print n + 0}' <<< "$head") / 1048576 ))
     free_mb=$(df -Pm "$dir" | awk 'NR == 2 {print $4}')
     if [ "$size_mb" -gt 0 ] && [ "$free_mb" -lt $((size_mb + 200)) ]; then
         log_error "No hay espacio en $dir: la ISO ocupa ~${size_mb} MB y hay ${free_mb} MB libres"
@@ -9071,6 +9121,47 @@ usb_write_sum_file() {
     [ -n "$sum" ] || return 0
     case ${#sum} in 128) ext=sha512 ;; 32) ext=md5 ;; *) ext=sha256 ;; esac
     printf '%s  %s\n' "$sum" "$(basename "$iso")" > "$iso.$ext" 2>/dev/null || true
+}
+
+# Prueba que cada sistema de la lista se pueda bajar: encuentra la ISO y su suma oficial y comprueba
+# que el archivo esté en el servidor. No descarga ninguna ISO. Sirve para avisar si una distribución
+# cambió de lugar sus descargas
+usb_test_all() {
+    local entry name ok=0 bad=0 head size group
+    command -v curl &> /dev/null || { log_error "Falta curl"; return 1; }
+    echo -e "\n${CYAN}🧪 Probando las descargas de todos los sistemas (no se baja ninguna ISO; tarda unos minutos)...${NC}"
+    for entry in "${USB_DISTROS[@]}"; do
+        if [[ "$entry" == "#"* ]]; then
+            group=${entry#\#}
+            echo -e "\n${YELLOW}${BOLD}${group%%|*}${NC}"
+            continue
+        fi
+        IFS='|' read -r _ name _ <<< "$entry"
+        name=${name%% (*}
+        name=${name%%, última LTS}
+        # Relleno a mano: printf cuenta bytes y los acentos ocupan dos
+        name="$name$(printf '%*s' $((34 - ${#name})) '')"
+        if [[ "$entry" == *"|enlace|"* ]]; then
+            printf "  ${CYAN}–${NC} %s se baja a mano (pide cuenta)\n" "$name"
+            continue
+        fi
+        if ! usb_resolve_download "$entry" > /dev/null 2>&1; then
+            printf "  ${RED}✗${NC} %s no se encontró la ISO o su suma oficial\n" "$name"
+            bad=$((bad + 1))
+            continue
+        fi
+        if ! head=$(curl -sSfLI -m 30 "$USB_ISO_URL" 2>&1); then
+            printf "  ${RED}✗${NC} %s %s: la ISO no está (%s)\n" "$name" "$USB_ISO_FILE" "${head##*: }"
+            bad=$((bad + 1))
+            continue
+        fi
+        size=$(awk 'tolower($1) == "content-length:" {n = $2} END {print n + 0}' <<< "$head")
+        printf "  ${GREEN}✓${NC} %s %s (%s, suma %s)\n" "$name" "$USB_ISO_FILE" \
+            "$([ "$size" -gt 0 ] && numfmt --to=iec "$size" || echo "tamaño ?")" "$(usb_hash_name ${#USB_ISO_SHA})"
+        ok=$((ok + 1))
+    done
+    echo -e "\n   Funcionan: ${GREEN}$ok${NC} · con problemas: ${RED}$bad${NC}"
+    [ "$bad" -eq 0 ] || echo -e "${YELLOW}   Si alguna falla, avísanos en el repositorio (o manda una foto de esta pantalla).${NC}"
 }
 
 # Busca ISOs en las carpetas habituales y deja la elegida en USB_ISO
@@ -9337,9 +9428,10 @@ create_usb_menu() {
     echo -e "  ${BLUE}2)${NC} ⬇  Solo descargar la imagen ISO (para grabarla después, Ventoy o una máquina virtual)"
     echo -e "  ${BLUE}3)${NC} 🔥 Grabar en un pendrive una ISO que ya tengo (la busco sola)"
     echo -e "  ${BLUE}4)${NC} 🧰 VENTOY: varios sistemas en un solo pendrive (live, con persistencia)"
+    echo -e "  ${BLUE}5)${NC} 🧪 Probar que todas las descargas funcionen (no baja nada)"
     echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
     local option
-    read -r -p "📌 Opción (0-4): " option
+    read -r -p "📌 Opción (0-5): " option
     USB_ISO="" USB_ISO_SHA=""
     case $option in
         1) usb_download_iso || return 1 ;;
@@ -9350,6 +9442,7 @@ create_usb_menu() {
             return 0 ;;
         3) usb_pick_local_iso || return 1 ;;
         4) ventoy_menu; return 0 ;;
+        5) usb_test_all; return 0 ;;
         *) return 0 ;;
     esac
 

@@ -488,12 +488,13 @@ hizo queda hecho).
 
 Descarga la imagen (ISO) oficial de un sistema y la graba en un pendrive con `dd`, pensado para que lo use cualquiera y
 sin riesgo de borrar el disco equivocado. Funciona en todas las distribuciones (también en el modo arranque de Arch,
-Fedora, openSUSE...). Tiene cuatro opciones:
+Fedora, openSUSE...). Tiene cinco opciones:
 
 - **1) Descargar un sistema y grabarlo en un pendrive.**
 - **2) Solo descargar la imagen ISO**, para grabarla después, usarla con Ventoy o en una máquina virtual.
 - **3) Grabar en un pendrive una ISO que ya tengo.**
 - **4) Ventoy**: varios sistemas en un solo pendrive, con persistencia (ver más abajo).
+- **5) Probar que todas las descargas funcionen**: revisa los más de 40 sistemas (encuentra cada ISO y su suma oficial y comprueba que el archivo esté en el servidor) sin bajar nada. Si una distribución cambió de lugar sus descargas, aparece con ✗: avísanos en Issues.
 
 1. **Elige la ISO:**
    - **Descargarla**: más de 40 sistemas. Primero eliges la familia y después el sistema. Siempre se baja **la
@@ -502,7 +503,7 @@ Fedora, openSUSE...). Tiene cuatro opciones:
 
      | Base | Sistemas |
      |---|---|
-     | **Ubuntu** | Ubuntu, Kubuntu, Xubuntu, Lubuntu, Ubuntu MATE, Ubuntu Budgie y Ubuntu Server (la **última LTS se detecta sola**; si un sabor todavía no sacó la nueva, se usa la anterior), **KDE neon** (User, Testing o Unstable), **Linux Mint** (Cinnamon, Xfce o MATE), **Zorin OS** Core y **Pop!_OS** (normal o NVIDIA) |
+     | **Ubuntu** | Ubuntu, Kubuntu, Xubuntu, Lubuntu, Ubuntu MATE, Ubuntu Budgie y Ubuntu Server (la **última LTS se detecta sola**; si un sabor todavía no sacó la nueva, se usa la anterior), **KDE neon** (User, Testing o Unstable; sigue a KDE aunque cambie la carpeta de sus descargas), **Linux Mint** (Cinnamon, Xfce o MATE), **Zorin OS** Core y **Pop!_OS** (normal o NVIDIA) |
      | **Debian** | Debian **estable** (KDE o GNOME live, o netinst), Debian **testing** (KDE live o netinst, se arma cada semana), **LMDE**, **MX Linux** (Xfce o KDE) y **Kali Linux** |
      | **Arch** | Arch Linux, **Manjaro** (KDE, GNOME o Xfce), **CachyOS** y **EndeavourOS** |
      | **Fedora y Red Hat** | **Fedora** (Workstation o KDE), **CentOS Stream**, **AlmaLinux** y **Rocky Linux** (compatibles con Red Hat, gratis). **Red Hat Enterprise Linux** pide iniciar sesión con una cuenta gratuita: el script explica cómo bajarla, abre la página y después la comprueba con la opción 3 |
