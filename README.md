@@ -844,6 +844,25 @@ Las contribuciones son bienvenidas. Puedes:
 2. Sugerir nuevos programas para incluir en la lista opcional
 3. Mejorar la documentación
 
+### 🧩 Cómo está organizado el código
+
+Los tres scripts comparten mucho código (crear USB y Ventoy, GRUB, auditoría, red, energía...). Para no
+editarlo tres veces, se guarda en piezas dentro de `partes/` y `armar.sh` las une:
+
+```
+partes/
+  comun.sh  usb.sh  arranque.sh  auditoria.sh   ← compartidas por los tres
+  apt.sh                                        ← compartida por Ubuntu y Debian
+  ubuntu.sh  debian.sh  arch.sh                 ← lo propio de cada uno y el orden del script
+
+bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch-ultimate-tools.sh
+```
+
+- **Para usarlo no cambia nada**: cada script sigue siendo un solo archivo completo, que se baja y se ejecuta igual.
+- **Para cambiar algo**: edita la pieza en `partes/`, corre `bash armar.sh` y sube las piezas y los scripts.
+  No edites los scripts finales a mano: la próxima vez que se armen, se pierde el cambio.
+- En cada PR, GitHub comprueba que los scripts coincidan con las piezas, la sintaxis y ShellCheck.
+
 ---
 
 ## 📄 Licencia
