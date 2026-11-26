@@ -446,7 +446,7 @@ hizo queda hecho).
 
 ## 🛡️ Auditoría de seguridad (opción 2)
 
-![Auditoría de seguridad con Lynis](screenshots/25-auditoria-lynis.png)
+![Menú de auditoría de seguridad](screenshots/26-registro-auditoria.png)
 
 | Opción | Qué hace |
 |---|---|
@@ -477,6 +477,19 @@ hizo queda hecho).
   - **Ver qué se registró**: resumen por categoría y los últimos cambios en usuarios, sudo y SSH.
   - **Quitar**: 2 → 5 (o Deshacer: Ubuntu 10 → 13, Debian y Arch 10 → 11) borra las reglas; si auditd lo instaló el script, ofrece desinstalarlo y
     borrar sus registros.
+**Lynis (opción 1)**: puntaje, advertencias y sugerencias:
+
+![Auditoría de seguridad con Lynis](screenshots/25-auditoria-lynis.png)
+
+**linaudit (opción 2)**: primero pregunta qué tipo de equipo es y después muestra el puntaje de 1 a 10, cada
+categoría y lo más urgente; con Enter se abre el detalle de cada hallazgo y cómo arreglarlo:
+
+![linaudit: tipo de equipo](screenshots/33-linaudit-inicio.png)
+
+![linaudit: resultado](screenshots/34-linaudit-resultado.png)
+
+*(Capturas de linaudit 0.3.1 de verdad, en un equipo de prueba: los hallazgos dependen de cada sistema.)*
+
 - Idea inspirada en [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) de Jeff Starke
   (Starke427). No se usa su código porque su repositorio no tiene licencia (ver [CREDITOS.md](CREDITOS.md)).
 
