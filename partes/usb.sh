@@ -23,6 +23,7 @@
 #   sf:      proyecto de SourceForge|carpeta|patrón|extensión del archivo de suma de cada ISO
 #   pop:     variantes a probar, separadas por coma (generic, intel, nvidia)|patrón (API oficial de System76)
 #   neon:    edición (user, testing o unstable)|patrón (files.kde.org; KDE cambió de carpeta en 2026)
+#   goldendog: release.json del sitio oficial|patrón (trae la ISO y su suma; se compara con el .sha256 del CDN)
 #   fedora:  subvariante|patrón (releases.json oficial de Fedora)
 #   zorin:   edición|patrón (sumas de la página oficial de ayuda de Zorin)
 #   gentoo:  carpeta de autobuilds|patrón (latest-iso.txt dice cuál es la última)
@@ -48,7 +49,7 @@ USB_DISTROS=(
     "zorin|Zorin OS Core (se parece a Windows o macOS)|zorin|Core|Zorin-OS-[0-9.]+-Core-64-bit(-r[0-9]+)?\\.iso"
     "pop|Pop!_OS (de System76, escritorio COSMIC)|pop|generic,intel|pop-os_[0-9.]+_amd64_[gi][a-z]+_[0-9]+\\.iso"
     "pop-nvidia|Pop!_OS para placas NVIDIA (trae el driver)|pop|nvidia|pop-os_[0-9.]+_amd64_nvidia_[0-9]+\\.iso"
-    "#Debian y sus derivadas|Debian estable y testing, LMDE, MX Linux, Kali"
+    "#Debian y sus derivadas|Debian estable y testing, LMDE, MX Linux, GoldenDog, Kali"
     "debian-kde|Debian estable con KDE Plasma (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-kde\\.iso"
     "debian-gnome|Debian estable con GNOME (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-gnome\\.iso"
     "debian-net|Debian estable netinst (instalador mínimo, baja el resto de internet)|lista|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd|SHA256SUMS|debian-[0-9.]+-amd64-netinst\\.iso"
@@ -57,6 +58,7 @@ USB_DISTROS=(
     "lmde|LMDE: Linux Mint sobre Debian (Cinnamon)|lista|https://mirrors.kernel.org/linuxmint/debian|sha256sum.txt|lmde-[0-9.]+-cinnamon-64bit\\.iso"
     "mx|MX Linux Xfce (liviano y muy estable)|sf|mx-linux|Final/Xfce|MX-[0-9.]+_Xfce_x64\\.iso|sha256"
     "mx-kde|MX Linux KDE Plasma|sf|mx-linux|Final/KDE|MX-[0-9.]+_KDE_x64\\.iso|sha256"
+    "goldendog|GoldenDog Linux (KDE Plasma sobre Debian, simple y amigable)|goldendog|https://raw.githubusercontent.com/goldendoglinux/goldendoglinux.github.io/main/src/data/release.json|goldendog-[0-9.]+-amd64\\.iso"
     "kali|Kali Linux (seguridad y pruebas de intrusión, instalador)|lista|https://cdimage.kali.org/current|SHA256SUMS|kali-linux-[0-9.]+[a-z]?-installer-amd64\\.iso"
     "#Arch y sus derivadas|Arch, Manjaro, CachyOS, EndeavourOS"
     "arch|Arch Linux (instalación por terminal)|lista|https://geo.mirror.pkgbuild.com/iso/latest|sha256sums.txt|archlinux-[0-9.]+-x86_64\\.iso"
@@ -304,6 +306,30 @@ usb_resolve_download() {
                     fi
                 done
             fi ;;
+        goldendog)
+            # El sitio oficial publica la última versión en release.json (enlace, archivo y SHA-256) y el
+            # CDN deja un .sha256 al lado de la ISO. Si las dos sumas no coinciden, no se descarga
+            local h_web="" h_cdn="" sumurl=""
+            json=$(curl -sSfL -m 30 "$a" 2>/dev/null)
+            url=$(grep -oE '"isoUrl" *: *"[^"]+\.iso"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | head -1)
+            sumurl=$(grep -oE '"sha256Url" *: *"[^"]+"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | head -1)
+            h_web=$(grep -oE '"sha256" *: *"[0-9a-fA-F]{64}"' <<< "$json" | sed -E 's/.*"([^"]+)"$/\1/' | head -1)
+            if [ -z "$url" ]; then
+                # Sin el sitio: la ISO más nueva de la carpeta "latest" del CDN
+                iso=$(usb_index_names https://cdn.goldendoglinux.org/latest | usb_sorted "$b" | tail -1)
+                [ -n "$iso" ] && url="https://cdn.goldendoglinux.org/latest/$iso"
+            fi
+            if [ -n "$url" ]; then
+                iso=${url##*/}
+                h_cdn=$(curl -sSfL -m 30 "${sumurl:-$url.sha256}" 2>/dev/null | usb_first_hash)
+                if [ -n "$h_web" ] && [ -n "$h_cdn" ] && [ "${h_web,,}" != "${h_cdn,,}" ]; then
+                    log_error "GoldenDog publica dos sumas distintas para $iso (el sitio y el CDN): no se descarga hasta que lo corrijan"
+                    return 1
+                fi
+                h=${h_web:-$h_cdn}
+                [ -n "$h" ] && picked="$h $iso"
+            fi
+            [ -n "$picked" ] || url="" ;;
         neon)
             # KDE neon: primero la carpeta nueva (desktop/<edición>/current), después la carpeta con la
             # fecha más nueva y por último la vieja (<edición>/current). Las ISO con fecha se prefieren a
