@@ -442,22 +442,22 @@ grub_repair_menu() {
             continue
         fi
         case $grub_option in
-            1) grub_diagnostic ;;
-            2) grub_normal_repair ;;
-            3) grub_full_repair; pause ;;
-            4) grub_reinstall_to_disk ;;
-            5) esp_check_repair; pause ;;
-            6) grub_default_entry_menu; pause ;;
-            7) grub_os_prober_toggle; pause ;;
-            8) uefi_boot_order_menu; pause ;;
-            9) grub_customize_menu ;;
-            10) grub_live_repair ;;
-            11) grub_prompt_guide ;;
-            12) grub_rescue_guide ;;
-            13) grub_live_guide ;;
-            14) rescue_card_menu ;;
-            15) uefi_fallback_menu ;;
-            16) boot_verbose_menu; pause ;;
+            1) submenu_run grub_diagnostic ;;
+            2) submenu_run grub_normal_repair ;;
+            3) submenu_run grub_full_repair; menu_pause ;;
+            4) submenu_run grub_reinstall_to_disk ;;
+            5) submenu_run esp_check_repair; menu_pause ;;
+            6) submenu_run grub_default_entry_menu; menu_pause ;;
+            7) submenu_run grub_os_prober_toggle; menu_pause ;;
+            8) submenu_run uefi_boot_order_menu; menu_pause ;;
+            9) submenu_run grub_customize_menu ;;
+            10) submenu_run grub_live_repair ;;
+            11) submenu_run grub_prompt_guide ;;
+            12) submenu_run grub_rescue_guide ;;
+            13) submenu_run grub_live_guide ;;
+            14) submenu_run rescue_card_menu ;;
+            15) submenu_run uefi_fallback_menu ;;
+            16) submenu_run boot_verbose_menu; menu_pause ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1 ;;
         esac
@@ -1408,17 +1408,17 @@ grub_customize_menu() {
         echo -e "\n${YELLOW}ℹ Qué arranca por defecto y cuánto espera el menú: opción 6 del menú de GRUB${NC}\n"
         read -r -p "📌 Opción (0-7): " custom_option
         case $custom_option in
-            1) grub_hide_entries ;;
-            2) grub_others_first_toggle ;;
-            3) grub_remember_last_toggle ;;
-            4) grub_appearance_menu ;;
-            5) grub_kernel_params_menu ;;
-            6) grub_restore_original ;;
-            7) undo_grub_customizer ;;
+            1) submenu_run grub_hide_entries ;;
+            2) submenu_run grub_others_first_toggle ;;
+            3) submenu_run grub_remember_last_toggle ;;
+            4) submenu_run grub_appearance_menu ;;
+            5) submenu_run grub_kernel_params_menu ;;
+            6) submenu_run grub_restore_original ;;
+            7) submenu_run undo_grub_customizer ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
 #@@ remove_refind

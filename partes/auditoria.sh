@@ -265,15 +265,15 @@ security_menu() {
         echo -e "\n  ${CYAN}0)${NC} 🔙 Volver\n"
         read -r -p "📌 Opción (0-6): " option
         case $option in
-            1) security_audit_lynis ;;
-            2) security_audit_linaudit ;;
-            3) enable_audit ;;
-            4) show_audit_events ;;
-            5) disable_audit ;;
-            6) remove_linaudit ;;
+            1) submenu_run security_audit_lynis ;;
+            2) submenu_run security_audit_linaudit ;;
+            3) submenu_run enable_audit ;;
+            4) submenu_run show_audit_events ;;
+            5) submenu_run disable_audit ;;
+            6) submenu_run remove_linaudit ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
-        pause
+        menu_pause
     done
 }
