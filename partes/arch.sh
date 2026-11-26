@@ -1240,6 +1240,18 @@ steam_supported() {
     fi
 }
 
+# Wine: programas y juegos de Windows fuera de Steam (repositorio multilib, como Steam)
+install_wine() {
+    if command -v wine &> /dev/null; then
+        echo -e "  ${GREEN}✓ Wine ya está instalado ($(wine --version 2>/dev/null))${NC}"
+        return 0
+    fi
+    echo -e "${BLUE}🍷 Instalando Wine...${NC}"
+    need_multilib "Wine" || { log_error "Wine necesita el repositorio multilib"; return 1; }
+    pkg_install_recorded wine winetricks || return 1
+    log_success "Wine instalado: abre un programa de Windows con \"wine programa.exe\""
+}
+
 install_steam() {
     steam_supported || return 1
     if steam_installed; then
@@ -2047,6 +2059,7 @@ ARCH_SOFTWARE=(
     "gparted|💾 GParted|gparted||"
     "vim|⌨️ Vim|vim||"
     "steam|🎮 Steam (con Proton para juegos de Windows)|@steam||"
+    "wine|🍷 Wine + winetricks (programas y juegos de Windows fuera de Steam)|@wine||"
     "proton-ge|🍷 Proton-GE (Proton de la comunidad, más compatible)|@proton-ge||"
     "spotify|🎵 Spotify (Flathub)|||com.spotify.Client"
     "obs-studio|🎥 OBS Studio|obs-studio||com.obsproject.Studio"
@@ -2071,6 +2084,7 @@ arch_software_installed() {
     local key="$1" repo fp
     case $key in
         steam) steam_installed; return ;;
+        wine) command -v wine &> /dev/null; return ;;
         proton-ge) [ -n "$(ls -d "$(steam_dir)"/compatibilitytools.d/GE-Proton* 2>/dev/null)" ]; return ;;
         android-tools) android_tools_installed; return ;;
         android-studio) android_studio_installed; return ;;
@@ -2155,6 +2169,7 @@ install_optional_with_progress() {
         repo=$(arch_software_field "$key" 3); fp=$(arch_software_field "$key" 5)
         case $repo in
             @steam) install_steam || failed+=(steam); continue ;;
+            @wine) install_wine || failed+=(wine); continue ;;
             @proton-ge) install_proton_ge || failed+=(proton-ge); continue ;;
             @android-tools) install_android_tools || failed+=(android-tools); continue ;;
             @android-studio) install_android_studio || failed+=(android-studio); continue ;;
@@ -3291,7 +3306,7 @@ EOF
     # En el perfil 'gaming' se activa directamente; en el menú se pregunta.
     if [ -f "$MANGOHUD_ENV" ]; then
         log_info "MangoHud ya está activo en todos los juegos Vulkan/Proton"
-    elif [ "$ACTIVE_PROFILE" = "gaming" ] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
+    elif [[ "$ACTIVE_PROFILE" == gaming* ]] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
         mkdir -p "$(dirname "$MANGOHUD_ENV")"
         echo "MANGOHUD=1" > "$MANGOHUD_ENV"
         log_success "MangoHud activo en todos los juegos Vulkan/Proton (tras cerrar sesión y volver a entrar)"

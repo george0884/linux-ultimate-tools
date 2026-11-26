@@ -1600,6 +1600,7 @@ select_optional_software() {
         "gparted|💾 GParted"
         "vim|⌨️ Vim"
         "steam|🎮 Steam (con Proton para juegos de Windows)"
+        "wine|🍷 Wine + winetricks (programas y juegos de Windows fuera de Steam)"
         "proton-ge|🍷 Proton-GE (Proton de la comunidad, más compatible)"
         "spotify|🎵 Spotify"
         "obs-studio|🎥 OBS Studio"
@@ -1738,13 +1739,13 @@ remove_apps_with_progress() {
     $AUTO_MODE || echo -e "${CYAN}ℹ Para quitar los íconos del escritorio o del panel usa la opción 6${NC}"
     echo ""
 }
-#@parte apt: setup_spotify_repo
+#@parte apt: setup_spotify_repo install_wine
 
 # Instala todo en una sola operación de apt. Los .deb externos (VSCode, Chrome,
 # Discord) se descargan en paralelo mientras se actualiza la lista de paquetes.
 install_optional_with_progress() {
     local repo=() deb_names=() deb_urls=() pids=() debs=() failed=() app i
-    local repo_changed=false tmp want_steam=false want_ge=false want_extra=()
+    local repo_changed=false tmp want_steam=false want_wine=false want_ge=false want_extra=()
     tmp=$(mktemp -d)
     chmod 755 "$tmp"
 
@@ -1784,6 +1785,7 @@ install_optional_with_progress() {
                 fi ;;
             # Necesitan pasos propios (32 bits, verificación): se instalan al final
             "steam") want_steam=true ;;
+            "wine") want_wine=true ;;
             "proton-ge") want_ge=true ;;
             # Descargas grandes con pasos propios: van al final, en este orden
             "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium"|"torbrowser-launcher"|"seamonkey") want_extra+=("$app") ;;
@@ -1847,6 +1849,7 @@ install_optional_with_progress() {
     rm -rf "$tmp"
 
     if $want_steam; then install_steam || failed+=(steam); fi
+    if $want_wine; then install_wine || failed+=(wine); fi
     if $want_ge; then install_proton_ge || failed+=(proton-ge); fi
     for app in firefox brave chromium torbrowser-launcher seamonkey android-tools android-studio flatpak flatpak-builder docker; do
         [[ " ${want_extra[*]} " == *" $app "* ]] || continue
@@ -2818,7 +2821,7 @@ EOF
     # En el perfil 'gaming' se activa directamente; en el menú se pregunta.
     if [ -f "$MANGOHUD_ENV" ]; then
         log_info "MangoHud ya está activo en todos los juegos Vulkan/Proton"
-    elif [ "$ACTIVE_PROFILE" = "gaming" ] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
+    elif [[ "$ACTIVE_PROFILE" == gaming* ]] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
         mkdir -p "$(dirname "$MANGOHUD_ENV")"
         echo "MANGOHUD=1" > "$MANGOHUD_ENV"
         log_success "MangoHud activo en todos los juegos Vulkan/Proton (tras cerrar sesión y volver a entrar)"

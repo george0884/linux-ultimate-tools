@@ -1879,6 +1879,7 @@ select_optional_software() {
         "gparted|💾 GParted"
         "vim|⌨️ Vim"
         "steam|🎮 Steam (con Proton para juegos de Windows)"
+        "wine|🍷 Wine + winetricks (programas y juegos de Windows fuera de Steam)"
         "proton-ge|🍷 Proton-GE (Proton de la comunidad, más compatible)"
         "spotify|🎵 Spotify"
         "obs-studio|🎥 OBS Studio"
@@ -2002,13 +2003,13 @@ remove_apps_with_progress() {
     $AUTO_MODE || echo -e "${CYAN}ℹ Para quitar los íconos del escritorio o del panel usa la opción 6${NC}"
     echo ""
 }
-#@parte apt: setup_spotify_repo
+#@parte apt: setup_spotify_repo install_wine
 
 # Instala todo en una sola operación de apt. Los .deb externos (VSCode, Chrome,
 # Discord) se descargan en paralelo mientras se actualiza la lista de paquetes.
 install_optional_with_progress() {
     local repo=() deb_names=() deb_urls=() pids=() debs=() failed=() app i
-    local repo_changed=false tmp want_steam=false want_ge=false want_extra=()
+    local repo_changed=false tmp want_steam=false want_wine=false want_ge=false want_extra=()
     tmp=$(mktemp -d)
     chmod 755 "$tmp"
 
@@ -2048,6 +2049,7 @@ install_optional_with_progress() {
                 fi ;;
             # Necesitan pasos propios (32 bits, verificación): se instalan al final
             "steam") want_steam=true ;;
+            "wine") want_wine=true ;;
             "proton-ge") want_ge=true ;;
             # Descargas grandes con pasos propios: van al final, en este orden
             "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium"|"torbrowser-launcher"|"seamonkey"|"escritorio") want_extra+=("$app") ;;
@@ -2111,6 +2113,7 @@ install_optional_with_progress() {
     rm -rf "$tmp"
 
     if $want_steam; then install_steam || failed+=(steam); fi
+    if $want_wine; then install_wine || failed+=(wine); fi
     if $want_ge; then install_proton_ge || failed+=(proton-ge); fi
     for app in escritorio firefox brave chromium torbrowser-launcher seamonkey android-tools android-studio flatpak flatpak-builder docker; do
         [[ " ${want_extra[*]} " == *" $app "* ]] || continue
@@ -3364,7 +3367,7 @@ EOF
     # En el perfil 'gaming' se activa directamente; en el menú se pregunta.
     if [ -f "$MANGOHUD_ENV" ]; then
         log_info "MangoHud ya está activo en todos los juegos Vulkan/Proton"
-    elif [ "$ACTIVE_PROFILE" = "gaming" ] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
+    elif [[ "$ACTIVE_PROFILE" == gaming* ]] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
         mkdir -p "$(dirname "$MANGOHUD_ENV")"
         echo "MANGOHUD=1" > "$MANGOHUD_ENV"
         log_success "MangoHud activo en todos los juegos Vulkan/Proton (tras cerrar sesión y volver a entrar)"
@@ -3439,9 +3442,224 @@ install_steam() {
 # OPCIÓN 18: PERFILES AUTOMÁTICOS (COLOR: PÚRPURA)
 # ============================================================
 
+# ============================================================
+# GAMING EXTREMO, AL ESTILO CACHYOS (perfil "gaming-extremo")
+# Se acerca a cómo viene CachyOS para jugar, sin ser lo mismo: CachyOS además recompila todo el
+# sistema para tu procesador, y eso no se puede copiar en Ubuntu. El perfil "gaming" no cambia.
+# Cada ajuste se deshace en 10 → 14 (o en 10 → 5, junto con el resto)
+# ============================================================
+EXTREME_IOSCHED_RULES="/etc/udev/rules.d/60-ultimate-tools-ioschedulers.rules"
+EXTREME_NTSYNC_CONF="/etc/modules-load.d/ultimate-tools-ntsync.conf"
+EXTREME_SCX_UNIT="/etc/systemd/system/ultimate-tools-scx.service"
+EXTREME_GAMEMODE_INI="/etc/gamemode.ini"
+EXTREME_ANANICY_DIR="/etc/ananicy.d"
+EXTREME_ANANICY_BACKUP="/etc/ananicy.d.antes-de-ultimate-tools"
+EXTREME_SYSCTL_KEYS=(vm.max_map_count kernel.split_lock_mitigate vm.compaction_proactiveness vm.page-cluster kernel.nmi_watchdog)
+# Reglas de prioridades de CachyOS para ananicy-cpp (GPL-3.0): se bajan de su repositorio oficial
+ANANICY_RULES_GIT="https://github.com/CachyOS/ananicy-rules"
+ANANICY_RULES_TGZ="https://codeload.github.com/CachyOS/ananicy-rules/tar.gz/refs/heads/master"
+
+# Baja las reglas de CachyOS y las copia a /etc/ananicy.d (guarda una copia de las que hubiera)
+install_cachyos_ananicy_rules() {
+    local tmp ok=1
+    tmp=$(mktemp -d)
+    if command -v git &> /dev/null; then
+        git clone -q --depth 1 "$ANANICY_RULES_GIT" "$tmp/src" >> "$LOG_FILE" 2>&1
+    fi
+    if ! [ -f "$tmp/src/ananicy.conf" ]; then
+        mkdir -p "$tmp/src"
+        curl -sSfL -m 120 "$ANANICY_RULES_TGZ" 2>>"$LOG_FILE" | tar -xz --strip-components=1 -C "$tmp/src" 2>>"$LOG_FILE"
+    fi
+    if [ -f "$tmp/src/ananicy.conf" ] && [ -d "$tmp/src/00-default" ]; then
+        if [ -d "$EXTREME_ANANICY_DIR" ] && ! [ -e "$EXTREME_ANANICY_BACKUP" ]; then
+            sudo cp -a "$EXTREME_ANANICY_DIR" "$EXTREME_ANANICY_BACKUP"
+        fi
+        sudo mkdir -p "$EXTREME_ANANICY_DIR" \
+            && ( cd "$tmp/src" && sudo cp -R ./*.cgroups ./*.types ananicy.conf 00-default "$EXTREME_ANANICY_DIR/" ) \
+            && { mkdir -p "$STATE_DIR"; touch "$STATE_DIR/ananicy-cachyos"; ok=0; }
+    fi
+    rm -rf -- "$tmp"
+    return $ok
+}
+
+# GameMode con más prioridad para el juego mientras corre (si no hay ananicy-cpp)
+gamemode_high_priority() {
+    if [ -f "$EXTREME_GAMEMODE_INI" ] && ! [ -f "$STATE_DIR/gamemode-ini" ] && ! [ -e "$EXTREME_GAMEMODE_INI.antes-de-ultimate-tools" ]; then
+        sudo cp -a "$EXTREME_GAMEMODE_INI" "$EXTREME_GAMEMODE_INI.antes-de-ultimate-tools"
+    fi
+    sudo tee "$EXTREME_GAMEMODE_INI" > /dev/null << 'INI'
+; Linux Ultimate Tools (perfil gaming-extremo): más prioridad para el juego mientras usa GameMode.
+; Se deshace en 10 → 14 (vuelve el archivo que había, o se borra)
+[general]
+renice=10
+ioprio=0
+softrealtime=auto
+inhibit_screensaver=1
+INI
+    mkdir -p "$STATE_DIR"
+    touch "$STATE_DIR/gamemode-ini"
+    # Subir la prioridad requiere estar en el grupo gamemode (vale desde el próximo inicio de sesión)
+    getent group gamemode > /dev/null && ! id -nG "$USER" | grep -qw gamemode \
+        && run "No se pudo agregar tu usuario al grupo gamemode" sudo usermod -aG gamemode "$USER"
+    log_success "GameMode da prioridad alta al juego (en Steam: opciones de lanzamiento \"gamemoderun %command%\")"
+}
+
+# Prioridad automática para los juegos: ananicy-cpp con las reglas de CachyOS si está en los
+# repositorios de tu Ubuntu; si no, GameMode con prioridad alta
+enable_game_priority() {
+    if [ -n "$(available_pkgs ananicy-cpp)" ]; then
+        apt_install_recorded ananicy-cpp || return 1
+        if install_cachyos_ananicy_rules; then
+            run "No se pudo activar ananicy-cpp" sudo systemctl enable --now ananicy-cpp
+            log_success "ananicy-cpp con las reglas de CachyOS: los juegos tienen prioridad sobre lo de fondo"
+            return 0
+        fi
+        log_warning "No se pudieron bajar las reglas de CachyOS: se usa GameMode"
+    else
+        echo -e "${YELLOW}ℹ ananicy-cpp no está en los repositorios de tu Ubuntu: se usa GameMode con prioridad alta${NC}"
+    fi
+    command -v gamemoded &> /dev/null || install_gaming_tools || return 1
+    gamemode_high_priority
+}
+
+# Ajustes de memoria y kernel que usan SteamOS y CachyOS para juegos
+gaming_sysctl_extreme() {
+    # Algunos juegos (Counter-Strike 2, Hogwarts Legacy...) se cierran si es bajo
+    set_sysctl vm.max_map_count 2147483642
+    # Sin la penalización de "split lock": algunos juegos pierden mucho rendimiento con ella
+    [ -e /proc/sys/kernel/split_lock_mitigate ] && set_sysctl kernel.split_lock_mitigate 0
+    # Menos pausas por compactar memoria en segundo plano
+    [ -e /proc/sys/vm/compaction_proactiveness ] && set_sysctl vm.compaction_proactiveness 0
+    # Con ZRAM conviene leer de a una página
+    zram_swap_active && set_sysctl vm.page-cluster 0
+    # Sin el vigilante NMI: menos interrupciones
+    [ -e /proc/sys/kernel/nmi_watchdog ] && set_sysctl kernel.nmi_watchdog 0
+    log_success "Ajustes de memoria y kernel para juegos aplicados"
+}
+
+# Planificador de disco según el tipo, como CachyOS: disco rígido → BFQ, SSD → mq-deadline, NVMe → ninguno
+enable_io_schedulers() {
+    sudo tee "$EXTREME_IOSCHED_RULES" > /dev/null << 'RULES'
+# Linux Ultimate Tools (perfil gaming-extremo): planificador de disco según el tipo.
+# Se deshace en 10 → 14 (o borrando este archivo y reiniciando)
+ACTION=="add|change", KERNEL=="sd[a-z]*|mmcblk[0-9]*", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="bfq"
+ACTION=="add|change", KERNEL=="sd[a-z]*|mmcblk[0-9]*", ATTR{queue/rotational}=="0", ATTR{queue/scheduler}="mq-deadline"
+ACTION=="add|change", KERNEL=="nvme[0-9]*n[0-9]*", ATTR{queue/scheduler}="none"
+RULES
+    sudo udevadm control --reload 2>/dev/null
+    sudo udevadm trigger --subsystem-match=block --action=change 2>/dev/null
+    log_success "Planificador de disco según el tipo (NVMe, SSD o disco rígido)"
+}
+
+# ntsync: Wine y Proton sincronizan más rápido (módulo de kernels 6.14 o más nuevos)
+enable_ntsync() {
+    if ! find /lib/modules/ -name 'ntsync.ko*' 2>/dev/null | grep -q .; then
+        echo -e "${YELLOW}ℹ Tus kernels no traen ntsync (llega con el 6.14 o más nuevo): se omite${NC}"
+        return 0
+    fi
+    echo ntsync | sudo tee "$EXTREME_NTSYNC_CONF" > /dev/null
+    sudo modprobe ntsync 2>/dev/null
+    log_success "ntsync activado$([ -e /dev/ntsync ] || echo " (desde el próximo reinicio)")"
+}
+
+# Planificador de CPU para juegos (sched-ext, scx_lavd), solo si algún kernel instalado lo permite y
+# los planificadores están en los repositorios oficiales. Si falla, el kernel vuelve solo al suyo
+enable_scx_lavd() {
+    local bin
+    if ! [ -d /sys/kernel/sched_ext ] && ! grep -qs '^CONFIG_SCHED_CLASS_EXT=y' /boot/config-*; then
+        echo -e "${YELLOW}ℹ Tus kernels no permiten sched-ext: se omite${NC}"
+        return 0
+    fi
+    if ! command -v scx_lavd &> /dev/null; then
+        if [ -n "$(available_pkgs scx)" ]; then
+            apt_install_recorded scx || return 1
+        else
+            echo -e "${YELLOW}ℹ Los planificadores sched-ext no están en los repositorios oficiales de tu Ubuntu: se omite${NC}"
+            return 0
+        fi
+    fi
+    bin=$(command -v scx_lavd) || { echo -e "${YELLOW}ℹ No se encontró scx_lavd: se omite${NC}"; return 0; }
+    sudo tee "$EXTREME_SCX_UNIT" > /dev/null << UNIT
+# Linux Ultimate Tools (perfil gaming-extremo). Se deshace en 10 → 14
+[Unit]
+Description=Planificador de CPU para juegos scx_lavd (sched-ext)
+ConditionPathIsDirectory=/sys/kernel/sched_ext
+
+[Service]
+ExecStart=$bin
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+    sudo systemctl daemon-reload
+    run "No se pudo activar scx_lavd" sudo systemctl enable --now "$(basename "$EXTREME_SCX_UNIT")" || return 1
+    log_success "scx_lavd activado$([ -d /sys/kernel/sched_ext ] || echo " (desde que arranques con un kernel que lo permita)")"
+}
+
+# ¿Hay algún ajuste del perfil gaming-extremo aplicado?
+extreme_gaming_active() {
+    [ -f "$EXTREME_IOSCHED_RULES" ] || [ -f "$EXTREME_NTSYNC_CONF" ] || [ -f "$EXTREME_SCX_UNIT" ] \
+        || [ -f "$STATE_DIR/ananicy-cachyos" ] || [ -f "$STATE_DIR/gamemode-ini" ]
+}
+
+# Deshace los ajustes del perfil gaming-extremo (los programas se quitan en 10 → 1)
+remove_extreme_gaming() {
+    local key changed=false sysctl_changed=false
+    if [ -f "$EXTREME_SCX_UNIT" ]; then
+        sudo systemctl disable --now "$(basename "$EXTREME_SCX_UNIT")" 2>/dev/null
+        sudo rm -f "$EXTREME_SCX_UNIT"
+        sudo systemctl daemon-reload
+        echo -e "  ${GREEN}✓ scx_lavd desactivado (vuelve el planificador del kernel)${NC}"
+        changed=true
+    fi
+    if [ -f "$EXTREME_IOSCHED_RULES" ]; then
+        sudo rm -f "$EXTREME_IOSCHED_RULES"
+        sudo udevadm control --reload 2>/dev/null
+        echo -e "  ${GREEN}✓ Planificador de disco: vuelve el de fábrica (al reiniciar)${NC}"
+        changed=true
+    fi
+    if [ -f "$EXTREME_NTSYNC_CONF" ]; then
+        sudo rm -f "$EXTREME_NTSYNC_CONF"
+        echo -e "  ${GREEN}✓ ntsync ya no se carga al iniciar${NC}"
+        changed=true
+    fi
+    if [ -f "$STATE_DIR/ananicy-cachyos" ]; then
+        sudo systemctl disable --now ananicy-cpp 2>/dev/null
+        sudo rm -rf "$EXTREME_ANANICY_DIR"
+        [ -d "$EXTREME_ANANICY_BACKUP" ] && sudo mv "$EXTREME_ANANICY_BACKUP" "$EXTREME_ANANICY_DIR"
+        rm -f "$STATE_DIR/ananicy-cachyos"
+        echo -e "  ${GREEN}✓ ananicy-cpp desactivado y reglas de CachyOS quitadas (el programa se quita en 10 → 1)${NC}"
+        changed=true
+    fi
+    if [ -f "$STATE_DIR/gamemode-ini" ]; then
+        if [ -f "$EXTREME_GAMEMODE_INI.antes-de-ultimate-tools" ]; then
+            sudo mv -f "$EXTREME_GAMEMODE_INI.antes-de-ultimate-tools" "$EXTREME_GAMEMODE_INI"
+        else
+            sudo rm -f "$EXTREME_GAMEMODE_INI"
+        fi
+        rm -f "$STATE_DIR/gamemode-ini"
+        echo -e "  ${GREEN}✓ GameMode vuelve a su configuración de antes${NC}"
+        changed=true
+    fi
+    if [ -f "$SYSCTL_FILE" ]; then
+        for key in "${EXTREME_SYSCTL_KEYS[@]}"; do
+            if grep -q "^${key//./\\.} *=" "$SYSCTL_FILE"; then
+                sudo sed -i "/^${key//./\\.} *=/d" "$SYSCTL_FILE"
+                changed=true sysctl_changed=true
+            fi
+        done
+        $sysctl_changed && echo -e "  ${GREEN}✓ Ajustes de memoria y kernel para juegos quitados (vuelven los de fábrica al reiniciar)${NC}"
+    fi
+    $changed || echo -e "  ${GREEN}✓ No hay ajustes del perfil gaming-extremo aplicados${NC}"
+    return 0
+}
+
 PROFILES=(
     "productividad|Oficina y uso diario: herramientas, RAM, DNS rápido, sin juegos"
     "gaming|Juegos: Steam + Proton, drivers, kernel Liquorix, GameMode, red de baja latencia"
+    "gaming-extremo|Al estilo CachyOS (parecido, no idéntico): gaming + kernel para tu CPU y más"
     "ahorro|Ahorro de energía: TLP en portátiles, sin indexador, ZRAM"
     "desarrollo|Programación: git, compiladores, Python, VSCode, SDK de Android para APK"
     "minimalista|Mínimo: sin meta-paquete, apps extra ni Snap; Firefox .deb de Mozilla"
@@ -3472,6 +3690,29 @@ Instalar Steam y activar Proton para todos los juegos|install_steam
 Instalar Proton-GE (más compatible con algunos juegos)|install_proton_ge
 Optimizar RAM (swappiness y caché)|apply_ram_tweaks
 Activar ZRAM|enable_zram
+Perfil de energía: rendimiento máximo (o GameMode al jugar)|set_gaming_power
+Desactivar el indexador de archivos|disable_indexer
+Wi-Fi sin ahorro de energía (menos latencia)|disable_wifi_powersave
+Activar TCP BBR|enable_bbr
+Usar el DNS más rápido (medido)|set_fastest_dns
+EOF
+        ;;
+        gaming-extremo) cat << 'EOF'
+Desactivar indexación de manuales (apt más rápido)|disable_mandb
+Actualizar el sistema|do_system_update
+Instalar drivers recomendados (GPU, Wi-Fi...)|install_recommended_drivers
+Kernel XanMod compilado para tu procesador (se omite si Secure Boot está activo)|install_xanmod_kernel
+Instalar GameMode y MangoHud|install_gaming_tools
+Prioridad para los juegos (ananicy-cpp con reglas de CachyOS, o GameMode)|enable_game_priority
+Instalar Steam y activar Proton para todos los juegos|install_steam
+Instalar Proton-GE (más compatible con algunos juegos)|install_proton_ge
+Instalar Wine y winetricks (juegos y programas de Windows fuera de Steam)|install_wine
+Optimizar RAM (swappiness y caché)|apply_ram_tweaks
+Activar ZRAM|enable_zram
+Ajustes de memoria y kernel para juegos (como SteamOS y CachyOS)|gaming_sysctl_extreme
+Planificador de disco según el tipo (NVMe, SSD o disco rígido)|enable_io_schedulers
+ntsync: Wine y Proton más rápidos (si tu kernel lo trae)|enable_ntsync
+Planificador de CPU para juegos sched-ext (si tu kernel y tu Ubuntu lo traen)|enable_scx_lavd
 Perfil de energía: rendimiento máximo (o GameMode al jugar)|set_gaming_power
 Desactivar el indexador de archivos|disable_indexer
 Wi-Fi sin ahorro de energía (menos latencia)|disable_wifi_powersave
@@ -3658,6 +3899,7 @@ show_tweaks_status() {
         factory_line "Indexador de archivos: activo (o no hay)"
     fi
     if [ -e /var/lib/man-db/auto-update ]; then factory_line "Indexación de manuales: activa"; else changed_line "Indexación de manuales: desactivada"; fi
+    if extreme_gaming_active; then changed_line "Perfil gaming-extremo: prioridades, disco, ntsync o sched-ext cambiados"; else factory_line "Ajustes del perfil gaming-extremo: no aplicados"; fi
     echo ""
     [ "$changed" -gt 0 ]
 }
@@ -3689,6 +3931,8 @@ restore_all_tweaks() {
     else
         enable_mandb
     fi
+    echo -e "${YELLOW}🎮 Perfil gaming-extremo${NC}"
+    remove_extreme_gaming
 }
 
 undo_menu() {
@@ -3714,10 +3958,11 @@ undo_menu() {
         echo -e "  ${RED}11)${NC} 🖥️ Quitar el escritorio instalado por el script"
         echo -e "  ${RED}12)${NC} 🖥️ Quitar OTROS escritorios (no el original ni el que está abierto)"
         echo -e "  ${RED}13)${NC} 📝 Quitar el registro de auditoría (auditd)"
+        echo -e "  ${RED}14)${NC} 🎮 Quitar los ajustes del perfil gaming-extremo (prioridades, disco, ntsync, sched-ext...)"
         echo -e "\n  ${RED} 0)${NC} 🔙 Volver"
         echo -e "\n${YELLOW}ℹ Otros cambios se deshacen en su menú: kernel (14), distribución original (11),${NC}"
         echo -e "${YELLOW}  Snap (9), accesos directos (6), DNS/BBR/Wi-Fi (16), energía e indexador (17)${NC}\n"
-        read -r -p "📌 Opción (0-13): " undo_option
+        read -r -p "📌 Opción (0-14): " undo_option
 
         case $undo_option in
             1) remove_installed_programs ;;
@@ -3732,6 +3977,7 @@ undo_menu() {
             11) remove_installed_desktop ;;
             12) remove_extra_desktop ;;
             13) disable_audit ;;
+            14) remove_extreme_gaming ;;
             5)
                 if ! show_tweaks_status; then
                     echo -e "${GREEN}✓ No hay ajustes cambiados: todo está como de fábrica${NC}"

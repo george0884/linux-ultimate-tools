@@ -77,7 +77,15 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [Proton-GE](https://github.com/GloriousEggroll/proton-ge-custom) | GloriousEggroll | BSD-3-Clause (y licencias de sus componentes) | Externo: descarga de GitHub |
 | [GameMode](https://github.com/FeralInteractive/gamemode) | Feral Interactive | BSD-3-Clause | Instala |
 | [MangoHud](https://github.com/flightlessmango/MangoHud) | flightlessmango | MIT | Instala |
+| [Wine](https://www.winehq.org/) y [winetricks](https://github.com/Winetricks/winetricks) | Wine project · Austin English y colaboradores | LGPL-2.1-or-later | Instala: programas y juegos de Windows fuera de Steam |
+| [ananicy-cpp](https://gitlab.com/ananicy-cpp/ananicy-cpp) | Vladislav Nepogodin y colaboradores | GPL-3.0 | Instala (perfil `gaming-extremo`, si está en los repositorios oficiales) |
+| [ananicy-rules de CachyOS](https://github.com/CachyOS/ananicy-rules) | Equipo de CachyOS y comunidad | GPL-3.0 | Externo: se bajan de su repositorio oficial a `/etc/ananicy.d` (perfil `gaming-extremo`); no se copian al script |
+| [sched-ext / scx](https://github.com/sched-ext/scx) (`scx_lavd`) | Comunidad sched-ext | GPL-2.0 | Instala (perfil `gaming-extremo`, solo desde los repositorios oficiales y si el kernel lo permite) |
 | [CoreCtrl](https://gitlab.com/corectrl/corectrl) | Juan Palacios | GPL-3.0-or-later | Instala: control de gráficas AMD |
+
+Los ajustes del perfil `gaming-extremo` (prioridades, planificador de disco, `vm.max_map_count`, *split lock*,
+ntsync, sched-ext) siguen la idea de [CachyOS](https://cachyos.org/) y SteamOS; los archivos de configuración los
+escribe el script desde cero.
 
 ## 🌐 Navegadores
 
