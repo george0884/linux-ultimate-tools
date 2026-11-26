@@ -612,9 +612,9 @@ checklist_tool() {
 # Entradas "paquete|descripción" o "paquete|descripción|ON" (casilla ya marcada);
 # deja lo elegido en CHOSEN. Devuelve 1 si se cancela.
 # Con CHECKLIST_NOTAGS=true no se muestra la columna de nombres internos.
-# Si no hay dialog ni whiptail (o no es una terminal interactiva) se elige escribiendo números.
-# En pantallas angostas (un celular en vertical, por ejemplo con Termux) también se usan números:
-# no hacen falta flechas ni barra espaciadora. LISTAS=numeros o LISTAS=casillas lo fuerza.
+# Si no hay dialog ni whiptail (o no es una terminal interactiva) se elige escribiendo números;
+# LISTAS=numeros lo fuerza. En el celular (Termux) también son casillas: dialog va sin ratón para
+# que tocar la pantalla siga abriendo el teclado.
 checklist_select() {
     local title="$1" text="$2"
     shift 2
@@ -622,20 +622,16 @@ checklist_select() {
     CHOSEN=()
     width=$(tput cols 2>/dev/null || echo 80)
 
-    if [ -t 0 ] && [ -t 1 ] && [ "${LISTAS:-}" != numeros ]; then
-        if [ "$width" -ge 70 ] || [ "${LISTAS:-}" = casillas ]; then
-            tool=$(checklist_tool)
-        fi
-    fi
+    [ -t 0 ] && [ -t 1 ] && [ "${LISTAS:-}" != numeros ] && tool=$(checklist_tool)
     if [ -n "$tool" ]; then
-        local cols lines w h lh tagw=0 max_desc out
+        local cols lines w h lh tagw=0 max_desc out notags="${CHECKLIST_NOTAGS:-}"
         cols=$(tput cols 2>/dev/null || echo 80)
         lines=$(tput lines 2>/dev/null || echo 24)
         # Ancho según la terminal (entre 60 y 120 columnas) y alto justo para la lista
         w=$((cols - 4))
         [ "$w" -gt 120 ] && w=120
-        [ "$w" -lt 60 ] && w=60
-        if [ -z "$CHECKLIST_NOTAGS" ]; then
+        [ "$w" -lt 60 ] && w=$((cols < 62 ? cols - 2 : 60))
+        if [ -z "$notags" ]; then
             for entry in "${entries[@]}"; do
                 name=${entry%%|*}
                 [ ${#name} -gt "$tagw" ] && tagw=${#name}
@@ -644,6 +640,7 @@ checklist_select() {
         fi
         # Lo que queda para la descripción: así ningún renglón se sale del recuadro
         max_desc=$((w - tagw - 14))
+        [ "$max_desc" -lt 12 ] && max_desc=12
         for entry in "${entries[@]}"; do
             status=off
             [[ "$entry" == *"|ON" ]] && { status=on; entry=${entry%|ON}; }
@@ -677,7 +674,7 @@ checklist_select() {
             $has_sys && text="$text\n\Z1⚠ SISTEMA\Zn = herramienta del sistema o de tu distribución: quítala solo si sabes que no la usas"
             # --no-mouse: con el ratón activado, en Termux tocar la pantalla ya no abre el teclado
             out=$(DIALOGRC="${DIALOGRC:-$rc_file}" NCURSES_NO_UTF8_ACS=1 dialog --no-mouse --colors --title " $title " --ok-label "Aceptar" --cancel-label "Cancelar" \
-                --separate-output ${CHECKLIST_NOTAGS:+--no-tags} \
+                --separate-output ${notags:+--no-tags} \
                 --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
                 0 0 0 "${args[@]}" 3>&1 1>&2 2>&3)
             local rc=$?
@@ -687,7 +684,7 @@ checklist_select() {
             $has_sys && text="$text\n⚠ SISTEMA = herramienta del sistema o de tu distribución: quítala solo si sabes que no la usas"
             out=$(NEWT_COLORS="${NEWT_COLORS:-$WHIPTAIL_COLORS}" \
                 whiptail --title "$title" --ok-button "Aceptar" --cancel-button "Cancelar" \
-                --separate-output ${CHECKLIST_NOTAGS:+--notags} \
+                --separate-output ${notags:+--notags} \
                 --checklist "$text\n\nEspacio: marcar/desmarcar · Flechas: moverse · Enter: aceptar" \
                 "$h" "$w" "$lh" "${args[@]}" 3>&1 1>&2 2>&3) || return 1
         fi
