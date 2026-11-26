@@ -7917,7 +7917,9 @@ boot_only_menu() {
 USB_DISTROS=(
     "ubuntu|Ubuntu (GNOME), última LTS|ubuntu|releases|ubuntu-[0-9.]+-desktop-amd64\\.iso"
     "kubuntu|Kubuntu (KDE Plasma), última LTS|ubuntu|kubuntu|kubuntu-[0-9.]+-desktop-amd64\\.iso"
-    "kdeneon|KDE neon (el KDE Plasma más nuevo, sobre Ubuntu LTS)|fijo|https://files.kde.org/neon/images/user/current|neon-user-current.iso|neon-user-current.iso.sha256sum"
+    "kdeneon|KDE neon User (el KDE Plasma más nuevo y estable, sobre Ubuntu LTS)|fijo|https://files.kde.org/neon/images/user/current|neon-user-current.iso|neon-user-current.iso.sha256sum"
+    "kdeneon-testing|KDE neon Testing (Plasma en prueba, antes de salir: para probar)|fijo|https://files.kde.org/neon/images/testing/current|neon-testing-current.iso|neon-testing-current.iso.sha256sum"
+    "kdeneon-unstable|KDE neon Unstable (lo último en desarrollo: puede fallar)|fijo|https://files.kde.org/neon/images/unstable/current|neon-unstable-current.iso|neon-unstable-current.iso.sha256sum"
     "xubuntu|Xubuntu (Xfce, liviano), última LTS|ubuntu|xubuntu|xubuntu-[0-9.]+-desktop-amd64\\.iso"
     "lubuntu|Lubuntu (LXQt, el más liviano), última LTS|ubuntu|lubuntu|lubuntu-[0-9.]+-desktop-amd64\\.iso"
     "server|Ubuntu Server, última LTS|ubuntu|releases|ubuntu-[0-9.]+-live-server-amd64\\.iso"

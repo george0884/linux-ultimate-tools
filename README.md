@@ -490,7 +490,7 @@ Graba un sistema en un pendrive con `dd`, pensado para que lo use cualquiera y s
 Funciona en todas las distribuciones (también en el modo arranque de Arch, Fedora, openSUSE...).
 
 1. **Elige la ISO:**
-   - **Descargarla**: Ubuntu, Kubuntu, **KDE neon**, Xubuntu, Lubuntu y Ubuntu Server (la **última LTS se detecta
+   - **Descargarla**: Ubuntu, Kubuntu, **KDE neon** (User, Testing o Unstable), Xubuntu, Lubuntu y Ubuntu Server (la **última LTS se detecta
      sola**), Debian con KDE o GNOME, Debian netinst o Arch. Se baja de la página oficial a tu carpeta de Descargas, se puede **retomar si
      se corta** y se **verifica con su SHA-256 oficial** (si está dañada, se borra y no se usa). Si ya la tenías
      descargada y entera, no se baja de nuevo.
