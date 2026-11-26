@@ -8610,7 +8610,7 @@ boot_only_menu() {
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
         echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
-        echo -e "  ${CYAN}20)${NC} 💿 CREAR USB DE INSTALACIÓN (descarga y graba Ubuntu, Debian, Arch...)"
+        echo -e "  ${CYAN}20)${NC} 💿 DESCARGAR SISTEMAS (ISO) Y CREAR USB DE INSTALACIÓN"
         echo ""
         echo -e "  ${CYAN}21)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
@@ -8637,7 +8637,7 @@ boot_only_menu() {
 # ============================================================
 
 # Distribuciones que se pueden descargar: clave|nombre|tipo|datos del tipo
-# (las líneas que empiezan con "#" son los títulos de cada grupo en el menú)
+# (las líneas que empiezan con "#" son los grupos del menú: "#título|ejemplos")
 #   ubuntu:  carpeta|patrón (la última LTS se detecta sola)
 #   lista:   url de la carpeta|archivo de sumas|patrón
 #   fijo:    url de la carpeta|nombre de la ISO|archivo con su suma
@@ -8647,8 +8647,13 @@ boot_only_menu() {
 #   pop:     variante (intel o nvidia)|patrón (API oficial de System76)
 #   fedora:  subvariante|patrón (releases.json oficial de Fedora)
 #   zorin:   edición|patrón (sumas de la página oficial de ayuda de Zorin)
+#   gentoo:  carpeta de autobuilds|patrón (latest-iso.txt dice cuál es la última)
+#   slackware: espejo oficial|patrón (suma MD5 y firma GPG oficial de Slackware)
+#   nixos:   variante|patrón (la última versión estable, de channels.nixos.org)
+#   enlace:  página de descarga|patrón (pide iniciar sesión: se explica cómo bajarla a mano)
+# La subcarpeta de "carpeta" puede seguir con una ruta fija: "[0-9]+/isos/x86_64"
 USB_DISTROS=(
-    "#Ubuntu y sus derivadas"
+    "#Ubuntu y sus derivadas|Ubuntu y sus sabores, KDE neon, Linux Mint, Zorin OS, Pop!_OS"
     "ubuntu|Ubuntu (GNOME), última LTS|ubuntu|releases|ubuntu-[0-9.]+-desktop-amd64\\.iso"
     "kubuntu|Kubuntu (KDE Plasma), última LTS|ubuntu|kubuntu|kubuntu-[0-9.]+-desktop-amd64\\.iso"
     "xubuntu|Xubuntu (Xfce, liviano), última LTS|ubuntu|xubuntu|xubuntu-[0-9.]+-desktop-amd64\\.iso"
@@ -8665,7 +8670,7 @@ USB_DISTROS=(
     "zorin|Zorin OS Core (se parece a Windows o macOS)|zorin|Core|Zorin-OS-[0-9.]+-Core-64-bit(-r[0-9]+)?\\.iso"
     "pop|Pop!_OS (de System76, escritorio COSMIC)|pop|intel|pop-os_[0-9.]+_amd64_intel_[0-9]+\\.iso"
     "pop-nvidia|Pop!_OS para placas NVIDIA (trae el driver)|pop|nvidia|pop-os_[0-9.]+_amd64_nvidia_[0-9]+\\.iso"
-    "#Debian y sus derivadas"
+    "#Debian y sus derivadas|Debian estable y testing, LMDE, MX Linux, Kali"
     "debian-kde|Debian estable con KDE Plasma (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-kde\\.iso"
     "debian-gnome|Debian estable con GNOME (live)|lista|https://cdimage.debian.org/debian-cd/current-live/amd64/iso-hybrid|SHA256SUMS|debian-live-[0-9.]+-amd64-gnome\\.iso"
     "debian-net|Debian estable netinst (instalador mínimo, baja el resto de internet)|lista|https://cdimage.debian.org/debian-cd/current/amd64/iso-cd|SHA256SUMS|debian-[0-9.]+-amd64-netinst\\.iso"
@@ -8675,17 +8680,29 @@ USB_DISTROS=(
     "mx|MX Linux Xfce (liviano y muy estable)|sf|mx-linux|Final/Xfce|MX-[0-9.]+_Xfce_x64\\.iso|sha256"
     "mx-kde|MX Linux KDE Plasma|sf|mx-linux|Final/KDE|MX-[0-9.]+_KDE_x64\\.iso|sha256"
     "kali|Kali Linux (seguridad y pruebas de intrusión, instalador)|lista|https://cdimage.kali.org/current|SHA256SUMS|kali-linux-[0-9.]+[a-z]?-installer-amd64\\.iso"
-    "#Arch y sus derivadas"
+    "#Arch y sus derivadas|Arch, Manjaro, CachyOS, EndeavourOS"
     "arch|Arch Linux (instalación por terminal)|lista|https://geo.mirror.pkgbuild.com/iso/latest|sha256sums.txt|archlinux-[0-9.]+-x86_64\\.iso"
     "manjaro-kde|Manjaro KDE Plasma (Arch fácil, con instalador gráfico)|sf|manjarolinux|kde|manjaro-kde-[0-9.]+-[0-9]+-linux[0-9]+\\.iso|sha256"
     "manjaro-gnome|Manjaro GNOME|sf|manjarolinux|gnome|manjaro-gnome-[0-9.]+-[0-9]+-linux[0-9]+\\.iso|sha256"
     "manjaro-xfce|Manjaro Xfce (liviano)|sf|manjarolinux|xfce|manjaro-xfce-[0-9.]+-[0-9]+-linux[0-9]+\\.iso|sha256"
     "cachyos|CachyOS (Arch optimizado para velocidad, instalador gráfico)|sf|cachyos-arch|gui-installer/desktop|cachyos-desktop-linux-[0-9]+\\.iso|sha256"
     "endeavouros|EndeavourOS (Arch casi puro, con instalador gráfico)|carpeta|https://mirror.alpix.eu/endeavouros/iso|-|EndeavourOS_[A-Za-z_-]+-[0-9.]+\\.iso|.sha512sum"
-    "#Otras"
+    "#Fedora y la familia Red Hat|Fedora, CentOS Stream, AlmaLinux, Rocky Linux, Red Hat"
     "fedora|Fedora Workstation (GNOME)|fedora|Workstation|Fedora-Workstation-Live-.+\\.iso"
     "fedora-kde|Fedora KDE Plasma|fedora|KDE|Fedora-KDE-.+\\.iso"
+    "centos|CentOS Stream (lo que será la próxima Red Hat, instalador completo ~10 GB)|carpeta|https://mirror.stream.centos.org|[0-9]+-stream/BaseOS/x86_64/iso|CentOS-Stream-[0-9]+-[0-9.]+-x86_64-dvd1\\.iso|.SHA256SUM"
+    "alma|AlmaLinux (compatible con Red Hat, gratis; instalador completo ~10 GB)|carpeta|https://repo.almalinux.org/almalinux|[0-9]+/isos/x86_64|AlmaLinux-[0-9]+\\.[0-9]+-x86_64-dvd\\.iso|CHECKSUM"
+    "rocky|Rocky Linux (compatible con Red Hat, gratis; instalador completo ~10 GB)|carpeta|https://download.rockylinux.org/pub/rocky|[0-9]+/isos/x86_64|Rocky-[0-9]+\\.[0-9]+-x86_64-dvd1?\\.iso|CHECKSUM"
+    "rhel|Red Hat Enterprise Linux (pide iniciar sesión: te explico cómo)|enlace|https://developers.redhat.com/products/rhel/download|rhel-[0-9.]+-x86_64-(dvd|boot)\\.iso"
+    "#openSUSE|Tumbleweed y Leap"
     "opensuse|openSUSE Tumbleweed (siempre al día)|fijo|https://download.opensuse.org/tumbleweed/iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso.sha256"
+    "leap|openSUSE Leap (estable, versión fija)|carpeta|https://download.opensuse.org/distribution/openSUSE-stable/offline|-|Leap-[0-9.]+-offline-installer-x86_64\\.install\\.iso|.sha256"
+    "#Independientes e históricas|Slackware, Gentoo, Void Linux, NixOS"
+    "slackware|Slackware (la más antigua que sigue viva, desde 1993)|slackware|https://mirrors.slackware.com/slackware|slackware64-[0-9.]+-install-dvd\\.iso"
+    "gentoo|Gentoo LiveGUI (KDE Plasma; todo se compila a tu medida)|gentoo|https://distfiles.gentoo.org/releases/amd64/autobuilds|livegui-amd64-[0-9TZ]+\\.iso"
+    "gentoo-min|Gentoo mínima (instalación por terminal)|gentoo|https://distfiles.gentoo.org/releases/amd64/autobuilds|install-amd64-minimal-[0-9TZ]+\\.iso"
+    "void|Void Linux Xfce (independiente, sin systemd)|lista|https://repo-default.voidlinux.org/live/current|sha256sum.txt|void-live-x86_64-[0-9]+-xfce\\.iso"
+    "nixos|NixOS (todo el sistema en un archivo de configuración)|nixos|graphical|nixos-graphical-.+-x86_64-linux\\.iso"
 )
 
 usb_download_dir() {
@@ -8697,21 +8714,65 @@ usb_download_dir() {
     echo "$d"
 }
 
+# Las listas en formato BSD ("SHA256 (archivo) = hash", Fedora, Rocky, Void...) pasan a "hash  archivo"
+usb_norm_sums() {
+    sed -E 's/^(SHA|MD)[0-9]* \(([^)]+)\) = ([0-9a-fA-F]+)[[:space:]]*$/\3  \2/'
+}
+
 # "hash archivo" de la versión más nueva que coincide con el patrón, dentro de una lista de sumas
 usb_pick_from_sums() {
-    local sums="$1" pattern="$2"
+    local sums
+    sums=$(usb_norm_sums <<< "$1")
+    local pattern="$2"
     awk -v re="^${pattern}\$" '{f = $2; sub(/^\*/, "", f); if (f ~ re) print $1, f}' <<< "$sums" \
         | sort -k2,2V | tail -1
 }
 
 # Primera suma SHA-256 o SHA-512 de un archivo de suma (lo lee por la entrada)
 usb_first_hash() {
-    grep -oiE '^[0-9a-f]+' | awk 'length($0) == 64 || length($0) == 128 {print; exit}'
+    usb_norm_sums | grep -oiE '^[0-9a-f]+' | awk 'length($0) == 64 || length($0) == 128 {print; exit}'
 }
 
-# Suma de un archivo: SHA-512 si la oficial tiene 128 caracteres, si no SHA-256
+# Suma de un archivo según el largo de la oficial: 128 = SHA-512, 32 = MD5 (Slackware), si no SHA-256
 usb_hash_of() {
-    if [ "${2:-64}" -eq 128 ]; then sha512sum "$1"; else sha256sum "$1"; fi | awk '{print $1}'
+    case ${2:-64} in
+        128) sha512sum "$1" ;;
+        32) md5sum "$1" ;;
+        *) sha256sum "$1" ;;
+    esac | awk '{print $1}'
+}
+
+usb_hash_name() {
+    case $1 in 128) echo SHA-512 ;; 32) echo MD5 ;; *) echo SHA-256 ;; esac
+}
+
+# Firma GPG de la ISO (Slackware): se comprueba con la llave oficial y su huella conocida
+usb_check_signature() {
+    [ -n "$USB_ISO_SIG" ] || return 0
+    if ! command -v gpg &> /dev/null; then
+        log_warning "No está gpg: solo se comprobó la suma $(usb_hash_name ${#USB_ISO_SHA})"
+        return 0
+    fi
+    local g status=""
+    g=$(mktemp -d)
+    echo -e "${BLUE}🔏 Comprobando la firma oficial (GPG)...${NC}"
+    if curl -sSfL -m 30 -o "$g/firma.asc" "$USB_ISO_SIG" && curl -sSfL -m 30 -o "$g/llave" "$USB_ISO_KEY" \
+        && gpg --homedir "$g" --batch --quiet --import "$g/llave" 2>/dev/null; then
+        status=$(gpg --homedir "$g" --batch --status-fd 1 --verify "$g/firma.asc" "$USB_ISO" 2>/dev/null)
+    fi
+    gpgconf --homedir "$g" --kill all &> /dev/null
+    rm -rf -- "$g"
+    if grep -q "^\[GNUPG:\] VALIDSIG .*$USB_ISO_KEYID" <<< "$status"; then
+        log_success "Firma oficial correcta"
+        return 0
+    fi
+    # Firma que no corresponde (ISO alterada o de otra llave): no se usa
+    if grep -qE "^\[GNUPG:\] (BADSIG|VALIDSIG)" <<< "$status"; then
+        log_error "La firma no es la oficial: la ISO no se usa"
+        return 1
+    fi
+    log_warning "No se pudo comprobar la firma (sin internet o gpg no la acepta): queda comprobada solo con $(usb_hash_name ${#USB_ISO_SHA})"
+    return 0
 }
 
 # Nombres de los enlaces de una página índice de un servidor (las carpetas sin la "/" final)
@@ -8733,6 +8794,7 @@ usb_sorted() {
 # Deja en USB_ISO_URL, USB_ISO_FILE y USB_ISO_SHA la descarga elegida
 usb_resolve_download() {
     local entry="$1" key name type a b c d dist sums base="" picked="" url="" dirs=() iso rel json ver h
+    USB_ISO_SIG="" USB_ISO_KEY="" USB_ISO_KEYID=""
     local tokens=() i
     IFS='|' read -r key name type a b c d <<< "$entry"
     case $type in
@@ -8768,7 +8830,10 @@ usb_resolve_download() {
             if [ "$b" = - ]; then
                 dirs=("$a")
             else
-                mapfile -t dirs < <(usb_index_names "$a" | usb_sorted "$b" | tail -3 | tac | sed "s#^#$a/#")
+                # "[0-9]+/isos/x86_64": la versión más nueva y, dentro, siempre la misma ruta
+                local sub=${b%%/*} rest=""
+                [[ "$b" == */* ]] && rest="/${b#*/}"
+                mapfile -t dirs < <(usb_index_names "$a" | usb_sorted "$sub" | tail -3 | tac | sed "s#^#$a/#; s#\$#$rest#")
             fi
             for base in "${dirs[@]}"; do
                 if [[ "$d" == .* ]]; then
@@ -8839,6 +8904,65 @@ usb_resolve_download() {
                 # Espejo oficial de kernel.org, carpeta de la versión principal (17, 18...)
                 url="https://mirrors.edge.kernel.org/zorinos-isos/$(cut -d. -f1 <<< "${iso#Zorin-OS-}" | cut -d- -f1)/$iso"
             fi ;;
+        gentoo)
+            # latest-iso.txt: "20261124T170000Z/livegui-amd64-20261124T170000Z.iso tamaño"
+            rel=$(curl -sSfL -m 30 "$a/latest-iso.txt" 2>/dev/null | grep -v '^#' | awk '{print $1}' | usb_sorted "$b" | tail -1)
+            if [ -n "$rel" ]; then
+                base="$a/${rel%/*}"
+                iso=${rel##*/}
+                h=$(curl -sSfL -m 30 "$base/$iso.sha256" 2>/dev/null | usb_first_hash)
+                # Si no hay .sha256, la SHA-512 del archivo DIGESTS (que también trae BLAKE2)
+                [ -n "$h" ] || h=$(curl -sSfL -m 30 "$base/$iso.DIGESTS" 2>/dev/null \
+                    | awk '/^# SHA512 HASH/ {getline; print $1; exit}' | usb_first_hash)
+                [ -n "$h" ] && picked="$h $iso"
+            fi ;;
+        slackware)
+            # La versión estable más nueva; Slackware publica MD5 y firma GPG (se comprueban las dos)
+            ver=$(usb_index_names "$a/slackware-iso" | usb_sorted 'slackware64-[0-9.]+-iso' | tail -1)
+            ver=${ver#slackware64-}
+            ver=${ver%-iso}
+            if [ -n "$ver" ]; then
+                base="$a/slackware-iso/slackware64-$ver-iso"
+                iso="slackware64-$ver-install-dvd.iso"
+                h=$(curl -sSfL -m 30 "$base/$iso.md5" 2>/dev/null | grep -oiE '^[0-9a-f]{32}' | head -1)
+                if [ -n "$h" ]; then
+                    picked="$h $iso"
+                    USB_ISO_SIG="$base/$iso.asc"
+                    USB_ISO_KEY="$a/slackware64-$ver/GPG-KEY"
+                    # Huella de la llave de Slackware Linux Project <security@slackware.com>
+                    USB_ISO_KEYID=EC5649DA401E22ABFA6736EF6A4463C040102233
+                fi
+            fi ;;
+        nixos)
+            # La estable más nueva ya publicada: salen a fin de mayo (AA.05) y de noviembre (AA.11)
+            local y m cand
+            y=$(date +%y); m=$(date +%m)
+            for cand in "$y.11" "$y.05" "$((10#$y - 1)).11" "$((10#$y - 1)).05"; do
+                [ "$(( ${cand%.*} * 100 + 10#${cand#*.} ))" -lt "$(( 10#$y * 100 + 10#$m ))" ] || continue
+                url="https://channels.nixos.org/nixos-$cand/latest-nixos-$a-x86_64-linux.iso"
+                sums=$(curl -sSfL -m 30 "$url.sha256" 2>/dev/null) || { url=""; continue; }
+                h=$(usb_first_hash <<< "$sums")
+                iso=$(awk '{print $2; exit}' <<< "$sums")
+                if [ -n "$h" ] && [ -n "$iso" ]; then
+                    picked="$h $iso"
+                    # El enlace "latest" lleva a la versión exacta: se baja esa
+                    dist=$(curl -sSI -m 30 "$url" 2>/dev/null | awk 'tolower($1) == "location:" {l = $2} END {print l}' | tr -d '\r')
+                    [ -n "$dist" ] && url=$dist
+                    break
+                fi
+                url=""
+            done ;;
+        enlace)
+            echo -e "\n${YELLOW}ℹ ${name%% (*} se baja con una cuenta gratuita de su sitio${NC} (hay que iniciar sesión, por eso"
+            echo -e "  no la puedo descargar sola). Pasos:"
+            echo -e "  1. Entra a ${BOLD}$a${NC} y crea la cuenta o inicia sesión."
+            echo -e "  2. Baja la ISO y copia la suma SHA-256 que muestra la página."
+            echo -e "  3. Vuelve aquí: ${BOLD}20 → 3) Grabar en un pendrive una ISO que ya tengo${NC}, y pega esa suma."
+            if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open &> /dev/null \
+                && confirm "${CYAN}¿Abro la página en el navegador?${NC}"; then
+                xdg-open "$a" &> /dev/null &
+            fi
+            return 1 ;;
     esac
     if [ -z "$picked" ]; then
         log_error "No se encontró la ISO de $name con su suma oficial: no se descarga sin poder comprobarla"
@@ -8849,25 +8973,51 @@ usb_resolve_download() {
     USB_ISO_URL=${url:-$base/$USB_ISO_FILE}
 }
 
+# Elige un sistema en dos pasos (familia y sistema); deja la línea de USB_DISTROS en USB_CHOSEN
+usb_choose_distro() {
+    local groups=() entry group="" i choice shown=() names
+    for entry in "${USB_DISTROS[@]}"; do
+        [[ "$entry" == "#"* ]] && groups+=("${entry#\#}")
+    done
+    local g
+    while true; do
+        echo -e "\n${CYAN}💿 ¿De qué familia es el sistema?${NC} (descarga oficial, se verifica sola)\n"
+        i=1
+        for g in "${groups[@]}"; do
+            printf "  ${CYAN}%d)${NC} ${BOLD}%s${NC}: %s\n" "$i" "${g%%|*}" "${g#*|}"
+            i=$((i + 1))
+        done
+        echo -e "  ${CYAN}0)${NC} Volver"
+        read -r -p "🔢 Familia: " choice
+        [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#groups[@]} ] || return 1
+        group=${groups[$((choice - 1))]}
+        shown=()
+        echo -e "\n${CYAN}💿 ${group%%|*}${NC}\n"
+        local on=false
+        for entry in "${USB_DISTROS[@]}"; do
+            if [[ "$entry" == "#"* ]]; then
+                [ "${entry#\#}" = "$group" ] && on=true || on=false
+                continue
+            fi
+            $on || continue
+            shown+=("$entry")
+            IFS='|' read -r _ names _ <<< "$entry"
+            printf "  ${CYAN}%2d)${NC} %s\n" "${#shown[@]}" "$names"
+        done
+        echo -e "  ${CYAN} 0)${NC} Volver a las familias"
+        read -r -p "🔢 Sistema: " choice
+        if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#shown[@]} ]; then
+            USB_CHOSEN=${shown[$((choice - 1))]}
+            return 0
+        fi
+    done
+}
+
 # Descarga (se puede retomar si se corta) y verifica; deja la ruta en USB_ISO
 usb_download_iso() {
-    local i entry name choice dir size_mb free_mb shown=()
-    echo -e "\n${CYAN}💿 ¿Qué sistema quieres en el pendrive?${NC} (descarga oficial, se verifica sola)"
-    i=1
-    for entry in "${USB_DISTROS[@]}"; do
-        if [[ "$entry" == "#"* ]]; then
-            echo -e "\n  ${YELLOW}${BOLD}${entry#\#}${NC}"
-            continue
-        fi
-        IFS='|' read -r _ name _ <<< "$entry"
-        printf "  ${CYAN}%2d)${NC} %s\n" "$i" "$name"
-        shown+=("$entry")
-        i=$((i + 1))
-    done
-    echo -e "\n  ${CYAN} 0)${NC} Volver"
-    read -r -p "🔢 Opción: " choice
-    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#shown[@]} ] || return 1
-    entry=${shown[$((choice - 1))]}
+    local entry dir size_mb free_mb
+    usb_choose_distro || return 1
+    entry=$USB_CHOSEN
     command -v curl &> /dev/null || { log_error "Falta curl para descargar"; return 1; }
     echo -e "${BLUE}🔍 Buscando la última versión y su suma oficial...${NC}"
     usb_resolve_download "$entry" || return 1
@@ -8877,7 +9027,8 @@ usb_download_iso() {
     # Si ya está bajada y entera, no se vuelve a bajar
     if [ -f "$USB_ISO" ] && [ "$(usb_hash_of "$USB_ISO" ${#USB_ISO_SHA})" = "${USB_ISO_SHA,,}" ]; then
         log_success "Ya la tenías descargada y está entera"
-        return 0
+        usb_check_signature
+        return
     fi
     size_mb=$(( $(curl -sSfLI -m 30 "$USB_ISO_URL" | awk 'tolower($1) == "content-length:" {n = $2} END {print n + 0}') / 1048576 ))
     free_mb=$(df -Pm "$dir" | awk 'NR == 2 {print $4}')
@@ -8891,9 +9042,13 @@ usb_download_iso() {
         log_error "La descarga se cortó: vuelve a elegirla para continuar"
         return 1
     fi
-    echo -e "${BLUE}🔐 Comprobando que llegó entera ($([ ${#USB_ISO_SHA} -eq 128 ] && echo SHA-512 || echo SHA-256))...${NC}"
+    echo -e "${BLUE}🔐 Comprobando que llegó entera ($(usb_hash_name ${#USB_ISO_SHA}))...${NC}"
     if [ "$(usb_hash_of "$USB_ISO" ${#USB_ISO_SHA})" != "${USB_ISO_SHA,,}" ]; then
         log_error "La ISO no coincide con la suma oficial: está dañada, no se usa (se borra)"
+        rm -f -- "$USB_ISO"
+        return 1
+    fi
+    if ! usb_check_signature; then
         rm -f -- "$USB_ISO"
         return 1
     fi
@@ -8993,7 +9148,7 @@ usb_official_sum_for() {
 # Busca "nombre" en una lista de sumas ("hash  nombre" o "hash *nombre"); imprime el hash
 usb_sum_lookup() {
     local sums="$1" name="$2" h
-    h=$(awk -v n="$name" '{f = $2; sub(/^\*/, "", f)} f == n {print $1; exit}' <<< "$sums")
+    h=$(usb_norm_sums <<< "$sums" | awk -v n="$name" '{f = $2; sub(/^\*/, "", f)} f == n {print $1; exit}')
     [ -n "$h" ] && { echo "$h"; return 0; }
     return 1
 }
@@ -9006,7 +9161,8 @@ usb_verify_local_iso() {
     name=$(basename "$iso")
     # 1. Un archivo de sumas al lado de la ISO
     for f in "$dir/$name.sha256" "$dir/$name.sha256sum" "$dir/$name.sha512" "$dir/$name.sha512sum" \
-             "$dir/SHA256SUMS" "$dir/sha256sums.txt" "$dir/SHA256SUMS.txt" "$dir/sha256sum.txt"; do
+             "$dir/$name.SHA256SUM" "$dir/SHA256SUMS" "$dir/sha256sums.txt" "$dir/SHA256SUMS.txt" \
+             "$dir/sha256sum.txt" "$dir/CHECKSUM"; do
         [ -f "$f" ] || continue
         expected=$(usb_sum_lookup "$(cat "$f")" "$name")
         # Los archivos de un solo archivo a veces traen solo el hash
@@ -9130,27 +9286,34 @@ create_usb_menu() {
     clear
     echo -e "${BLUE}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════════╗"
-    echo "║                💿 CREAR USB DE INSTALACIÓN                       ║"
+    echo "║       💿 DESCARGAR SISTEMAS Y CREAR USB DE INSTALACIÓN           ║"
     echo "╚══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
-    echo -e "Graba un sistema en un pendrive para instalarlo o probarlo en cualquier PC."
-    echo -e "${YELLOW}⚠ Todo lo que tenga el pendrive se borra.${NC} El disco de tu sistema nunca aparece en la lista.\n"
-    echo -e "  ${BLUE}1)${NC} Descargar un sistema (Ubuntu, Kubuntu, Debian, Arch...) y grabarlo"
-    echo -e "  ${BLUE}2)${NC} Usar una ISO que ya tengo (la busco sola)"
+    echo -e "Descarga la imagen (ISO) oficial de más de 40 sistemas, verificada, y grábala en un pendrive"
+    echo -e "para instalarla o probarla en cualquier PC. También sirve para solo descargarla."
+    echo -e "${YELLOW}⚠ Al grabar, se borra todo lo que tenga el pendrive.${NC} El disco de tu sistema nunca aparece.\n"
+    echo -e "  ${BLUE}1)${NC} 💿 Descargar un sistema y grabarlo en un pendrive"
+    echo -e "  ${BLUE}2)${NC} ⬇  Solo descargar la imagen ISO (para grabarla después, Ventoy o una máquina virtual)"
+    echo -e "  ${BLUE}3)${NC} 🔥 Grabar en un pendrive una ISO que ya tengo (la busco sola)"
     echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
     local option
-    read -r -p "📌 Opción (0-2): " option
+    read -r -p "📌 Opción (0-3): " option
     USB_ISO="" USB_ISO_SHA=""
     case $option in
         1) usb_download_iso || return 1 ;;
-        2) usb_pick_local_iso || return 1 ;;
+        2)
+            usb_download_iso || return 1
+            echo -e "\n${GREEN}✓ Lista: ${BOLD}$USB_ISO${NC}"
+            echo -e "${CYAN}💡 Para grabarla en un pendrive más tarde: opción 20 → 3.${NC}"
+            return 0 ;;
+        3) usb_pick_local_iso || return 1 ;;
         *) return 0 ;;
     esac
 
     echo -e "\n${CYAN}💿 ISO:${NC} $USB_ISO"
     usb_check_iso "$USB_ISO" || return 1
     # Las descargadas ya se comprobaron; las que ya tenías, ahora
-    if [ "$option" = 2 ]; then
+    if [ "$option" = 3 ]; then
         usb_verify_local_iso "$USB_ISO" || return 1
     fi
     local iso_bytes
@@ -9237,7 +9400,7 @@ main_menu() {
         echo -e "  ${CYAN}17)${NC} 🔋 Energía y rendimiento"
         echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
-        echo -e "  ${CYAN}20)${NC} 💿 CREAR USB DE INSTALACIÓN (descarga y graba Ubuntu, Debian, Arch...)"
+        echo -e "  ${CYAN}20)${NC} 💿 DESCARGAR SISTEMAS (ISO) Y CREAR USB DE INSTALACIÓN"
         echo ""
         echo -e "  ${CYAN}21)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
@@ -9344,7 +9507,7 @@ offer_right_script() {
     path="$here/$name"
     url="https://raw.githubusercontent.com/george0884/linux-ultimate-tools/main/$name"
     echo -e "${YELLOW}🐧 Detecté ${BOLD}$(os_release_value PRETTY_NAME)${NC}${YELLOW}: el script para este sistema es ${BOLD}$name${NC}"
-    echo -e "${YELLOW}   Con este ($(basename "$0")) solo están el menú de arranque y crear un USB de instalación.${NC}\n"
+    echo -e "${YELLOW}   Con este ($(basename "$0")) solo están el menú de arranque y descargar sistemas y crear un USB de instalación.${NC}\n"
     if [ -f "$path" ]; then
         read -r -p "¿Abrir $name ahora? (s/n): " answer
     else

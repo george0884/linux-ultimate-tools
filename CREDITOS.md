@@ -142,14 +142,15 @@ El script solo instala los metapaquetes oficiales de Ubuntu; cada escritorio y s
 | [Linux Audit (auditd)](https://github.com/linux-audit/audit-userspace) | Red Hat y colaboradores | GPL-2.0-or-later (bibliotecas LGPL-2.1) | Instala: registro de auditoría con reglas **propias del script** |
 | [Linux-Security-Policy](https://github.com/Starke427/Linux-Security-Policy) | Jeff Starke (Starke427) | **Sin licencia publicada** | **Inspiración**: la idea de combinar auditd y Lynis. No se copia ni se descarga su código ni sus reglas: un repositorio sin licencia no se puede redistribuir. Las reglas de auditd del script se escribieron desde cero para Ubuntu y Debian actuales |
 
-## 💿 Crear USB de instalación (opción 20)
+## 💿 Descargar sistemas y crear USB de instalación (opción 20)
 
 | Proyecto | Licencia | Uso |
 |---|---|---|
-| [GNU coreutils](https://www.gnu.org/software/coreutils/) (`dd`, `sha256sum`, `sha512sum`) | GPL-3.0-or-later | Sistema: grabar el pendrive y verificar las descargas |
+| [GNU coreutils](https://www.gnu.org/software/coreutils/) (`dd`, `sha256sum`, `sha512sum`, `md5sum`) | GPL-3.0-or-later | Sistema: grabar el pendrive y verificar las descargas |
 | [util-linux](https://github.com/util-linux/util-linux) (`lsblk`, `findmnt`) | GPL-2.0-or-later | Sistema: detectar los pendrives y lo que tienen montado |
 | [udisks](https://github.com/storaged-project/udisks) (`udisksctl`) | GPL-2.0-or-later | Sistema: desmontar y expulsar el pendrive |
 | [curl](https://curl.se/) | Licencia curl | Sistema: descargar las ISO oficiales |
+| [GnuPG](https://gnupg.org/) (`gpg`) | GPL-3.0-or-later | Sistema (si está): comprobar la firma oficial de Slackware |
 
 Las ISO y sus sumas se descargan de los sitios oficiales de cada distribución o de sus espejos oficiales, con sus
 propias licencias y marcas; el script no las modifica:
@@ -167,7 +168,15 @@ propias licencias y marcas; el script no las modifica:
 | [Arch Linux](https://archlinux.org/) | geo.mirror.pkgbuild.com (`sha256sums.txt`) |
 | [EndeavourOS](https://endeavouros.com/) | espejo principal mirror.alpix.eu (`.sha512sum`) |
 | [Fedora](https://fedoraproject.org/) | `releases.json` oficial (el que usa Fedora Media Writer) |
-| [openSUSE Tumbleweed](https://www.opensuse.org/) | download.opensuse.org (`.sha256`) |
+| [CentOS Stream](https://www.centos.org/centos-stream/) | mirror.stream.centos.org (`.SHA256SUM`) |
+| [AlmaLinux](https://almalinux.org/) | repo.almalinux.org (`CHECKSUM`) |
+| [Rocky Linux](https://rockylinux.org/) | download.rockylinux.org (`CHECKSUM`) |
+| [Red Hat Enterprise Linux](https://www.redhat.com/es/technologies/linux-platforms/enterprise-linux) | No se descarga sola: pide cuenta en [developers.redhat.com](https://developers.redhat.com/products/rhel/download); el script solo abre esa página |
+| [openSUSE](https://www.opensuse.org/) Tumbleweed y Leap | download.opensuse.org (`.sha256`) |
+| [Slackware](http://www.slackware.com/) | mirrors.slackware.com (`.md5` y firma `.asc` con la llave oficial `GPG-KEY`, huella EC56 49DA 401E 22AB FA67 36EF 6A44 63C0 4010 2233) |
+| [Gentoo](https://www.gentoo.org/) | distfiles.gentoo.org (`latest-iso.txt`, `.sha256` o `.DIGESTS`) |
+| [Void Linux](https://voidlinux.org/) | repo-default.voidlinux.org (`sha256sum.txt`) |
+| [NixOS](https://nixos.org/) | channels.nixos.org (`.sha256`) |
 
 ## 💾 Archivo swap (opción 15)
 
