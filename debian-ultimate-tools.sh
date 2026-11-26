@@ -10080,7 +10080,7 @@ main_menu() {
         print_header
         echo -e "${CYAN}📌 ¿Qué deseas hacer?${NC}\n"
         echo -e "  ${CYAN} 1)${NC} 🔄 ACTUALIZAR SISTEMA (update/full-upgrade/clean)"
-        echo -e "  ${CYAN} 2)${NC} 🛡️ AUDITORÍA DE SEGURIDAD (Lynis y registro de auditoría)"
+        echo -e "  ${CYAN} 2)${NC} 🛡️ AUDITORÍA DE SEGURIDAD (Lynis, linaudit y registro)"
         echo -e "  ${CYAN} 3)${NC} 📊 Información del sistema y hardware"
         echo ""
         echo -e "  ${CYAN} 4)${NC} 🚮 Eliminar aplicaciones preinstaladas"
