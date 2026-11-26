@@ -9420,9 +9420,11 @@ boot_only_menu() {
 # Distribuciones que se pueden descargar: clave|nombre|tipo|dato
 #   tipo ubuntu: dato = "carpeta|patrón" (la última LTS se detecta sola)
 #   tipo lista:  dato = "url de la carpeta|archivo de sumas|patrón del nombre"
+#   tipo fijo:   dato = "url de la carpeta|nombre de la ISO|archivo con su suma" (KDE neon)
 USB_DISTROS=(
     "ubuntu|Ubuntu (GNOME), última LTS|ubuntu|releases|ubuntu-[0-9.]+-desktop-amd64\\.iso"
     "kubuntu|Kubuntu (KDE Plasma), última LTS|ubuntu|kubuntu|kubuntu-[0-9.]+-desktop-amd64\\.iso"
+    "kdeneon|KDE neon (el KDE Plasma más nuevo, sobre Ubuntu LTS)|fijo|https://files.kde.org/neon/images/user/current|neon-user-current.iso|neon-user-current.iso.sha256sum"
     "xubuntu|Xubuntu (Xfce, liviano), última LTS|ubuntu|xubuntu|xubuntu-[0-9.]+-desktop-amd64\\.iso"
     "lubuntu|Lubuntu (LXQt, el más liviano), última LTS|ubuntu|lubuntu|lubuntu-[0-9.]+-desktop-amd64\\.iso"
     "server|Ubuntu Server, última LTS|ubuntu|releases|ubuntu-[0-9.]+-live-server-amd64\\.iso"
@@ -9462,6 +9464,16 @@ usb_resolve_download() {
         fi
         sums=$(curl -sSfL -m 30 "$base/SHA256SUMS") || { log_error "No se pudo leer la lista de $name"; return 1; }
         picked=$(usb_pick_from_sums "$sums" "$b")
+    elif [ "$type" = fijo ]; then
+        # Una sola ISO con su archivo de suma (que puede nombrarla con la fecha en vez de "current")
+        base="$a"
+        sums=$(curl -sSfL -m 30 "$base/$c" 2>/dev/null) || sums=$(curl -sSfL -m 30 "$base/SHA256SUMS" 2>/dev/null)
+        picked=$(grep -oiE '^[0-9a-f]{64}' <<< "$sums" | head -1)
+        if [ -z "$picked" ]; then
+            log_error "$name no publicó la suma de su ISO: no se descarga sin poder comprobarla"
+            return 1
+        fi
+        picked="$picked $b"
     else
         base="$a"
         sums=$(curl -sSfL -m 30 "$base/$b") || { log_error "No se pudo leer la lista de $name"; return 1; }
@@ -9555,6 +9567,102 @@ usb_pick_local_iso() {
 
 # ¿Se puede grabar con dd? Las ISO de Linux son "híbridas" (arrancan desde un USB);
 # las de Windows no (necesitan otra herramienta, por ejemplo WoeUSB)
+# Suma oficial de una ISO que ya tienes, si es de una distribución de la lista (vacío si no se encuentra)
+usb_official_sum_for() {
+    local entry="$1" name="$2" key dname type a b c ver major sums base url
+    IFS='|' read -r key dname type a b c <<< "$entry"
+    case $type in
+        ubuntu)
+            # ubuntu-24.04.3-desktop-amd64.iso → carpeta de esa versión (o de la serie, o de old-releases)
+            ver=$(sed -E 's/^[a-z]+-([0-9]+\.[0-9]+(\.[0-9]+)*)-.*/\1/' <<< "$name")
+            major=$(cut -d. -f1,2 <<< "$ver")
+            for base in "$ver" "$major"; do
+                if [ "$a" = releases ]; then
+                    for url in "https://releases.ubuntu.com/$base" "https://old-releases.ubuntu.com/releases/$base"; do
+                        sums=$(curl -sSfL -m 30 "$url/SHA256SUMS" 2>/dev/null) && usb_sum_lookup "$sums" "$name" && return 0
+                    done
+                else
+                    url="https://cdimage.ubuntu.com/$a/releases/$base/release"
+                    sums=$(curl -sSfL -m 30 "$url/SHA256SUMS" 2>/dev/null) && usb_sum_lookup "$sums" "$name" && return 0
+                fi
+            done ;;
+        lista)
+            sums=$(curl -sSfL -m 30 "$a/$b" 2>/dev/null) && usb_sum_lookup "$sums" "$name" && return 0 ;;
+        fijo)
+            sums=$(curl -sSfL -m 30 "$a/$c" 2>/dev/null) || return 1
+            usb_sum_lookup "$sums" "$name" && return 0
+            # Bajada con el nombre "current": su suma está en el archivo con el nombre fechado
+            [ "$name" = "$b" ] && grep -oiE '^[0-9a-f]{64}' <<< "$sums" | head -1 | grep . && return 0 ;;
+    esac
+    return 1
+}
+
+# Busca "nombre" en una lista de sumas ("hash  nombre" o "hash *nombre"); imprime el hash
+usb_sum_lookup() {
+    local sums="$1" name="$2" h
+    h=$(awk -v n="$name" '{f = $2; sub(/^\*/, "", f)} f == n {print $1; exit}' <<< "$sums")
+    [ -n "$h" ] && { echo "$h"; return 0; }
+    return 1
+}
+
+# ¿Coincide la ISO que ya tienes con su suma oficial? Busca la suma junto a la ISO, en la lista
+# oficial de su distribución o te deja pegarla; si no coincide, no se graba
+usb_verify_local_iso() {
+    local iso="$1" dir name got expected="" src="" f entry pattern key dname type a b c answer
+    dir=$(dirname "$iso")
+    name=$(basename "$iso")
+    echo -e "\n${BLUE}🔐 Comprobando que la ISO esté entera (calculando su SHA-256, puede tardar un minuto)...${NC}"
+    got=$(sha256sum "$iso" | awk '{print $1}')
+    # 1. Un archivo de sumas al lado de la ISO
+    for f in "$dir/$name.sha256" "$dir/$name.sha256sum" "$dir/SHA256SUMS" "$dir/sha256sums.txt" "$dir/SHA256SUMS.txt"; do
+        [ -f "$f" ] || continue
+        expected=$(usb_sum_lookup "$(cat "$f")" "$name")
+        # Los .sha256 de un solo archivo a veces traen solo el hash
+        [ -z "$expected" ] && [[ "$f" == *"$name".sha256* ]] && expected=$(grep -oiE '^[0-9a-f]{64}' "$f" | head -1)
+        [ -n "$expected" ] && { src="$(basename "$f"), junto a la ISO"; break; }
+    done
+    # 2. La lista oficial, si es de una distribución que el script conoce
+    if [ -z "$expected" ]; then
+        for entry in "${USB_DISTROS[@]}"; do
+            IFS='|' read -r key dname type a b c <<< "$entry"
+            case $type in
+                ubuntu) pattern=$b ;;
+                lista) pattern=$c ;;
+                # fijo: neon-user-current.iso también reconoce las fechadas (neon-user-20261101-0700.iso)
+                *) pattern=$(sed -e 's/[.]/\\./g' -e 's/current/.*/' <<< "$b") ;;
+            esac
+            if [[ "$name" =~ ^${pattern}$ ]]; then
+                dname=${dname%%, última LTS}
+                dname=${dname%% (*}
+                echo -e "   Es una ISO de ${BOLD}$dname${NC}: busco su suma oficial..."
+                expected=$(usb_official_sum_for "$entry" "$name") && src="lista oficial de $dname"
+                break
+            fi
+        done
+    fi
+    # 3. La suma que publica el sitio de la distribución, pegada a mano
+    if [ -z "$expected" ]; then
+        echo -e "${YELLOW}ℹ No encontré la suma oficial de esta ISO. Su SHA-256 es:${NC}"
+        echo -e "   ${BOLD}$got${NC}"
+        echo -e "   Compárala con la que publica la página de descarga de tu distribución."
+        read -r -p "📋 Pega aquí la suma oficial (Enter = grabar sin comprobar, 0 = volver): " answer
+        [ "$answer" = 0 ] && return 1
+        if [ -z "$answer" ]; then
+            log_warning "Se graba sin comprobar la suma"
+            return 0
+        fi
+        expected=$(grep -oiE '[0-9a-f]{64}' <<< "$answer" | head -1)
+        [ -n "$expected" ] || { log_error "Eso no es una suma SHA-256 (64 caracteres hexadecimales)"; return 1; }
+        src="la que pegaste"
+    fi
+    if [ "${got,,}" = "${expected,,}" ]; then
+        log_success "La ISO está entera: coincide con la suma oficial ($src)"
+        return 0
+    fi
+    log_error "La ISO NO coincide con la suma oficial ($src): está dañada o es otra versión. Vuelve a descargarla."
+    return 1
+}
+
 usb_check_iso() {
     local iso="$1" label sig
     label=$(dd if="$iso" bs=1 skip=32808 count=32 2>/dev/null | tr -d '\0' | sed 's/ *$//')
@@ -9648,6 +9756,10 @@ create_usb_menu() {
 
     echo -e "\n${CYAN}💿 ISO:${NC} $USB_ISO"
     usb_check_iso "$USB_ISO" || return 1
+    # Las descargadas ya se comprobaron; las que ya tenías, ahora
+    if [ "$option" = 2 ]; then
+        usb_verify_local_iso "$USB_ISO" || return 1
+    fi
     local iso_bytes
     iso_bytes=$(stat -c %s "$USB_ISO")
     usb_pick_device "$iso_bytes" || return 1
