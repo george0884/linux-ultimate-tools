@@ -178,6 +178,21 @@ propias licencias y marcas; el script no las modifica:
 | [Void Linux](https://voidlinux.org/) | repo-default.voidlinux.org (`sha256sum.txt`) |
 | [NixOS](https://nixos.org/) | channels.nixos.org (`.sha256`) |
 
+## 🧰 Ventoy (opción 20 → 4)
+
+| Proyecto | Autor | Licencia | Uso |
+|---|---|---|---|
+| [Ventoy](https://www.ventoy.net) ([código](https://github.com/ventoy/Ventoy)) | longpanda | GPL-3.0-or-later | Externo: se baja el paquete oficial para Linux de su [proyecto en SourceForge](https://sourceforge.net/projects/ventoy/), se verifica con su `sha256.txt` y se usan sus herramientas (`Ventoy2Disk.sh`, `CreatePersistentImg.sh`) sin modificarlas. Queda en `/var/cache/linux-ultimate-tools/` |
+| [exfat-fuse](https://github.com/relan/exfat) | Andrew Nayenko | GPL-2.0-or-later | Sistema (si está): abrir el pendrive Ventoy cuando el kernel no trae exFAT |
+| [dosfstools](https://github.com/dosfstools/dosfstools) (`mkfs.vfat`) | Varios | GPL-3.0-or-later | Instala (si falta): Ventoy lo usa para su partición de arranque |
+| [e2fsprogs](https://e2fsprogs.sourceforge.net/) (`mkfs.ext4`) | Theodore Ts'o y colaboradores | GPL-2.0 | Sistema: el archivo de persistencia |
+
+Ventoy trae dentro otros programas libres (GRUB2, BusyBox, herramientas exFAT, wimboot, entre otros), cada uno con su
+licencia; la lista completa está en la [página de licencias de Ventoy](https://www.ventoy.net/en/doc_license.html).
+El script no copia ni redistribuye nada de Ventoy: lo descarga de su fuente oficial en tu equipo. En 2024 hubo una
+discusión pública sobre archivos binarios precompilados en el repositorio de Ventoy (cómo se generan); quien lo
+necesite puede revisarla en el repositorio del proyecto antes de usarlo.
+
 ## 💾 Archivo swap (opción 15)
 
 | Proyecto | Autor | Licencia | Uso |

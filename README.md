@@ -37,7 +37,7 @@ el escritorio** y adaptan sus opciones:
 - ⚡ **Cambiar de kernel** (Liquorix, XanMod, oficial LTS/HWE, backports...) y **reparar o personalizar GRUB**
 - 🎮 **Optimizar** GPU, RAM, red, DNS y energía, o aplicar un **perfil automático** (gaming, productividad...)
 - 📦 **Instalar** software popular, la terminal Alacritty con tema Tokyo Night o **un escritorio completo**
-- 💿 **Descargar sistemas y crear un USB de instalación**: descarga la imagen ISO oficial de más de 40 sistemas (Ubuntu, Mint, Zorin, Pop!_OS, Debian, MX, Kali, Arch, Manjaro, CachyOS, Fedora, AlmaLinux, Rocky, openSUSE, Slackware, Gentoo, NixOS...), la verifica y la graba en un pendrive sin riesgo de borrar otro disco, o solo la descarga
+- 💿 **Descargar sistemas y crear un USB de instalación**: descarga la imagen ISO oficial de más de 40 sistemas (Ubuntu, Mint, Zorin, Pop!_OS, Debian, MX, Kali, Arch, Manjaro, CachyOS, Fedora, AlmaLinux, Rocky, openSUSE, Slackware, Gentoo, NixOS...), la verifica y la graba en un pendrive sin riesgo de borrar otro disco, o solo la descarga. Con **Ventoy**, varios sistemas en un mismo pendrive, con persistencia
 - ↩️ **Deshacer** cualquier cambio o **revertir** a la distribución original
 - 🖥️ **Ver** toda la información del sistema y del hardware, con fastfetch e inxi sin instalar
 
@@ -488,11 +488,12 @@ hizo queda hecho).
 
 Descarga la imagen (ISO) oficial de un sistema y la graba en un pendrive con `dd`, pensado para que lo use cualquiera y
 sin riesgo de borrar el disco equivocado. Funciona en todas las distribuciones (también en el modo arranque de Arch,
-Fedora, openSUSE...). Tiene tres opciones:
+Fedora, openSUSE...). Tiene cuatro opciones:
 
 - **1) Descargar un sistema y grabarlo en un pendrive.**
 - **2) Solo descargar la imagen ISO**, para grabarla después, usarla con Ventoy o en una máquina virtual.
 - **3) Grabar en un pendrive una ISO que ya tengo.**
+- **4) Ventoy**: varios sistemas en un solo pendrive, con persistencia (ver más abajo).
 
 1. **Elige la ISO:**
    - **Descargarla**: más de 40 sistemas. Primero eliges la familia y después el sistema. Siempre se baja **la
@@ -528,6 +529,26 @@ Fedora, openSUSE...). Tiene tres opciones:
 4. **Graba y comprueba:** desmonta sus particiones, graba con `dd` mostrando el progreso, **compara la copia con la
    ISO** byte a byte y lo **expulsa**. Al final explica cómo arrancar desde el USB (F12, F11, F10, F8 o Esc según la
    marca, y Secure Boot) y ofrece borrar la ISO descargada.
+
+### 🧰 Ventoy: varios sistemas en un solo pendrive (20 → 4)
+
+![Ventoy](screenshots/32-ventoy.png)
+
+[Ventoy](https://www.ventoy.net) se instala una vez en el pendrive. Después los sistemas se copian como archivos comunes y,
+al arrancar, aparece un menú para elegir cuál probar o instalar. El script baja **Ventoy oficial** (de su proyecto en
+SourceForge, verificado con su `sha256.txt`) y lo usa con las mismas protecciones de siempre: solo pendrives, nunca el
+disco del sistema, y hay que escribir `BORRAR`.
+
+| Opción | Qué hace |
+|---|---|
+| **1** Instalar Ventoy | En un pendrive (lo borra): MBR (recomendado) o GPT, y compatibilidad con **Secure Boot** (explica cómo registrar la llave la primera vez). Si faltan `fdisk` o `mkfs.vfat`, ofrece instalarlos |
+| **2** Agregar sistemas | **Descarga cualquiera de los más de 40 sistemas directo al pendrive**, verificado con su suma oficial, o **copia una ISO que ya tienes** (comprobada antes y después de copiar). Deja la suma al lado de cada ISO y les pone un **nombre claro** en el menú de Ventoy ("Ubuntu 26.04.1") |
+| **3** Ver, comprobar y quitar | Lista los sistemas del pendrive con su tamaño y el espacio libre; **comprueba que estén enteros** (también sin internet, con la suma que quedó al lado) y quita los que no quieras, con su persistencia |
+| **4** Persistencia | Que el live **guarde los cambios** (programas, archivos, ajustes) entre reinicios: 2, 4, 8 o 16 GB. Ubuntu y sus sabores, Mint, Zorin, Pop!_OS y KDE neon (`casper-rw`); Debian live, LMDE y Kali live (`persistence`) |
+| **5** Actualizar Ventoy | A la última versión, **sin borrar los sistemas** |
+
+Los nombres y la persistencia se guardan en `ventoy/ventoy.json`. Si ya tenías un `ventoy.json` hecho a mano, el
+script no lo toca y te avisa.
 
 ---
 
