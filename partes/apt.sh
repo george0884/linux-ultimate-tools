@@ -1398,3 +1398,24 @@ disable_audit() {
         fi
     fi
 }
+#@@ install_wine
+
+# Wine: programas y juegos de Windows fuera de Steam. Del repositorio de la distro (estable), con
+# la parte de 32 bits (muchos instaladores de Windows todavía son de 32 bits) y winetricks
+install_wine() {
+    local pkgs=(wine)
+    if command -v wine &> /dev/null; then
+        echo -e "  ${GREEN}✓ Wine ya está instalado ($(wine --version 2>/dev/null))${NC}"
+        return 0
+    fi
+    echo -e "${BLUE}🍷 Instalando Wine...${NC}"
+    if ! dpkg --print-foreign-architectures | grep -qx i386; then
+        run "No se pudo activar la arquitectura de 32 bits" sudo dpkg --add-architecture i386 || return 1
+        log_success "Arquitectura de 32 bits (i386) activada"
+        apt_update force || return 1
+    fi
+    apt-cache policy wine32:i386 2>/dev/null | grep -q 'Candidate: [0-9]' && pkgs+=(wine32:i386)
+    [ -n "$(available_pkgs winetricks)" ] && pkgs+=(winetricks)
+    apt_install_recorded "${pkgs[@]}" || return 1
+    log_success "Wine instalado: abre un programa de Windows con \"wine programa.exe\"$([[ " ${pkgs[*]} " == *" winetricks "* ]] && echo " (winetricks agrega lo que le falte)")"
+}

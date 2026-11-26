@@ -3520,6 +3520,7 @@ select_optional_software() {
         "gparted|💾 GParted"
         "vim|⌨️ Vim"
         "steam|🎮 Steam (con Proton para juegos de Windows)"
+        "wine|🍷 Wine + winetricks (programas y juegos de Windows fuera de Steam)"
         "proton-ge|🍷 Proton-GE (Proton de la comunidad, más compatible)"
         "spotify|🎵 Spotify"
         "obs-studio|🎥 OBS Studio"
@@ -3678,11 +3679,31 @@ setup_spotify_repo() {
     echo "deb https://repository.spotify.com stable non-free" | sudo tee /etc/apt/sources.list.d/spotify.list > /dev/null
 }
 
+# Wine: programas y juegos de Windows fuera de Steam. Del repositorio de la distro (estable), con
+# la parte de 32 bits (muchos instaladores de Windows todavía son de 32 bits) y winetricks
+install_wine() {
+    local pkgs=(wine)
+    if command -v wine &> /dev/null; then
+        echo -e "  ${GREEN}✓ Wine ya está instalado ($(wine --version 2>/dev/null))${NC}"
+        return 0
+    fi
+    echo -e "${BLUE}🍷 Instalando Wine...${NC}"
+    if ! dpkg --print-foreign-architectures | grep -qx i386; then
+        run "No se pudo activar la arquitectura de 32 bits" sudo dpkg --add-architecture i386 || return 1
+        log_success "Arquitectura de 32 bits (i386) activada"
+        apt_update force || return 1
+    fi
+    apt-cache policy wine32:i386 2>/dev/null | grep -q 'Candidate: [0-9]' && pkgs+=(wine32:i386)
+    [ -n "$(available_pkgs winetricks)" ] && pkgs+=(winetricks)
+    apt_install_recorded "${pkgs[@]}" || return 1
+    log_success "Wine instalado: abre un programa de Windows con \"wine programa.exe\"$([[ " ${pkgs[*]} " == *" winetricks "* ]] && echo " (winetricks agrega lo que le falte)")"
+}
+
 # Instala todo en una sola operación de apt. Los .deb externos (VSCode, Chrome,
 # Discord) se descargan en paralelo mientras se actualiza la lista de paquetes.
 install_optional_with_progress() {
     local repo=() deb_names=() deb_urls=() pids=() debs=() failed=() app i
-    local repo_changed=false tmp want_steam=false want_ge=false want_extra=()
+    local repo_changed=false tmp want_steam=false want_wine=false want_ge=false want_extra=()
     tmp=$(mktemp -d)
     chmod 755 "$tmp"
 
@@ -3722,6 +3743,7 @@ install_optional_with_progress() {
                 fi ;;
             # Necesitan pasos propios (32 bits, verificación): se instalan al final
             "steam") want_steam=true ;;
+            "wine") want_wine=true ;;
             "proton-ge") want_ge=true ;;
             # Descargas grandes con pasos propios: van al final, en este orden
             "android-tools"|"android-studio"|"flatpak"|"flatpak-builder"|"docker"|"firefox"|"brave"|"chromium"|"torbrowser-launcher"|"seamonkey") want_extra+=("$app") ;;
@@ -3785,6 +3807,7 @@ install_optional_with_progress() {
     rm -rf "$tmp"
 
     if $want_steam; then install_steam || failed+=(steam); fi
+    if $want_wine; then install_wine || failed+=(wine); fi
     if $want_ge; then install_proton_ge || failed+=(proton-ge); fi
     for app in firefox brave chromium torbrowser-launcher seamonkey android-tools android-studio flatpak flatpak-builder docker; do
         [[ " ${want_extra[*]} " == *" $app "* ]] || continue
@@ -7122,7 +7145,7 @@ EOF
     # En el perfil 'gaming' se activa directamente; en el menú se pregunta.
     if [ -f "$MANGOHUD_ENV" ]; then
         log_info "MangoHud ya está activo en todos los juegos Vulkan/Proton"
-    elif [ "$ACTIVE_PROFILE" = "gaming" ] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
+    elif [[ "$ACTIVE_PROFILE" == gaming* ]] || confirm "${YELLOW}¿Activar MangoHud en todos los juegos Vulkan/Proton (sin configurar cada juego)?${NC}"; then
         mkdir -p "$(dirname "$MANGOHUD_ENV")"
         echo "MANGOHUD=1" > "$MANGOHUD_ENV"
         log_success "MangoHud activo en todos los juegos Vulkan/Proton (tras cerrar sesión y volver a entrar)"

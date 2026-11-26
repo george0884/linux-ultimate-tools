@@ -186,13 +186,18 @@ o desde la terminal. Por ahora solo en el script de Ubuntu:
 |--------|----------|
 | `productividad` | Actualiza, quita juegos, instala git/htop/timeshift..., RAM + ZRAM, TRIM, DNS más rápido, TCP BBR |
 | `gaming` | **Steam + Proton** (activado para todos los juegos) y Proton-GE, drivers recomendados, kernel Liquorix, GameMode + MangoHud, energía al máximo, sin Baloo, Wi-Fi sin ahorro, BBR, DNS |
+| `gaming-extremo` | **Al estilo CachyOS (parecido, no idéntico)**: todo lo de `gaming` con **kernel XanMod compilado para tu procesador** (x86-64-v2/v3/v4) en vez de Liquorix, y además: **prioridad para los juegos** (ananicy-cpp con las reglas de CachyOS si tu Ubuntu lo trae; si no, GameMode con prioridad alta), **Wine + winetricks**, ajustes de memoria y kernel de SteamOS/CachyOS (`vm.max_map_count`, sin penalización de *split lock*…), **planificador de disco según el tipo** (NVMe, SSD o disco rígido), **ntsync** para Wine/Proton (kernel 6.14+) y el planificador de CPU para juegos **scx_lavd** (sched-ext) si tu kernel y tus repositorios oficiales lo traen |
 | `ahorro` | TLP en portátiles (perfil de ahorro en PC), sin Baloo, ZRAM, RAM, TRIM |
 | `desarrollo` | git, build-essential, Python, VSCode, **SDK de Android para compilar APK**, más vigilancia de archivos para IDEs, RAM, ZRAM, BBR, DNS |
 | `minimalista` | Mínimo: sin el meta-paquete del sabor ni apps extra, sin Snap, Firefox .deb de Mozilla (en KDE, Plasma de backports) |
 
 - Si un paso falla, el perfil sigue con los demás y al final muestra un resumen ✓/✗.
 - Las preguntas internas (por ejemplo, instalar CUDA) se responden "no" automáticamente.
-- El perfil `gaming` omite Liquorix si Secure Boot está activado.
+- El perfil `gaming` omite Liquorix si Secure Boot está activado (y `gaming-extremo`, XanMod).
+- **`gaming-extremo` no es CachyOS**: CachyOS además recompila *todo* el sistema para tu procesador, y eso no se
+  puede copiar en Ubuntu. Lo que no está en tus repositorios oficiales (ananicy-cpp, sched-ext) se omite con un aviso:
+  no se usan PPAs experimentales. Todos sus ajustes se deshacen en **10 → 14** (o en 10 → 5, con el resto); los
+  programas, en 10 → 1. Para algo más "pelado", aplica antes el perfil `minimalista`.
 - El perfil `minimalista` copia antes los perfiles de Firefox/Thunderbird del snap para no perder marcadores.
 
 ---
@@ -649,6 +654,7 @@ SeaMonkey.
 | Discord | Chat de voz y texto | `.deb` oficial |
 | Steam | Juegos; incluye **Proton** para jugar juegos de Windows | `.deb` oficial de Valve (o el de Ubuntu) |
 | Proton-GE | Proton de la comunidad, con arreglos para más juegos | Página oficial del proyecto (descarga verificada) |
+| Wine + winetricks | Programas y juegos de Windows **fuera de Steam** (`wine programa.exe`); activa los 32 bits si hace falta | Repositorios de la distro · Arch: `multilib` |
 | Spotify | Música | Repositorio de Spotify |
 | OBS Studio | Grabar pantalla y hacer streaming | Ubuntu |
 | Python 3, PIP y entornos virtuales | Programación | Ubuntu |
