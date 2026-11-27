@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.4.0](#340--2026-11-27) | 2026-11-27 | Quitar periféricos | 5 | | |
 | [3.3.0](#330--2026-11-27) | 2026-11-27 | Pruebas y reinstalar controladores | 8 | | |
 | [3.2.0](#320--2026-11-27) | 2026-11-27 | Temas, periféricos y versionado | 7 | 3.025 | 284 |
 | [3.1.0](#310--2026-11-26) | 2026-11-26 | Descargar sistemas, Ventoy y código en piezas | 14 | 24.386 | 727 |
@@ -23,10 +24,22 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **91** | **59.153** | **3.784** |
+| **Total** | | | **96** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.4.0] — 2026-11-27
+
+**Quitar periféricos.** El menú de periféricos (23) tiene la opción 10 para quitar lo que ya no usas.
+
+5 cambios
+
+- Periféricos → 10 → 1: quitar impresoras configuradas (solo su configuración; con casillas y prueba de que se fue)
+- Periféricos → 10 → 2: desvincular dispositivos Bluetooth
+- Periféricos → 10 → 3: borrar las huellas registradas y dejar de pedirlas para iniciar sesión y `sudo`
+- Periféricos → 10 → 4: desinstalar el soporte de periféricos que instaló el script (nunca lo que traía el sistema), avisando antes qué más se quitaría por dependencias
+- Cada cosa quitada se comprueba (🧪 ✓ / ✗)
 
 ## [3.3.0] — 2026-11-27
 

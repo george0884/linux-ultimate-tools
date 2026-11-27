@@ -4,7 +4,7 @@
 #@@ datos_version
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.3.0"
+UT_VERSION="3.4.0"
 UT_VERSION_DATE="2026-11-27"
 #@@ log
 
@@ -3234,6 +3234,136 @@ periph_reinstall() {
     esac
     PERIPH_REINSTALL=false
 }
+#@@ datos_periph_pkgs
+# Paquetes que puede instalar la opción 23 (nombres de Ubuntu/Debian y de Arch), por tipo
+PERIPH_PKGS_PRINTERS="cups cups-filters ipp-usb hplip printer-driver-brlaser printer-driver-splix printer-driver-escpr printer-driver-gutenprint gutenprint print-manager system-config-printer"
+PERIPH_PKGS_SCANNERS="sane-utils sane sane-airscan skanpage simple-scan"
+PERIPH_PKGS_CAMERAS="v4l-utils gphoto2 kamoso guvcview"
+PERIPH_PKGS_BT="bluez bluez-utils blueman"
+PERIPH_PKGS_PADS="steam-devices"
+PERIPH_PKGS_FINGER="fprintd libpam-fprintd"
+PERIPH_PKGS_TABLETS="libwacom-common xserver-xorg-input-wacom libwacom xf86-input-wacom"
+#@@ periph_remove
+
+# Opción 10: quitar impresoras, dispositivos Bluetooth vinculados, huellas o el soporte instalado
+periph_remove() {
+    local choice
+    echo -e "\n${CYAN}🗑 ¿Qué quitas?${NC}"
+    echo -e "  ${CYAN}1)${NC} Impresoras configuradas"
+    echo -e "  ${CYAN}2)${NC} Dispositivos Bluetooth vinculados"
+    echo -e "  ${CYAN}3)${NC} Las huellas registradas (y dejar de usarlas para iniciar sesión)"
+    echo -e "  ${CYAN}4)${NC} El soporte que instaló el script (controladores y programas de periféricos)"
+    echo -e "  ${CYAN}0)${NC} Volver"
+    read -r -p "🔢 Opción: " choice
+    case $choice in
+        1) periph_remove_printers ;;
+        2) periph_remove_bluetooth ;;
+        3) periph_remove_fingerprints ;;
+        4) periph_remove_support ;;
+        *) return 2 ;;
+    esac
+}
+#@@ periph_remove_printers
+
+periph_remove_printers() {
+    local entries=() q
+    while IFS= read -r q; do
+        entries+=("${q%%|*}|$(periph_queue_state "${q%%|*}" | sed 's/\x1b\[[0-9;]*m//g')")
+    done < <(LC_ALL=C lpstat -v 2>/dev/null | sed -n 's/^device for \([^:]*\): \(.*\)$/\1|\2/p')
+    if [ ${#entries[@]} -eq 0 ]; then
+        echo -e "${YELLOW}ℹ No hay impresoras configuradas${NC}"
+        return 0
+    fi
+    checklist_select "Quitar impresoras" "Marca las impresoras que quieres QUITAR (la impresora no se toca, solo su configuración)" "${entries[@]}" || return 2
+    [ ${#CHOSEN[@]} -gt 0 ] || return 2
+    confirm "${YELLOW}¿Quitar ${CHOSEN[*]}?${NC}" || return 2
+    for q in "${CHOSEN[@]}"; do
+        if sudo lpadmin -x "$q" 2>>"$LOG_FILE"; then
+            LC_ALL=C lpstat -v 2>/dev/null | grep -q "device for $q:" \
+                && periph_result fail "$q sigue configurada" || periph_result ok "$q quitada"
+        else
+            periph_result fail "No se pudo quitar $q"
+        fi
+    done
+}
+#@@ periph_remove_bluetooth
+
+periph_remove_bluetooth() {
+    local entries=() line mac
+    command -v bluetoothctl &> /dev/null || { echo -e "${YELLOW}ℹ Bluetooth no está instalado${NC}"; return 0; }
+    # bluetoothctl nuevo: "devices Paired"; el anterior: "paired-devices"
+    while read -r _ mac line; do
+        [ -n "$mac" ] && entries+=("$mac|$line")
+    done < <({ bluetoothctl devices Paired 2>/dev/null || bluetoothctl paired-devices 2>/dev/null; } | grep '^Device ')
+    if [ ${#entries[@]} -eq 0 ]; then
+        echo -e "${YELLOW}ℹ No hay dispositivos Bluetooth vinculados${NC}"
+        return 0
+    fi
+    checklist_select "Quitar dispositivos Bluetooth" "Marca los que quieres DESVINCULAR (para usarlos de nuevo hay que volver a vincularlos)" "${entries[@]}" || return 2
+    [ ${#CHOSEN[@]} -gt 0 ] || return 2
+    for mac in "${CHOSEN[@]}"; do
+        if bluetoothctl remove "$mac" 2>/dev/null | grep -qi 'removed'; then
+            periph_result ok "Desvinculado: $mac"
+        else
+            periph_result fail "No se pudo desvincular $mac"
+        fi
+    done
+}
+#@@ periph_remove_fingerprints
+
+periph_remove_fingerprints() {
+    command -v fprintd-delete &> /dev/null || { echo -e "${YELLOW}ℹ El lector de huella no está instalado${NC}"; return 0; }
+    confirm "${YELLOW}¿Borrar todas tus huellas registradas?${NC}" || return 2
+    # Primero se deja de pedir la huella al iniciar sesión y en sudo
+    command -v pam-auth-update &> /dev/null && sudo pam-auth-update --disable fprintd 2>/dev/null
+    fprintd-delete "$(id -un)" &> /dev/null
+    if fprintd-list "$(id -un)" 2>/dev/null | grep -q ' - #'; then
+        periph_result fail "Quedaron huellas registradas"
+    else
+        periph_result ok "Huellas borradas; ya no se piden para iniciar sesión ni para sudo"
+    fi
+}
+#@@ periph_remove_support
+
+# Los paquetes de periféricos que instaló el script (nunca los que traía el sistema)
+periph_remove_support() {
+    local owned_pkgs=() entries=() p label extra=()
+    [ -s "$INSTALLED_LIST" ] || { echo -e "${YELLOW}ℹ El script no instaló soporte de periféricos${NC}"; return 0; }
+    for p in $PERIPH_PKGS_PRINTERS $PERIPH_PKGS_SCANNERS $PERIPH_PKGS_CAMERAS $PERIPH_PKGS_BT $PERIPH_PKGS_PADS $PERIPH_PKGS_FINGER $PERIPH_PKGS_TABLETS; do
+        grep -qx -- "$p" "$INSTALLED_LIST" && [ -n "$(periph_installed "$p")" ] && owned_pkgs+=("$p")
+    done
+    if [ ${#owned_pkgs[@]} -eq 0 ]; then
+        echo -e "${YELLOW}ℹ El script no instaló soporte de periféricos (o ya se quitó)${NC}"
+        return 0
+    fi
+    for p in "${owned_pkgs[@]}"; do
+        case " $PERIPH_PKGS_PRINTERS " in *" $p "*) label="Impresoras" ;; *)
+        case " $PERIPH_PKGS_SCANNERS " in *" $p "*) label="Escáneres" ;; *)
+        case " $PERIPH_PKGS_CAMERAS " in *" $p "*) label="Cámaras" ;; *)
+        case " $PERIPH_PKGS_BT " in *" $p "*) label="Bluetooth" ;; *)
+        case " $PERIPH_PKGS_FINGER " in *" $p "*) label="Huella" ;; *)
+        case " $PERIPH_PKGS_TABLETS " in *" $p "*) label="Tabletas" ;; *) label="Mandos" ;; esac ;; esac ;; esac ;; esac ;; esac ;; esac
+        entries+=("$p|$label: $(pkg_summary "$p" 2>/dev/null)")
+    done
+    checklist_select "Quitar soporte de periféricos" "Marca lo que quieres DESINSTALAR (solo aparece lo que instaló el script)" "${entries[@]}" || return 2
+    [ ${#CHOSEN[@]} -gt 0 ] || return 2
+    if declare -F apt_purge > /dev/null; then
+        mapfile -t extra < <(LC_ALL=C apt-get -s purge "${CHOSEN[@]}" 2>/dev/null | awk '/^(Purg|Remv) / {print $2}' | grep -vxF -f <(printf '%s\n' "${CHOSEN[@]}"))
+        [ ${#extra[@]} -gt 0 ] && echo -e "${YELLOW}⚠ También se quitan porque dependen de ellos: ${extra[*]}${NC}"
+    fi
+    confirm "${YELLOW}¿Desinstalar ${CHOSEN[*]}?${NC}" || return 2
+    printf '%s\n' "${CHOSEN[@]}" | grep -qx 'fprintd\|libpam-fprintd' && command -v pam-auth-update &> /dev/null \
+        && sudo pam-auth-update --disable fprintd 2>/dev/null
+    if declare -F apt_purge > /dev/null; then
+        apt_purge "${CHOSEN[@]}" || return 1
+    else
+        pkg_remove "${CHOSEN[@]}" || return 1
+    fi
+    forget_installed "${CHOSEN[@]}"
+    for p in "${CHOSEN[@]}"; do
+        if [ -z "$(periph_installed "$p")" ]; then periph_result ok "Desinstalado: $p"; else periph_result fail "Sigue instalado: $p"; fi
+    done
+}
 #@@ peripherals_menu
 
 peripherals_menu() {
@@ -3255,8 +3385,9 @@ peripherals_menu() {
         echo -e "  ${CYAN}7)${NC} 👆 Lector de huella"
         echo -e "  ${CYAN}8)${NC} 📝 Tabletas gráficas"
         echo -e "  ${CYAN}9)${NC} 🔁 Reinstalar controladores (si algo dejó de andar) y probar"
+        echo -e "  ${CYAN}10)${NC} 🗑 Quitar: impresoras, dispositivos Bluetooth, huellas o el soporte instalado"
         echo -e "  ${CYAN}0)${NC} 🔙 Volver\n"
-        read -r -p "📌 Opción (0-9): " option
+        read -r -p "📌 Opción (0-10): " option
         case $option in
             1) submenu_run periph_install_detected ;;
             2) submenu_run periph_printers ;;
@@ -3267,6 +3398,7 @@ peripherals_menu() {
             7) submenu_run periph_fingerprint ;;
             8) submenu_run periph_tablets ;;
             9) submenu_run periph_reinstall ;;
+            10) submenu_run periph_remove ;;
             0|"") return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
