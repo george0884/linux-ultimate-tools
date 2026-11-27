@@ -8287,7 +8287,7 @@ boot_only_menu() {
 #   lista:   url de la carpeta|archivo de sumas|patrón
 #   fijo:    url de la carpeta|nombre de la ISO|archivo con su suma
 #   carpeta: url|patrón de la subcarpeta de la versión (- = ninguna)|patrón|archivo de sumas,
-#            o ".extensión" si cada ISO tiene su propio archivo de suma al lado
+#            o ".extensión" si cada ISO tiene su propio archivo de suma al lado (varias: ".sha256,.sha512")
 #   sf:      proyecto de SourceForge|carpeta|patrón|extensión del archivo de suma de cada ISO
 #   pop:     variantes a probar, separadas por coma (generic, intel, nvidia)|patrón (API oficial de System76)
 #   neon:    edición (user, testing o unstable)|patrón (files.kde.org; KDE cambió de carpeta en 2026)
@@ -8344,7 +8344,7 @@ USB_DISTROS=(
     "rhel|Red Hat Enterprise Linux (pide iniciar sesión: te explico cómo)|enlace|https://developers.redhat.com/products/rhel/download|rhel-[0-9.]+-x86_64-[a-z]+\\.iso"
     "#openSUSE|Tumbleweed y Leap"
     "opensuse|openSUSE Tumbleweed (siempre al día)|fijo|https://download.opensuse.org/tumbleweed/iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso|openSUSE-Tumbleweed-DVD-x86_64-Current.iso.sha256"
-    "leap|openSUSE Leap (estable, versión fija)|carpeta|https://download.opensuse.org/distribution/openSUSE-stable/offline|-|Leap-[0-9.]+-offline-installer-x86_64\\.install\\.iso|.sha256"
+    "leap|openSUSE Leap (estable, versión fija)|carpeta|https://download.opensuse.org/distribution/leap|[0-9]+\\.[0-9]+/offline|Leap-[0-9.]+-offline-installer-x86_64\\.install\\.iso|.sha256,.sha512"
     "#Independientes e históricas|Slackware, Gentoo, Void Linux, NixOS"
     "slackware|Slackware (la más antigua que sigue viva, desde 1993)|slackware|https://mirrors.slackware.com/slackware|slackware64-[0-9.]+-install-dvd\\.iso"
     "gentoo|Gentoo LiveGUI (KDE Plasma; todo se compila a tu medida)|gentoo|https://distfiles.gentoo.org/releases/amd64/autobuilds|livegui-amd64-[0-9TZ]+\\.iso"
@@ -8487,8 +8487,11 @@ usb_resolve_download() {
                 if [[ "$d" == .* ]]; then
                     iso=$(usb_index_names "$base" | usb_sorted "$c" | tail -1)
                     [ -n "$iso" ] || continue
-                    h=$(curl -sSfL -m 30 "$base/$iso$d" 2>/dev/null | usb_first_hash)
-                    [ -n "$h" ] && picked="$h $iso"
+                    local ext
+                    for ext in ${d//,/ }; do
+                        h=$(curl -sSfL -m 30 "$base/$iso$ext" 2>/dev/null | usb_first_hash)
+                        [ -n "$h" ] && { picked="$h $iso"; break; }
+                    done
                 else
                     sums=$(curl -sSfL -m 30 "$base/$d" 2>/dev/null) || continue
                     picked=$(usb_pick_from_sums "$sums" "$c")
@@ -8540,24 +8543,19 @@ usb_resolve_download() {
                 picked="$(cut -d' ' -f2 <<< "$picked") ${url##*/}"
             fi ;;
         zorin)
-            # Zorin publica las sumas en su página de ayuda, junto al nombre de cada ISO
-            mapfile -t tokens < <(curl -sSfL -m 30 https://help.zorin.com/docs/getting-started/check-the-integrity-of-your-copy-of-zorin-os/ 2>/dev/null \
-                | sed 's/<[^>]*>/\n/g' | grep -oiE "Zorin-OS-[0-9.]+-$a-64-bit(-r[0-9]+)?\\.iso|\\b[0-9a-f]{64}\\b")
-            iso=$(printf '%s\n' "${tokens[@]}" | usb_sorted "$b" | tail -1)
-            for i in "${!tokens[@]}"; do
-                [ "${tokens[$i]}" = "$iso" ] || continue
-                if [[ "${tokens[$((i + 1))]:-}" =~ ^[0-9a-fA-F]{64}$ ]]; then h=${tokens[$((i + 1))]}
-                elif [ "$i" -gt 0 ] && [[ "${tokens[$((i - 1))]}" =~ ^[0-9a-fA-F]{64}$ ]]; then h=${tokens[$((i - 1))]}
-                fi
-                break
-            done
-            if [ -n "$iso" ] && [ -n "$h" ]; then
-                # Espejos oficiales de la lista de Zorin, carpeta de la versión principal (17, 18...):
-                # se usa el primero que la tenga
-                local major m
-                major=$(cut -d. -f1 <<< "${iso#Zorin-OS-}" | cut -d- -f1)
+            # La página oficial de ayuda de Zorin lista "Zorin OS 18.1 Core 64-bit" y su SHA-256.
+            # El nombre exacto del archivo (a veces con "-r2") sale de la carpeta del espejo
+            local page major m names
+            page=$(curl -sSfL -m 30 https://help.zorin.com/docs/getting-started/check-the-integrity-of-your-copy-of-zorin-os/ 2>/dev/null \
+                | sed 's/<[^>]*>/ /g; s/&nbsp;/ /g' | tr -s ' \n\t' ' ')
+            ver=$(grep -oE "Zorin OS [0-9]+(\.[0-9]+)? $a 64-bit" <<< "$page" | awk '{print $3}' | sort -V | tail -1)
+            if [ -n "$ver" ]; then
+                h=$(grep -oE "Zorin OS ${ver//./\\.} $a 64-bit[^0-9a-fA-F]{0,200}[0-9a-fA-F]{64}" <<< "$page" | head -1 | grep -oE '[0-9a-fA-F]{64}$')
+                major=${ver%%.*}
                 for m in https://mirrors.edge.kernel.org/zorinos-isos https://ftp.nluug.nl/os/Linux/distr/zorin; do
-                    if curl -sSfLI -m 30 -o /dev/null "$m/$major/$iso" 2>/dev/null; then
+                    names=$(usb_index_names "$m/$major")
+                    iso=$(usb_sorted "Zorin-OS-${ver//./\\.}-$a-64-bit(-r[0-9]+)?\\.iso" <<< "$names" | tail -1)
+                    if [ -n "$iso" ] && [ -n "$h" ]; then
                         url="$m/$major/$iso"
                         picked="$h $iso"
                         break
