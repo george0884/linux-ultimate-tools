@@ -4415,7 +4415,7 @@ first_run_notice() {
 #@parte comun: notice_save
 
 SCRIPT_FAMILY=ubuntu
-#@parte comun: right_script_family offer_right_script
+#@parte comun: right_script_family datos_update update_version_newer update_check offer_right_script
 
 # ============================================================
 # INICIO
@@ -4439,6 +4439,7 @@ Ejemplos:
 EOF
 }
 
+UT_ARGS=("$@")   # para volver a abrirse igual después de actualizarse
 PROFILE=""
 NOTICE_OK=false
 while [ $# -gt 0 ]; do
@@ -4476,6 +4477,7 @@ set_terminal_title "Ubuntu Ultimate Tools · $(os_release_value PRETTY_NAME)"
 
 # Antes de pedir la contraseña o tocar nada
 first_run_notice
+update_check
 offer_right_script
 
 echo "=== Ubuntu Ultimate Tools - $(date) ===" > "$LOG_FILE"

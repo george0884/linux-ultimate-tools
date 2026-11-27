@@ -3385,7 +3385,7 @@ first_run_notice() {
 #@parte comun: notice_save
 
 SCRIPT_FAMILY=debian
-#@parte comun: right_script_family offer_right_script
+#@parte comun: right_script_family datos_update update_version_newer update_check offer_right_script
 
 # ============================================================
 # INICIO
@@ -3399,6 +3399,7 @@ if [ "$EUID" -eq 0 ]; then
     echo -e "${RED}❌ No ejecutes este script como root (no uses sudo)${NC}"
     exit 1
 fi
+UT_ARGS=("$@")   # para volver a abrirse igual después de actualizarse
 NOTICE_OK=false
 case ${1:-} in
     -h|--ayuda) echo "Uso: $0 [--entiendo]   (menú interactivo; versión beta para Debian y derivadas)"
@@ -3413,6 +3414,7 @@ set_terminal_title "Debian Ultimate Tools (beta) · $(os_release_value PRETTY_NA
 
 # Antes de pedir la contraseña o tocar nada
 first_run_notice
+update_check
 offer_right_script
 if ! command -v sudo &> /dev/null; then
     echo -e "${RED}❌ Falta sudo. Instálalo como root (su -c 'apt install sudo') y agrega tu usuario:${NC}"
