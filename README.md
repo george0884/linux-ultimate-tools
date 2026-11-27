@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
-[![Versión](https://img.shields.io/badge/Versión-3.3.0-7aa2f7.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Versión-3.4.0-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -667,8 +667,8 @@ descargas ni de licencias de terceros:
 ![Periféricos](screenshots/37-perifericos.png)
 
 Muestra lo que está conectado (lo lee del sistema, sin instalar nada para mirar) y prepara cada cosa con paquetes
-de los **repositorios oficiales** de tu distribución (nada de AUR ni descargas sueltas). Todo lo que instala se
-quita en 10 → 1.
+de los **repositorios oficiales** de tu distribución (nada de AUR ni descargas sueltas). Lo que instala se quita en
+**23 → 10 → 4** o en 10 → 1 (solo lo que instaló el script).
 
 | Opción | Qué hace |
 |---|---|
@@ -681,6 +681,7 @@ quita en 10 → 1.
 | **7** Lector de huella | `fprintd`, registrar la huella y (Ubuntu/Debian) usarla para iniciar sesión y `sudo` |
 | **8** Tabletas gráficas | Soporte de Wacom, Huion y XP-Pen (`libwacom`); la presión y los botones, en la configuración del escritorio |
 | **9** Reinstalar controladores | Si algo dejó de andar: reinstala los paquetes del periférico que elijas, reinicia su servicio y lo vuelve a probar |
+| **10** Quitar | **1** impresoras configuradas (solo su configuración), **2** desvincular dispositivos Bluetooth, **3** borrar las huellas (y dejar de pedirlas al iniciar sesión y en `sudo`), **4** desinstalar el soporte que instaló el script, con aviso de lo que se quitaría por dependencias. Cada cosa quitada se comprueba |
 
 **Cada opción termina con una prueba** (🧪 ✓ funciona / ✗ falla y por qué): la impresora habilitada y la página de
 prueba que sale de la cola (si queda trabada, avisa qué revisar), un escaneo de prueba, una imagen de la cámara,
@@ -951,7 +952,7 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 
 ## 🔖 Versiones
 
-Versión actual: **3.3.0** (2026-11-27). Todos los cambios, contados por versión, están en
+Versión actual: **3.4.0** (2026-11-27). Todos los cambios, contados por versión, están en
 [CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
 tu distribución); también aparece en la cabecera del menú.
 
