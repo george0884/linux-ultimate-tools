@@ -2381,6 +2381,8 @@ TOKYO_GTK_GIT="https://github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme"
 TOKYO_GTK_TGZ="https://codeload.github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme/tar.gz/refs/heads/master"
 TOKYO_GTK_NAME="Tokyonight-Dark"
 TOKYO_TERMINAL_NAME="Tokyo Night"
+# Para que las apps Qt (VLC, qBittorrent...) usen los colores del tema GTK
+TOKYO_QT_ENV="$HOME/.config/environment.d/60-ultimate-tools-qt.conf"
 
 # Tokyo Night para GNOME: tema GTK (ventanas y apps de GNOME), modo oscuro y perfil de GNOME Terminal
 install_tokyo_night_gnome() {
@@ -2425,8 +2427,29 @@ install_tokyo_night_gnome() {
     gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null
     run "No se pudo aplicar el tema" gsettings set org.gnome.desktop.interface gtk-theme "$TOKYO_GTK_NAME" || return 1
     log_success "Tema Tokyo Night aplicado (las apps abiertas lo toman al volver a abrirlas)"
+    tokyo_night_qt
     tokyo_night_gnome_terminal
     echo -e "${CYAN}ℹ Para volver al tema anterior: opción 11 (Revertir)${NC}"
+}
+
+# Apps Qt en GNOME: el complemento oficial de Qt para GTK les pasa los colores del tema GTK (Qt 5 y Qt 6)
+tokyo_night_qt() {
+    local pkgs=() f
+    if command -v apt-get &> /dev/null; then
+        mapfile -t pkgs < <(available_pkgs qt5-gtk-platformtheme qt6-gtk-platformtheme)
+        [ ${#pkgs[@]} -gt 0 ] && { apt_install_recorded "${pkgs[@]}" || return 1; }
+    fi
+    # Si ya elegiste otro tema para Qt (qt5ct, Kvantum...), no se toca
+    for f in "$HOME"/.config/environment.d/*.conf; do
+        [ -f "$f" ] && [ "$f" != "$TOKYO_QT_ENV" ] && grep -q '^QT_QPA_PLATFORMTHEME=' "$f" && {
+            echo -e "${YELLOW}ℹ Ya elegiste un tema para las apps Qt en $f: no se cambia${NC}"
+            return 0
+        }
+    done
+    mkdir -p "$(dirname "$TOKYO_QT_ENV")"
+    printf '%s\n' "# Linux Ultimate Tools (tema Tokyo Night): las apps Qt usan los colores del tema GTK" \
+        "QT_QPA_PLATFORMTHEME=gtk3" > "$TOKYO_QT_ENV"
+    log_success "Las apps Qt (VLC, qBittorrent...) usarán los colores Tokyo Night desde el próximo inicio de sesión"
 }
 
 # Perfil "Tokyo Night" en GNOME Terminal, como predeterminado (el anterior queda anotado para Revertir)
@@ -4304,6 +4327,10 @@ restore_theme() {
                 [ -e "$HOME/.config/gtk-4.0/$f.antes-de-ultimate-tools" ] && ! [ -e "$HOME/.config/gtk-4.0/$f" ] \
                     && mv "$HOME/.config/gtk-4.0/$f.antes-de-ultimate-tools" "$HOME/.config/gtk-4.0/$f"
             done
+            if [ -f "$TOKYO_QT_ENV" ]; then
+                rm -f "$TOKYO_QT_ENV"
+                log_success "Las apps Qt vuelven a su aspecto anterior (desde el próximo inicio de sesión)"
+            fi
             if compgen -G "$HOME/.themes/Tokyonight*" > /dev/null; then
                 rm -rf -- "$HOME"/.themes/Tokyonight*
                 log_success "Tema Tokyo Night quitado"
