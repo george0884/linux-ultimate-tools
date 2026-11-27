@@ -204,6 +204,23 @@ El script no copia ni redistribuye nada de Ventoy: lo descarga de su fuente ofic
 discusión pública sobre archivos binarios precompilados en el repositorio de Ventoy (cómo se generan); quien lo
 necesite puede revisarla en el repositorio del proyecto antes de usarlo.
 
+## 🔌 Periféricos (opción 23)
+
+Todo se instala desde los repositorios oficiales de cada distribución; el script no copia código de ninguno:
+
+| Proyecto | Licencia | Uso |
+|---|---|---|
+| [CUPS](https://github.com/OpenPrinting/cups) y [cups-filters](https://github.com/OpenPrinting/cups-filters) (OpenPrinting) | Apache-2.0 · GPL/LGPL | Impresión e impresión sin controlador |
+| [ipp-usb](https://github.com/OpenPrinting/ipp-usb) (OpenPrinting) | BSD-2-Clause | Impresoras y escáneres USB sin controlador |
+| [HPLIP](https://developers.hp.com/hp-linux-imaging-and-printing) (HP) | GPL-2.0, MIT y BSD | Controlador de impresoras y escáneres HP |
+| [Gutenprint](https://gimp-print.sourceforge.io/), [brlaser](https://github.com/pdewacht/brlaser), [SpliX](https://github.com/OpenPrinting/splix), [ESC/P-R](https://github.com/OpenPrinting/epson-inkjet-printer-escpr) | GPL-2.0 o posterior | Controladores de impresoras (Canon y otras, Brother, Samsung, Epson) |
+| [SANE](https://gitlab.com/sane-project) y [sane-airscan](https://github.com/alexpevzner/sane-airscan) | GPL-2.0 (con excepción) | Escáneres y escaneo sin controlador |
+| [v4l-utils](https://git.linuxtv.org/v4l-utils.git), [gPhoto2](http://www.gphoto.org/), [guvcview](https://guvcview.sourceforge.net/), [Kamoso](https://apps.kde.org/kamoso/) | GPL-2.0 o posterior | Cámaras web y de fotos |
+| [BlueZ](https://www.bluez.org/) y [Blueman](https://github.com/blueman-project/blueman) | GPL-2.0 o posterior | Bluetooth |
+| [steam-devices](https://github.com/ValveSoftware/steam-devices) (Valve) | MIT | Reglas para mandos de juego |
+| [fprintd](https://fprint.freedesktop.org/) | GPL-2.0 o posterior | Lector de huella |
+| [libwacom](https://github.com/linuxwacom/libwacom) y [xf86-input-wacom](https://github.com/linuxwacom/xf86-input-wacom) | MIT · GPL-2.0 | Tabletas gráficas |
+
 ## 💾 Archivo swap (opción 15)
 
 | Proyecto | Autor | Licencia | Uso |
