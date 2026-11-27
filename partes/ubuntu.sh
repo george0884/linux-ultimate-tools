@@ -1161,6 +1161,7 @@ system_update() {
 
 THEME_BACKUP="$STATE_DIR/tema-anterior.txt"
 #@parte comun: save_theme_value theme_value kde_color_scheme theme_session_env theme_install_pkgs tokyo_icons_ready tokyo_night_wallpaper tokyo_theme_active desktop_theme_menu apply_tokyo_night_full install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_qt tokyo_night_gnome_terminal gnome_dark_mode
+#@parte comun: periph_available periph_installed periph_install periph_is_apt periph_usb_list periph_detect periph_show periph_summary periph_printers periph_uri_name periph_scanners periph_cameras periph_bluetooth periph_gamepads periph_fingerprint periph_tablets periph_install_detected peripherals_menu
 #@parte apt: install_custom_software
 
 # ------------------------------------------------------------
@@ -4330,6 +4331,7 @@ main_menu() {
         echo -e "  ${CYAN}14)${NC} 🐧 Optimizar Kernel (Liquorix/XanMod/Estándar)"
         echo -e "  ${CYAN}15)${NC} 💾 Optimizar Memoria RAM (automático)"
         echo -e "  ${CYAN}16)${NC} 🌐 Red, DNS y drivers"
+        echo -e "  ${CYAN}23)${NC} 🔌 Periféricos: impresoras, escáneres, cámaras, Bluetooth, mandos..."
         echo -e "  ${CYAN}17)${NC} 🔋 Energía y rendimiento"
         echo -e "  ${CYAN}18)${NC} 🚀 PERFILES AUTOMÁTICOS (gaming, productividad...)"
         echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
@@ -4339,7 +4341,7 @@ main_menu() {
         echo -e "  ${CYAN}21)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (0-22): " option
+        read -r -p "🔢 Opción (0-23): " option
 
         case $option in
             1) ( MENU_SUBSHELL=1; system_update ) ;;
@@ -4364,6 +4366,7 @@ main_menu() {
             20) ( MENU_SUBSHELL=1; create_usb_menu ) ;;
             21) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
             22) ( MENU_SUBSHELL=1; desktop_theme_menu ) ;;
+            23) ( MENU_SUBSHELL=1; peripherals_menu ) ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
                 exit 0

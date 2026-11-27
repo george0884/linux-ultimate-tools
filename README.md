@@ -661,6 +661,27 @@ descargas ni de licencias de terceros:
 
 ---
 
+## 🔌 Periféricos: detectar e instalar (opción 23)
+
+![Periféricos](screenshots/37-perifericos.png)
+
+Muestra lo que está conectado (lo lee del sistema, sin instalar nada para mirar) y prepara cada cosa con paquetes
+de los **repositorios oficiales** de tu distribución (nada de AUR ni descargas sueltas). Todo lo que instala se
+quita en 10 → 1.
+
+| Opción | Qué hace |
+|---|---|
+| **1** Preparar todo lo detectado | Una sola confirmación y prepara cada periférico conectado |
+| **2** Impresoras | CUPS, impresión **sin controlador** (IPP Everywhere, también por USB con `ipp-usb`) y el controlador de la marca detectada (HP `hplip`, Brother `brlaser`, Samsung `splix`, Epson `escpr`, otras `gutenprint`). Busca las impresoras **USB y de red**, la **agrega** y ofrece imprimir una página de prueba |
+| **3** Escáneres | SANE y escaneo **sin controlador** (`sane-airscan`: casi todas las multifunción modernas, USB o Wi-Fi), y una app para escanear (Skanpage en Plasma, Escáner de documentos en el resto) |
+| **4** Cámaras | Herramientas para la cámara web (`v4l-utils`) y las de fotos (`gphoto2`), y una app para probarla |
+| **5** Bluetooth | BlueZ, el servicio activo y el adaptador encendido (desbloqueado si estaba bloqueado) |
+| **6** Mandos de juego | Reglas para Xbox, PlayStation, Nintendo, 8BitDo y Steam Controller (`steam-devices`) |
+| **7** Lector de huella | `fprintd`, registrar la huella y (Ubuntu/Debian) usarla para iniciar sesión y `sudo` |
+| **8** Tabletas gráficas | Soporte de Wacom, Huion y XP-Pen (`libwacom`); la presión y los botones, en la configuración del escritorio |
+
+---
+
 ## 📦 Software opcional (opción 7)
 
 Los **navegadores van juntos** al principio de la lista: Firefox, Chrome, Chromium, Brave, Edge, Tor Browser y

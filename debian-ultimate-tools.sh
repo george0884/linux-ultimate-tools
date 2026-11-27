@@ -2780,6 +2780,371 @@ gnome_dark_mode() {
     log_success "Modo oscuro de GNOME activado"
 }
 
+# ============================================================
+# OPCIÓN 23: PERIFÉRICOS (impresoras, escáneres, cámaras, Bluetooth, mandos, huella, tabletas)
+# Detecta lo conectado leyendo /sys (no necesita instalar nada para mirar) e instala lo que falta
+# desde los repositorios oficiales. Todo lo instalado se quita en 10 → 1
+# ============================================================
+
+# Paquetes de la lista que existen en los repositorios (apt o pacman)
+periph_available() {
+    if declare -F available_pkgs > /dev/null; then
+        available_pkgs "$@"
+    else
+        pkg_available "$@"
+    fi
+}
+
+# Paquetes de la lista que ya están instalados
+periph_installed() {
+    if declare -F installed_pkgs > /dev/null; then
+        installed_pkgs "$@"
+    else
+        pkg_installed "$@"
+    fi
+}
+
+# Instala los que existan y falten (avisa los que no están en tus repositorios)
+periph_install() {
+    local want=() have=() missing=() p
+    mapfile -t want < <(periph_available "$@" | sort -u)
+    for p in "$@"; do
+        printf '%s\n' "${want[@]}" | grep -qx -- "$p" || missing+=("$p")
+    done
+    [ ${#missing[@]} -gt 0 ] && echo -e "${YELLOW}ℹ No están en tus repositorios (se omiten): ${missing[*]}${NC}"
+    mapfile -t have < <(periph_installed "${want[@]}")
+    local new=()
+    for p in "${want[@]}"; do
+        printf '%s\n' "${have[@]}" | grep -qx -- "$p" || new+=("$p")
+    done
+    if [ ${#new[@]} -eq 0 ]; then
+        echo -e "  ${GREEN}✓ Ya está todo instalado${NC}"
+        return 0
+    fi
+    echo -e "${BLUE}📦 Instalando: ${new[*]}${NC}"
+    declare -F apt_update > /dev/null && apt_update
+    theme_install_pkgs "${new[@]}"
+}
+
+# ¿Este script es de la familia apt (Ubuntu/Debian)? Se decide por el script, no por lo instalado
+periph_is_apt() { declare -F apt_install_recorded > /dev/null; }
+
+# Dispositivos USB: "vendedor|producto|clases de interfaz|nombre"
+periph_usb_list() {
+    local d v p classes name
+    for d in /sys/bus/usb/devices/*; do
+        [ -f "$d/idVendor" ] || continue
+        v=$(cat "$d/idVendor"); p=$(cat "$d/idProduct")
+        classes=$(cat "$d"/*:*/bInterfaceClass 2>/dev/null | sort -u | tr '\n' ' ')
+        name="$(cat "$d/manufacturer" 2>/dev/null) $(cat "$d/product" 2>/dev/null)"
+        name=$(echo "$name" | tr -s ' ' | sed 's/^ //; s/ $//')
+        echo "$v|$p|$classes|${name:-dispositivo $v:$p}"
+    done
+}
+
+# Deja en PERIPH_<tipo> los nombres de lo detectado (uno por línea) y la marca de la impresora
+periph_detect() {
+    local line v p classes name low
+    PERIPH_PRINTER="" PERIPH_SCANNER="" PERIPH_CAMERA="" PERIPH_PHOTO="" PERIPH_BT="" PERIPH_PAD=""
+    PERIPH_FINGER="" PERIPH_TABLET="" PERIPH_BRANDS=""
+    while IFS='|' read -r v p classes name; do
+        low=${name,,}
+        if [[ " $classes" == *" 07"* ]]; then
+            PERIPH_PRINTER+="$name"$'\n'
+            case $v in
+                03f0) PERIPH_BRANDS+=" hp" ;; 04f9) PERIPH_BRANDS+=" brother" ;; 04e8) PERIPH_BRANDS+=" samsung" ;;
+                04b8) PERIPH_BRANDS+=" epson" ;; 04a9) PERIPH_BRANDS+=" canon" ;;
+            esac
+            # Las multifunción de estas marcas también escanean
+            [[ "$v" =~ ^(03f0|04f9|04b8|04a9|04e8)$ ]] && PERIPH_SCANNER+="$name"$'\n'
+        elif [[ "$low" == *scan* ]]; then
+            PERIPH_SCANNER+="$name"$'\n'
+        fi
+        [[ " $classes" == *" 06"* ]] && PERIPH_PHOTO+="$name"$'\n'
+        [[ " $classes" == *" 0e"* ]] && PERIPH_CAMERA+="$name"$'\n'
+        case $v in
+            27c6|138a|2808|1c7a|10a5) PERIPH_FINGER+="$name"$'\n' ;;
+            06cb|04f3) [[ "$low" == *finger* ]] && PERIPH_FINGER+="$name"$'\n' ;;
+            056a|256c|28bd) PERIPH_TABLET+="$name"$'\n' ;;
+        esac
+        if [[ "$low" =~ controller|gamepad|joystick|xbox|dualsense|dualshock|8bitdo ]] || [ "$v" = 2dc8 ] || [ "$v" = 28de ]; then
+            PERIPH_PAD+="$name"$'\n'
+        fi
+    done < <(periph_usb_list)
+    # Cámaras web (USB o integradas) y Bluetooth (USB o integrado)
+    local f
+    # Las integradas también aparecen en video4linux (si ya está por USB, no se repite)
+    if [ -z "$PERIPH_CAMERA" ]; then
+        for f in /sys/class/video4linux/video*/name; do
+            [ -f "$f" ] && PERIPH_CAMERA+="$(cat "$f")"$'\n'
+        done
+    fi
+    PERIPH_CAMERA=$(printf '%s' "$PERIPH_CAMERA" | sort -u)
+    for f in /sys/class/bluetooth/hci*; do
+        [ -e "$f" ] && PERIPH_BT+="Adaptador Bluetooth $(basename "$f")"$'\n'
+    done
+    for f in /dev/input/js*; do
+        [ -e "$f" ] && [ -z "$PERIPH_PAD" ] && PERIPH_PAD="Mando de juego ($(basename "$f"))"$'\n'
+    done
+    return 0
+}
+
+# Muestra un tipo de periférico: lo detectado o "no se detectó"
+periph_show() {
+    local label="$1" list="$2" line
+    if [ -n "${list//[$'\n' ]/}" ]; then
+        echo -e "  ${GREEN}✓${NC} ${BOLD}$label${NC}"
+        while IFS= read -r line; do
+            [ -n "$line" ] && echo -e "      $line"
+        done <<< "$list"
+    else
+        echo -e "  ${YELLOW}·${NC} $label: no se detectó"
+    fi
+}
+
+periph_summary() {
+    periph_detect
+    echo -e "\n${CYAN}🔌 Conectado ahora:${NC}"
+    periph_show "Impresoras (USB)" "$PERIPH_PRINTER"
+    periph_show "Escáneres" "$PERIPH_SCANNER"
+    periph_show "Cámaras web" "$PERIPH_CAMERA"
+    periph_show "Cámaras de fotos y celulares (PTP)" "$PERIPH_PHOTO"
+    periph_show "Bluetooth" "$PERIPH_BT"
+    periph_show "Mandos de juego" "$PERIPH_PAD"
+    periph_show "Lector de huella" "$PERIPH_FINGER"
+    periph_show "Tabletas gráficas" "$PERIPH_TABLET"
+    echo -e "\n${CYAN}ℹ Las impresoras y escáneres de red (Wi-Fi) se buscan en las opciones 2 y 3.${NC}"
+}
+
+# Impresoras: CUPS, soporte sin controlador (IPP Everywhere, también por USB) y el controlador de la marca
+periph_printers() {
+    local pkgs brand uris=() i choice uri name
+    periph_detect
+    pkgs=(cups cups-filters ipp-usb)
+    for brand in $PERIPH_BRANDS; do
+        if periph_is_apt; then
+            case $brand in
+                hp) pkgs+=(hplip) ;; brother) pkgs+=(printer-driver-brlaser) ;; samsung) pkgs+=(printer-driver-splix) ;;
+                epson) pkgs+=(printer-driver-escpr) ;; canon) pkgs+=(printer-driver-gutenprint) ;;
+            esac
+        else
+            case $brand in hp) pkgs+=(hplip) ;; *) pkgs+=(gutenprint) ;; esac
+        fi
+    done
+    case $DESKTOP in
+        kde) pkgs+=(print-manager) ;;
+        gnome) ;;
+        none|"") ;;
+        *) pkgs+=(system-config-printer) ;;
+    esac
+    periph_install "${pkgs[@]}" || return 1
+    sudo systemctl enable --now cups.service &> /dev/null || sudo systemctl enable --now cups.socket &> /dev/null
+    getent group lpadmin > /dev/null && ! id -nG | grep -qw lpadmin \
+        && sudo usermod -aG lpadmin "$(id -un)" && log_success "Tu usuario puede administrar impresoras (grupo lpadmin)"
+    echo -e "\n${BLUE}🔍 Buscando impresoras (USB y de red, unos segundos)...${NC}"
+    mapfile -t uris < <(sudo lpinfo --timeout 15 -v 2>/dev/null | awk '$2 ~ /^(usb|ipp|ipps|dnssd):/ {print $2}' | sort -u)
+    if [ -n "$(lpstat -e 2>/dev/null)" ]; then
+        echo -e "${GREEN}✓ Impresoras ya configuradas:${NC}"
+        lpstat -e 2>/dev/null | sed 's/^/   /'
+    fi
+    if [ ${#uris[@]} -eq 0 ]; then
+        echo -e "${YELLOW}ℹ No encontré impresoras nuevas. Enciéndela y conéctala (USB o a tu misma red Wi-Fi) y vuelve a probar.${NC}"
+        return 0
+    fi
+    echo -e "\n${CYAN}🖨 Impresoras encontradas:${NC}"
+    i=1
+    for uri in "${uris[@]}"; do
+        printf "  ${CYAN}%d)${NC} %s\n" "$i" "$(periph_uri_name "$uri")"
+        i=$((i + 1))
+    done
+    echo -e "  ${CYAN}0)${NC} Volver"
+    read -r -p "🔢 ¿Cuál agrego? " choice
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#uris[@]} ] || return 2
+    uri=${uris[$((choice - 1))]}
+    name=$(periph_uri_name "$uri" | sed 's/ ([^)]*)$//' | tr -c 'A-Za-z0-9_-' '_' | sed 's/__*/_/g; s/^_//; s/_$//' | cut -c1-30)
+    # Sin controlador (IPP Everywhere): sirve para casi todas las impresoras de los últimos 10 años
+    if sudo lpadmin -p "${name:-Impresora}" -E -v "$uri" -m everywhere 2>>"$LOG_FILE"; then
+        sudo lpadmin -d "${name:-Impresora}" 2>/dev/null
+        log_success "Impresora agregada y elegida como predeterminada: ${name:-Impresora}"
+        if confirm "${CYAN}¿Imprimir una página de prueba?${NC}"; then
+            lp -d "${name:-Impresora}" /usr/share/cups/data/testprint &> /dev/null \
+                && log_success "Página de prueba enviada" || log_warning "No se pudo enviar la página de prueba"
+        fi
+    else
+        log_warning "Esta impresora necesita su controlador: agrégala en Configuración → Impresoras (lo elige solo)"
+    fi
+}
+
+# Nombre legible de una dirección de impresora de CUPS
+periph_uri_name() {
+    local uri="$1" n kind
+    kind=${uri%%:*}
+    n=${uri#*://}
+    n=${n%%\?*}
+    case $kind in
+        usb) n=${n//\// }; kind="USB" ;;                 # usb://HP/DeskJet%202700 → HP DeskJet 2700
+        dnssd) n=${n%%._*}; kind="red" ;;                 # dnssd://Nombre._ipp._tcp.local/ → Nombre
+        *) n=${n%%/*}; kind="red" ;;
+    esac
+    n=$(printf '%b' "${n//%/\\x}")
+    echo "${n% } ($kind)"
+}
+
+# Escáneres: SANE y soporte sin controlador (eSCL/WSD, casi todas las multifunción modernas)
+periph_scanners() {
+    local pkgs list
+    periph_detect
+    if periph_is_apt; then pkgs=(sane-utils sane-airscan); else pkgs=(sane sane-airscan); fi
+    [[ "$PERIPH_BRANDS" == *hp* ]] && pkgs+=(hplip)
+    if has_desktop; then
+        case $DESKTOP in kde) pkgs+=(skanpage) ;; *) pkgs+=(simple-scan) ;; esac
+    fi
+    periph_install "${pkgs[@]}" || return 1
+    echo -e "\n${BLUE}🔍 Buscando escáneres (USB y de red, unos segundos)...${NC}"
+    list=$(timeout 40 scanimage -L 2>/dev/null | grep -i 'device')
+    if [ -n "$list" ]; then
+        echo -e "${GREEN}✓ Escáneres listos:${NC}"
+        sed "s/^device \`\([^']*\)' is a /   • /" <<< "$list"
+        has_desktop && echo -e "${CYAN}💡 Para escanear: $([ "$DESKTOP" = kde ] && echo Skanpage || echo "Escáner de documentos")${NC}"
+    else
+        echo -e "${YELLOW}ℹ No encontré escáneres. Enciéndelo y conéctalo (USB o a tu misma red) y vuelve a probar.${NC}"
+    fi
+}
+
+# Cámaras: herramientas para la web (v4l) y para cámaras de fotos (gphoto2), y una app para probarla
+periph_cameras() {
+    local pkgs=(v4l-utils gphoto2)
+    periph_detect
+    if has_desktop; then
+        case $DESKTOP in kde) pkgs+=(kamoso) ;; *) pkgs+=(guvcview) ;; esac
+    fi
+    periph_install "${pkgs[@]}" || return 1
+    if [ -n "$PERIPH_CAMERA" ]; then
+        echo -e "\n${GREEN}✓ Cámaras web:${NC}"
+        v4l2-ctl --list-devices 2>/dev/null | sed 's/^/   /' | head -20
+    else
+        echo -e "\n${YELLOW}ℹ No hay cámara web conectada${NC}"
+    fi
+    if command -v gphoto2 &> /dev/null && gphoto2 --auto-detect 2>/dev/null | tail -n +3 | grep -q .; then
+        echo -e "${GREEN}✓ Cámaras de fotos:${NC}"
+        gphoto2 --auto-detect 2>/dev/null | tail -n +3 | sed 's/^/   /'
+    fi
+    has_desktop && echo -e "${CYAN}💡 Para probar la cámara: $([ "$DESKTOP" = kde ] && echo Kamoso || echo guvcview)${NC}"
+}
+
+# Bluetooth: BlueZ, el servicio activo y el adaptador encendido
+periph_bluetooth() {
+    local pkgs=(bluez)
+    periph_is_apt || pkgs+=(bluez-utils)
+    case $DESKTOP in kde|gnome|none|"") ;; *) pkgs+=(blueman) ;; esac
+    periph_install "${pkgs[@]}" || return 1
+    command -v rfkill &> /dev/null && sudo rfkill unblock bluetooth 2>/dev/null
+    run "No se pudo activar el servicio de Bluetooth" sudo systemctl enable --now bluetooth.service || return 1
+    if ! compgen -G "/sys/class/bluetooth/hci*" > /dev/null; then
+        log_warning "Bluetooth activado, pero no se detecta un adaptador (¿está apagado en la BIOS o es un USB sin conectar?)"
+        return 0
+    fi
+    bluetoothctl power on &> /dev/null
+    log_success "Bluetooth listo y encendido: vincula tus dispositivos desde la configuración del escritorio"
+}
+
+# Mandos de juego: reglas para que Steam y los juegos los usen sin ser administrador
+periph_gamepads() {
+    if periph_is_apt; then
+        periph_install steam-devices || return 1
+        sudo udevadm control --reload 2>/dev/null
+        sudo udevadm trigger 2>/dev/null
+        log_success "Mandos listos (Xbox, PlayStation, Nintendo, 8BitDo, Steam Controller): desconéctalo y conéctalo"
+    else
+        echo -e "${CYAN}ℹ En Arch los mandos funcionan con el kernel y las reglas vienen con Steam (opción 7 o 17 → 6).${NC}"
+    fi
+}
+
+# Lector de huella: fprintd, registrar la huella y usarla para iniciar sesión y sudo
+periph_fingerprint() {
+    local pkgs=(fprintd)
+    periph_is_apt && pkgs+=(libpam-fprintd)
+    periph_install "${pkgs[@]}" || return 1
+    periph_detect
+    [ -z "$PERIPH_FINGER" ] \
+        && echo -e "${YELLOW}ℹ No detecté un lector conocido. Si el tuyo no es compatible, fprintd no lo encontrará: https://fprint.freedesktop.org/supported-devices.html${NC}"
+    if confirm "${CYAN}¿Registrar tu huella ahora? (apoya el dedo varias veces cuando lo pida)${NC}"; then
+        fprintd-enroll "$USER" || log_warning "No se pudo registrar: prueba desde la configuración de usuarios del escritorio"
+    fi
+    if command -v pam-auth-update &> /dev/null && confirm "${CYAN}¿Usar la huella para iniciar sesión y para sudo?${NC}"; then
+        run "No se pudo activar la huella" sudo pam-auth-update --enable fprintd && log_success "Huella activada para iniciar sesión y sudo"
+    fi
+}
+
+# Tabletas gráficas (Wacom, Huion, XP-Pen)
+periph_tablets() {
+    if periph_is_apt; then
+        periph_install libwacom-common xserver-xorg-input-wacom || return 1
+    else
+        periph_install libwacom xf86-input-wacom || return 1
+    fi
+    log_success "Soporte de tabletas listo; la presión y los botones se ajustan en la configuración del escritorio (Tableta gráfica)"
+}
+
+# Instala el soporte de todo lo detectado (sin preguntas de más: una confirmación al principio)
+periph_install_detected() {
+    local todo=() t
+    periph_detect
+    [ -n "$PERIPH_PRINTER" ] && todo+=("Impresoras|periph_printers")
+    [ -n "$PERIPH_SCANNER" ] && todo+=("Escáneres|periph_scanners")
+    { [ -n "$PERIPH_CAMERA" ] || [ -n "$PERIPH_PHOTO" ]; } && todo+=("Cámaras|periph_cameras")
+    [ -n "$PERIPH_BT" ] && todo+=("Bluetooth|periph_bluetooth")
+    [ -n "$PERIPH_PAD" ] && todo+=("Mandos de juego|periph_gamepads")
+    [ -n "$PERIPH_FINGER" ] && todo+=("Lector de huella|periph_fingerprint")
+    [ -n "$PERIPH_TABLET" ] && todo+=("Tabletas gráficas|periph_tablets")
+    if [ ${#todo[@]} -eq 0 ]; then
+        echo -e "${YELLOW}ℹ No detecté periféricos que necesiten algo. Conéctalos (y enciéndelos) y vuelve a probar.${NC}"
+        return 0
+    fi
+    echo -e "${CYAN}Se va a preparar:${NC} $(printf '%s, ' "${todo[@]%%|*}" | sed 's/, $//')"
+    confirm "${CYAN}¿Continuar?${NC}" || return 2
+    for t in "${todo[@]}"; do
+        log_title "${t%%|*}"
+        "${t#*|}"
+    done
+}
+
+peripherals_menu() {
+    local option
+    while true; do
+        clear
+        echo -e "${CYAN}${BOLD}"
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        echo "║           🔌 PERIFÉRICOS: DETECTAR E INSTALAR                    ║"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        periph_summary
+        echo -e "\n  ${CYAN}1)${NC} ✨ Preparar todo lo detectado"
+        echo -e "  ${CYAN}2)${NC} 📠 Impresoras (USB y de red): instalar y agregar"
+        echo -e "  ${CYAN}3)${NC} 📑 Escáneres (USB y de red)"
+        echo -e "  ${CYAN}4)${NC} 📷 Cámaras web y de fotos"
+        echo -e "  ${CYAN}5)${NC} 🔵 Bluetooth"
+        echo -e "  ${CYAN}6)${NC} 🎮 Mandos de juego"
+        echo -e "  ${CYAN}7)${NC} 👆 Lector de huella"
+        echo -e "  ${CYAN}8)${NC} 📝 Tabletas gráficas"
+        echo -e "  ${CYAN}0)${NC} 🔙 Volver\n"
+        read -r -p "📌 Opción (0-8): " option
+        case $option in
+            1) submenu_run periph_install_detected ;;
+            2) submenu_run periph_printers ;;
+            3) submenu_run periph_scanners ;;
+            4) submenu_run periph_cameras ;;
+            5) submenu_run periph_bluetooth ;;
+            6) submenu_run periph_gamepads ;;
+            7) submenu_run periph_fingerprint ;;
+            8) submenu_run periph_tablets ;;
+            0|"") return 0 ;;
+            *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
+        esac
+        menu_pause
+    done
+}
+
 install_custom_software() {
     if ! has_desktop; then
         log_warning "Alacritty y los temas necesitan un escritorio (este sistema no tiene)"
@@ -10514,6 +10879,7 @@ main_menu() {
         echo -e "  ${CYAN}14)${NC} 🐧 Kernel (oficial, backports, Liquorix, XanMod)"
         echo -e "  ${CYAN}15)${NC} 💾 Optimizar Memoria RAM (automático)"
         echo -e "  ${CYAN}16)${NC} 🌐 Red, DNS y firmware"
+        echo -e "  ${CYAN}23)${NC} 🔌 Periféricos: impresoras, escáneres, cámaras, Bluetooth, mandos..."
         echo -e "  ${CYAN}17)${NC} 🔋 Energía y rendimiento"
         echo -e "  ${CYAN}19)${NC} 🔧 ARRANQUE: reparar y personalizar GRUB/EFI"
         echo ""
@@ -10524,7 +10890,7 @@ main_menu() {
         echo -e "\n${YELLOW}ℹ Versión beta: los números son los mismos que en Ubuntu. Snap (5 y 9) no aplica en${NC}"
         echo -e "${YELLOW}  Debian y los perfiles automáticos (18) llegan en una próxima versión.${NC}"
         echo ""
-        read -r -p "🔢 Opción (0-22): " option
+        read -r -p "🔢 Opción (0-23): " option
 
         case $option in
             1) ( MENU_SUBSHELL=1; system_update ) ;;
@@ -10546,6 +10912,7 @@ main_menu() {
             20) ( MENU_SUBSHELL=1; create_usb_menu ) ;;
             21) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
             22) ( MENU_SUBSHELL=1; desktop_theme_menu ) ;;
+            23) ( MENU_SUBSHELL=1; peripherals_menu ) ;;
             4|8) echo -e "${YELLOW}ℹ Snap no se usa en Debian${NC}"; sleep 2 ;;
             18) echo -e "${YELLOW}ℹ Los perfiles automáticos llegan en una próxima versión${NC}"; sleep 2 ;;
             0)
