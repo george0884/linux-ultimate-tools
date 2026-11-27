@@ -37,6 +37,10 @@ BOLD='\033[1m'
 # Variables de estado
 SELECTED_APPS=()
 SELECTED_OPTIONAL=()
+# Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
+# CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
+UT_VERSION="3.2.0"
+UT_VERSION_DATE="2026-11-27"
 
 # ============================================================
 # FUNCIONES DE LOG Y PROGRESO
@@ -65,7 +69,8 @@ print_header() {
     local version
     version=$(os_release_value VERSION_ID)
     echo -e "${GREEN}🐧 Detectado: ${FLAVOR_NAME}${version:+ $version} · ${DESKTOP_NAME}${NC}"
-    echo -e "${YELLOW}📁 Log activo: $LOG_FILE${NC}\n"
+    echo -e "${YELLOW}📁 Log activo: $LOG_FILE${NC}"
+    echo -e "${CYAN}🔖 Linux Ultimate Tools ${UT_VERSION} (${UT_VERSION_DATE})${NC}\n"
 }
 
 # Modo automático (perfiles): sin pausas ni preguntas; las confirmaciones responden "no"
@@ -10286,6 +10291,10 @@ offer_right_script() {
 # INICIO
 # ============================================================
 
+# La versión se puede ver siempre (también como root)
+case ${1:-} in
+    -v|--version) echo "Linux Ultimate Tools ${UT_VERSION} (${UT_VERSION_DATE}) · $(basename "$0") (beta)"; exit 0 ;;
+esac
 if [ "$EUID" -eq 0 ]; then
     echo -e "${RED}❌ No ejecutes este script como root (no uses sudo)${NC}"
     exit 1
@@ -10293,7 +10302,8 @@ fi
 NOTICE_OK=false
 case ${1:-} in
     -h|--ayuda) echo "Uso: $0 [--entiendo]   (menú interactivo; versión beta para Arch y derivadas)"
-                echo "  --entiendo   No mostrar el aviso del primer uso (si ya lo leíste)"; exit 0 ;;
+                echo "  --entiendo   No mostrar el aviso del primer uso (si ya lo leíste)"
+                echo "  --version    Muestra la versión"; exit 0 ;;
     --entiendo) NOTICE_OK=true ;;
     "") ;;
     *) echo -e "${RED}❌ Opción desconocida: $1${NC} (en la beta no hay perfiles automáticos)"; exit 1 ;;

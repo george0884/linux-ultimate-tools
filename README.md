@@ -4,6 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
+[![Versión](https://img.shields.io/badge/Versión-3.2.0-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -931,7 +932,17 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 - **Para usarlo no cambia nada**: cada script sigue siendo un solo archivo completo, que se baja y se ejecuta igual.
 - **Para cambiar algo**: edita la pieza en `partes/`, corre `bash armar.sh` y sube las piezas y los scripts.
   No edites los scripts finales a mano: la próxima vez que se armen, se pierde el cambio.
+- **Versión**: está en `partes/comun.sh` (`UT_VERSION`) y se ve en la cabecera y con `--version`. Al subirla, agrega
+  su entrada en [CHANGELOG.md](CHANGELOG.md); `armar.sh` no deja armar una versión sin su entrada.
 - En cada PR, GitHub comprueba que los scripts coincidan con las piezas, la sintaxis y ShellCheck.
+
+---
+
+## 🔖 Versiones
+
+Versión actual: **3.2.0** (2026-11-27). Todos los cambios, contados por versión, están en
+[CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
+tu distribución); también aparece en la cabecera del menú.
 
 ---
 
