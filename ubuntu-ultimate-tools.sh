@@ -2253,7 +2253,7 @@ system_update() {
 }
 
 # ============================================================
-# OPCIÓN 8: INSTALAR ALACRITTY Y TEMAS (COLOR: CIAN)
+# OPCIÓN 8 (ALACRITTY) Y 22 (TEMA DEL ESCRITORIO): COLORES TOKYO NIGHT
 # ============================================================
 
 # ------------------------------------------------------------
@@ -2345,26 +2345,168 @@ theme_value() { sed -n "s/^$1=//p" "$THEME_BACKUP" 2>/dev/null | head -n1; }
 
 kde_color_scheme() { sed -n '/^\[General\]/,/^\[/ s/^ColorScheme=//p' "$HOME/.config/kdeglobals" 2>/dev/null | head -n1; }
 
+# Para aplicar el tema en tu sesión abierta aunque el script corra por SSH (por ejemplo desde Termux):
+# se usa el bus de tu sesión y, sin pantalla, las herramientas de Plasma corren sin ventana
+theme_session_env() {
+    local bus
+    bus="/run/user/$(id -u)/bus"
+    [ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ] && [ -S "$bus" ] && export DBUS_SESSION_BUS_ADDRESS="unix:path=$bus"
+    [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && export QT_QPA_PLATFORM=offscreen
+    return 0
+}
+
+# Instala paquetes del tema con el gestor de la distro (quedan registrados para quitarlos en 10 → 1)
+theme_install_pkgs() {
+    if declare -F apt_install_recorded > /dev/null; then
+        apt_install_recorded "$@"
+    else
+        pkg_install_recorded "$@"
+    fi
+}
+
+# Íconos Papirus-Dark (repositorios oficiales): combinan con Tokyo Night
+tokyo_icons_ready() {
+    [ -d /usr/share/icons/Papirus-Dark ] && return 0
+    echo -e "${BLUE}🖼 Instalando los íconos Papirus...${NC}"
+    theme_install_pkgs papirus-icon-theme && [ -d /usr/share/icons/Papirus-Dark ]
+}
+
+# Fondo de pantalla Tokyo Night hecho por el script (ciudad de noche con los colores del tema)
+tokyo_night_wallpaper() {
+    local file="$HOME/.local/share/wallpapers/tokyo-night-ultimate-tools.svg"
+    mkdir -p "$(dirname "$file")"
+    cat > "$file" << 'SVG'
+<svg xmlns="http://www.w3.org/2000/svg" width="3840" height="2160" viewBox="0 0 3840 2160">
+  <defs>
+    <linearGradient id="cielo" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16161e"/><stop offset="0.6" stop-color="#1a1b26"/><stop offset="1" stop-color="#24283b"/>
+    </linearGradient>
+    <radialGradient id="luz" cx="0.72" cy="0.3" r="0.4">
+      <stop offset="0" stop-color="#bb9af7" stop-opacity="0.35"/><stop offset="1" stop-color="#bb9af7" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="brillo" cx="0.2" cy="0.9" r="0.5">
+      <stop offset="0" stop-color="#7aa2f7" stop-opacity="0.25"/><stop offset="1" stop-color="#7aa2f7" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="3840" height="2160" fill="url(#cielo)"/>
+  <rect width="3840" height="2160" fill="url(#luz)"/>
+  <rect width="3840" height="2160" fill="url(#brillo)"/>
+  <circle cx="2760" cy="640" r="170" fill="#c0caf5" opacity="0.9"/>
+  <g fill="#15161e"><rect x="0" y="1740" width="188" height="420"/><rect x="200" y="1740" width="108" height="420"/><rect x="320" y="1640" width="168" height="520"/><rect x="500" y="1780" width="188" height="380"/><rect x="700" y="1900" width="188" height="260"/><rect x="900" y="1820" width="228" height="340"/><rect x="1140" y="1740" width="108" height="420"/><rect x="1260" y="1860" width="228" height="300"/><rect x="1500" y="1780" width="168" height="380"/><rect x="1680" y="1540" width="108" height="620"/><rect x="1800" y="1640" width="148" height="520"/><rect x="1960" y="1820" width="128" height="340"/><rect x="2100" y="1860" width="128" height="300"/><rect x="2240" y="1780" width="228" height="380"/><rect x="2480" y="1860" width="168" height="300"/><rect x="2660" y="1460" width="188" height="700"/><rect x="2860" y="1820" width="188" height="340"/><rect x="3060" y="1460" width="228" height="700"/><rect x="3300" y="1820" width="108" height="340"/><rect x="3420" y="1900" width="148" height="260"/><rect x="3580" y="1740" width="228" height="420"/><rect x="3820" y="1740" width="128" height="420"/></g>
+  <g><rect x="70" y="1780" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="116" y="1780" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="24" y="1850" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="116" y="1850" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="24" y="1920" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="116" y="1920" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="24" y="1990" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="24" y="2060" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="270" y="1780" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="270" y="1920" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="270" y="2060" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="390" y="1820" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="436" y="1820" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="436" y="1960" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="344" y="2030" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="390" y="2030" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="390" y="2100" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="616" y="1960" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="924" y="1860" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="1016" y="2000" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="1062" y="2000" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="1164" y="2060" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="1330" y="1900" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="1376" y="1970" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="1422" y="1970" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="1284" y="2110" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="1376" y="2110" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="1570" y="1820" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="1616" y="1890" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="1750" y="1720" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="1916" y="1680" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="1824" y="1960" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2030" y="1860" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="2030" y="2000" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="2124" y="1970" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2170" y="1970" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2124" y="2040" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="2170" y="2110" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="2264" y="1820" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="2310" y="1820" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2264" y="1890" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="2264" y="2100" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="2596" y="1900" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2550" y="1970" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="2596" y="2040" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2730" y="1500" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="2776" y="1500" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2730" y="2060" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2930" y="1930" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="2884" y="2070" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="3084" y="1500" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="3176" y="1500" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="3222" y="1570" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="3084" y="1640" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="3222" y="1710" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="3130" y="1780" width="14" height="22" fill="#7dcfff" opacity="0.7"/><rect x="3370" y="1860" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="3324" y="1930" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="3536" y="1940" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="3742" y="1780" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="3650" y="1920" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="3844" y="1850" width="14" height="22" fill="#e0af68" opacity="0.7"/><rect x="3890" y="1850" width="14" height="22" fill="#bb9af7" opacity="0.7"/><rect x="3844" y="1990" width="14" height="22" fill="#e0af68" opacity="0.7"/></g>
+</svg>
+SVG
+    echo "$file"
+}
+
+# ¿Está aplicado el tema Tokyo Night del script?
+tokyo_theme_active() {
+    case $DESKTOP in
+        kde) [ "$(kde_color_scheme)" = TokyoNight ] ;;
+        gnome) [ "$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null | tr -d "'")" = "$TOKYO_GTK_NAME" ] ;;
+        *) return 1 ;;
+    esac
+}
+
+# Opción 22: el tema completo del escritorio (la 8 queda solo para Alacritty)
+desktop_theme_menu() {
+    local option
+    while true; do
+        clear
+        echo -e "${PURPLE}${BOLD}"
+        echo "╔══════════════════════════════════════════════════════════════════╗"
+        echo "║                🎨 TEMA DEL ESCRITORIO: TOKYO NIGHT               ║"
+        echo "╚══════════════════════════════════════════════════════════════════╝"
+        echo -e "${NC}"
+        case $DESKTOP in
+            kde) echo -e "Para ${BOLD}KDE Plasma${NC}: colores (ventanas, panel y apps GTK), íconos Papirus-Dark,"
+                 echo -e "fondo de pantalla y de la pantalla de bloqueo, y perfil de Konsole." ;;
+            gnome) echo -e "Para ${BOLD}GNOME${NC}: tema GTK (ventanas y apps de GNOME), apps Qt, íconos Papirus-Dark,"
+                   echo -e "fondo de pantalla y perfil de GNOME Terminal." ;;
+            *) echo -e "${YELLOW}ℹ El tema completo es para KDE Plasma y GNOME (este escritorio: ${DESKTOP_NAME:-ninguno}).${NC}"
+               echo -e "${YELLOW}  La terminal Alacritty ya trae los colores Tokyo Night (opción 8).${NC}" ;;
+        esac
+        if tokyo_theme_active; then
+            echo -e "\nEstado: ${GREEN}Tokyo Night aplicado${NC}"
+        else
+            echo -e "\nEstado: ${YELLOW}tema de siempre${NC}"
+        fi
+        echo -e "\n  ${PURPLE}1)${NC} 🎨 Aplicar Tokyo Night completo"
+        echo -e "  ${PURPLE}2)${NC} ↩  Volver al tema que tenías antes"
+        echo -e "  ${PURPLE}0)${NC} 🔙 Volver\n"
+        read -r -p "📌 Opción (0-2): " option
+        case $option in
+            1) submenu_run apply_tokyo_night_full ;;
+            2) submenu_run restore_theme ;;
+            0|"") return 0 ;;
+            *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
+        esac
+        menu_pause
+    done
+}
+
+apply_tokyo_night_full() {
+    case $DESKTOP in
+        kde) install_tokyo_night_theme ;;
+        gnome) install_tokyo_night_gnome ;;
+        *) log_error "El tema completo es para KDE Plasma y GNOME"; return 1 ;;
+    esac
+}
+
 install_tokyo_night_theme() {
-    echo -e "${CYAN}🎨 Aplicando tema Tokyo Night...${NC}"
-    local before
+    local before kwrite kread current tool wall icons prev
+    echo -e "${CYAN}🎨 Aplicando Tokyo Night a KDE Plasma...${NC}"
+    theme_session_env
+    kwrite=$(command -v kwriteconfig6 || command -v kwriteconfig5)
+    kread=$(command -v kreadconfig6 || command -v kreadconfig5)
+
+    # Colores: ventanas, panel (Breeze los sigue), barras de título y apps GTK (Breeze GTK los toma)
     before=$(kde_color_scheme)
     [ "$before" != TokyoNight ] && save_theme_value kde-colores "${before:-BreezeLight}"
-    save_theme_value konsole-perfil "$(sed -n 's/^DefaultProfile=//p' "$HOME/.config/konsolerc" 2>/dev/null)"
     write_tokyo_night_colors
-    write_tokyo_night_konsole
+    if command -v plasma-apply-colorscheme &> /dev/null \
+        && run "No se pudo aplicar el esquema de colores" plasma-apply-colorscheme TokyoNight; then
+        log_success "Colores Tokyo Night aplicados a Plasma"
+    elif [ -n "$kwrite" ]; then
+        "$kwrite" --file kdeglobals --group General --key ColorScheme TokyoNight
+        log_warning "Colores Tokyo Night elegidos: se ven del todo al volver a iniciar sesión"
+    fi
 
-    if command -v plasma-apply-colorscheme &> /dev/null; then
-        run "No se pudo aplicar el esquema de colores (¿estás en una sesión de Plasma?)" \
-            plasma-apply-colorscheme TokyoNight \
-            && log_success "Colores Tokyo Night aplicados a Plasma"
+    # Íconos
+    if tokyo_icons_ready; then
+        icons=$([ -n "$kread" ] && "$kread" --file kdeglobals --group Icons --key Theme)
+        [ "$icons" != Papirus-Dark ] && save_theme_value kde-iconos "${icons:-breeze}"
+        tool=$(ls /usr/lib/*/libexec/plasma-changeicons /usr/libexec/plasma-changeicons /usr/lib/libexec/plasma-changeicons 2>/dev/null | head -1)
+        if [ -n "$tool" ] && "$tool" Papirus-Dark >> "$LOG_FILE" 2>&1; then
+            log_success "Íconos Papirus-Dark aplicados"
+        elif [ -n "$kwrite" ]; then
+            "$kwrite" --file kdeglobals --group Icons --key Theme Papirus-Dark
+            log_success "Íconos Papirus-Dark elegidos (se ven del todo al volver a iniciar sesión)"
+        fi
     else
-        log_warning "Aplica los colores a mano: Preferencias del sistema → Colores → Tokyo Night"
+        log_warning "No se pudieron instalar los íconos Papirus: quedan los de siempre"
+    fi
+
+    # Fondo de pantalla y de la pantalla de bloqueo
+    wall=$(tokyo_night_wallpaper)
+    prev=$(grep -m1 '^Image=' "$HOME/.config/plasma-org.kde.plasma.desktop-appletsrc" 2>/dev/null | cut -d= -f2-)
+    [ -n "$prev" ] && [[ "$prev" != *tokyo-night-ultimate-tools* ]] && save_theme_value kde-fondo "$prev"
+    if command -v plasma-apply-wallpaperimage &> /dev/null \
+        && plasma-apply-wallpaperimage "$wall" >> "$LOG_FILE" 2>&1; then
+        log_success "Fondo de pantalla Tokyo Night aplicado"
+    else
+        echo -e "${CYAN}ℹ Fondo de pantalla: clic derecho en el escritorio → Configurar escritorio → $wall${NC}"
+    fi
+    if [ -n "$kwrite" ]; then
+        prev=$([ -n "$kread" ] && "$kread" --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key Image)
+        [[ "$prev" != *tokyo-night-ultimate-tools* ]] && save_theme_value kde-fondo-bloqueo "${prev:--}"
+        "$kwrite" --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key Image "file://$wall" \
+            && log_success "Fondo de la pantalla de bloqueo Tokyo Night"
     fi
 
     # Konsole: perfil Tokyo Night como predeterminado (si ya usas otro, se pregunta)
-    local kwrite current
-    kwrite=$(command -v kwriteconfig6 || command -v kwriteconfig5)
+    save_theme_value konsole-perfil "$(sed -n 's/^DefaultProfile=//p' "$HOME/.config/konsolerc" 2>/dev/null)"
+    write_tokyo_night_konsole
     current=$(sed -n 's/^DefaultProfile=//p' "$HOME/.config/konsolerc" 2>/dev/null)
     if [ -n "$kwrite" ] && { [ -z "$current" ] || [ "$current" = "TokyoNight.profile" ] \
         || confirm "${CYAN}Konsole usa el perfil '$current'. ¿Cambiarlo por Tokyo Night?${NC}"; }; then
@@ -2373,7 +2515,7 @@ install_tokyo_night_theme() {
     else
         echo -e "${CYAN}ℹ En Konsole: Configuración → Gestionar perfiles → Tokyo Night${NC}"
     fi
-    echo -e "${CYAN}ℹ Para volver a los colores originales: opción 11 (Revertir) o Preferencias del sistema → Colores${NC}"
+    echo -e "${CYAN}ℹ Para volver al tema anterior: opción 22 → 2 (o 11, Revertir)${NC}"
 }
 # Tema GTK Tokyo Night de Fausto-Korpsvart (GPL-3.0): se baja de su repositorio oficial y se instala
 # con su propio instalador en ~/.themes (y en ~/.config/gtk-4.0 para las apps nuevas de GNOME)
@@ -2386,8 +2528,9 @@ TOKYO_QT_ENV="$HOME/.config/environment.d/60-ultimate-tools-qt.conf"
 
 # Tokyo Night para GNOME: tema GTK (ventanas y apps de GNOME), modo oscuro y perfil de GNOME Terminal
 install_tokyo_night_gnome() {
-    local tmp f ok=false
+    local tmp f ok=false wall
     echo -e "${CYAN}🎨 Aplicando Tokyo Night a GNOME...${NC}"
+    theme_session_env
     # Lo que necesita su instalador para armar el tema
     if command -v apt-get &> /dev/null; then
         apt_install_recorded sassc gtk2-engines-murrine gnome-themes-extra || return 1
@@ -2427,9 +2570,19 @@ install_tokyo_night_gnome() {
     gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null
     run "No se pudo aplicar el tema" gsettings set org.gnome.desktop.interface gtk-theme "$TOKYO_GTK_NAME" || return 1
     log_success "Tema Tokyo Night aplicado (las apps abiertas lo toman al volver a abrirlas)"
+    if tokyo_icons_ready; then
+        save_theme_value gnome-iconos "$(gsettings get org.gnome.desktop.interface icon-theme 2>/dev/null)"
+        gsettings set org.gnome.desktop.interface icon-theme Papirus-Dark && log_success "Íconos Papirus-Dark aplicados"
+    fi
+    wall=$(tokyo_night_wallpaper)
+    save_theme_value gnome-fondo "$(gsettings get org.gnome.desktop.background picture-uri 2>/dev/null)"
+    save_theme_value gnome-fondo-oscuro "$(gsettings get org.gnome.desktop.background picture-uri-dark 2>/dev/null)"
+    gsettings set org.gnome.desktop.background picture-uri "file://$wall" 2>/dev/null
+    gsettings set org.gnome.desktop.background picture-uri-dark "file://$wall" 2>/dev/null \
+        && log_success "Fondo de pantalla Tokyo Night aplicado"
     tokyo_night_qt
     tokyo_night_gnome_terminal
-    echo -e "${CYAN}ℹ Para volver al tema anterior: opción 11 (Revertir)${NC}"
+    echo -e "${CYAN}ℹ Para volver al tema anterior: opción 22 → 2 (o 11, Revertir)${NC}"
 }
 
 # Apps Qt en GNOME: el complemento oficial de Qt para GTK les pasa los colores del tema GTK (Qt 5 y Qt 6)
@@ -2542,21 +2695,7 @@ EOF
         echo -e "${GREEN}✓ Alacritty instalado (usando GPU para renderizado)${NC}"
     fi
 
-    case $DESKTOP in
-        kde)
-            if confirm "${CYAN}¿Aplicar tema Tokyo Night a Plasma y Konsole?${NC}"; then
-                install_tokyo_night_theme
-            fi ;;
-        gnome)
-            if confirm "${CYAN}¿Aplicar el tema Tokyo Night a GNOME (ventanas, apps y GNOME Terminal)?${NC}"; then
-                install_tokyo_night_gnome
-            elif confirm "${CYAN}¿Activar solo el modo oscuro de GNOME?${NC}"; then
-                gnome_dark_mode
-            fi ;;
-        *)
-            echo -e "${CYAN}ℹ El tema del escritorio se aplica en KDE Plasma y GNOME (Tokyo Night).${NC}"
-            echo -e "${CYAN}  Alacritty ya usa los colores Tokyo Night.${NC}" ;;
-    esac
+    echo -e "${CYAN}ℹ El tema Tokyo Night completo para el escritorio (Plasma o GNOME) está en la opción 22.${NC}"
 
     pause
 }
@@ -4282,10 +4421,30 @@ install_missing_pkgs() {
 
 # Vuelve el tema del escritorio al de antes de la opción 8 (Tokyo Night o modo oscuro)
 restore_theme() {
-    local kwrite value
+    local kwrite value tool
     kwrite=$(command -v kwriteconfig6 || command -v kwriteconfig5)
+    theme_session_env
     case $DESKTOP in
         kde)
+            value=$(theme_value kde-iconos)
+            if [ -n "$value" ]; then
+                tool=$(ls /usr/lib/*/libexec/plasma-changeicons /usr/libexec/plasma-changeicons /usr/lib/libexec/plasma-changeicons 2>/dev/null | head -1)
+                { [ -n "$tool" ] && "$tool" "$value" >> "$LOG_FILE" 2>&1; } \
+                    || { [ -n "$kwrite" ] && "$kwrite" --file kdeglobals --group Icons --key Theme "$value"; }
+                log_success "Íconos restaurados ($value)"
+            fi
+            value=$(theme_value kde-fondo)
+            if [ -n "$value" ] && command -v plasma-apply-wallpaperimage &> /dev/null; then
+                plasma-apply-wallpaperimage "${value#file://}" >> "$LOG_FILE" 2>&1 && log_success "Fondo de pantalla restaurado"
+            fi
+            value=$(theme_value kde-fondo-bloqueo)
+            if [ -n "$value" ] && [ -n "$kwrite" ]; then
+                if [ "$value" = - ]; then
+                    "$kwrite" --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key Image --delete
+                else
+                    "$kwrite" --file kscreenlockerrc --group Greeter --group Wallpaper --group org.kde.image --group General --key Image "$value"
+                fi
+            fi
             if [ "$(kde_color_scheme)" = TokyoNight ]; then
                 value=$(theme_value kde-colores)
                 run "No se pudieron restaurar los colores de Plasma" plasma-apply-colorscheme "${value:-BreezeLight}" \
@@ -4307,9 +4466,14 @@ restore_theme() {
             ;;
         gnome)
             if grep -qs '^gnome-' "$THEME_BACKUP"; then
-                for value in color-scheme:gnome-estilo gtk-theme:gnome-tema; do
+                for value in color-scheme:gnome-estilo gtk-theme:gnome-tema icon-theme:gnome-iconos; do
                     if [ -n "$(theme_value "${value#*:}")" ]; then
                         gsettings set org.gnome.desktop.interface "${value%%:*}" "$(theme_value "${value#*:}")"
+                    fi
+                done
+                for value in picture-uri:gnome-fondo picture-uri-dark:gnome-fondo-oscuro; do
+                    if [ -n "$(theme_value "${value#*:}")" ]; then
+                        gsettings set org.gnome.desktop.background "${value%%:*}" "$(theme_value "${value#*:}")"
                     fi
                 done
                 value=$(theme_value gnome-terminal-perfil)
@@ -4338,7 +4502,7 @@ restore_theme() {
             ;;
         *) echo -e "  ${GREEN}✓ El script no cambia el tema de ${DESKTOP_NAME}${NC}" ;;
     esac
-    rm -f "$THEME_BACKUP"
+    rm -f "$THEME_BACKUP" "$HOME/.local/share/wallpapers/tokyo-night-ultimate-tools.svg"
 }
 
 # Quita el repositorio de Mozilla (Firefox .deb) y vuelve al Firefox de Ubuntu
@@ -11363,7 +11527,8 @@ main_menu() {
         else
             echo -e "  ${CYAN} 7)${NC} 📦 Instalar software opcional o un ESCRITORIO (KDE, GNOME, Xfce...)"
         fi
-        echo -e "  ${CYAN} 8)${NC} 💻 Instalar Alacritty (terminal GPU) y temas"
+        echo -e "  ${CYAN} 8)${NC} 💻 Instalar Alacritty (terminal GPU, con colores Tokyo Night)"
+        echo -e "  ${CYAN}22)${NC} 🎨 TEMA DEL ESCRITORIO: Tokyo Night completo (Plasma o GNOME)"
         echo -e "  ${CYAN} 9)${NC} 📥 Reinstalar Snap"
         echo -e "  ${CYAN}10)${NC} 🩹 Deshacer optimizaciones / quitar programas"
         echo -e "  ${CYAN}11)${NC} ⏪ Revertir a distribución original"
@@ -11386,7 +11551,7 @@ main_menu() {
         echo -e "  ${CYAN}21)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (0-21): " option
+        read -r -p "🔢 Opción (0-22): " option
 
         case $option in
             1) ( MENU_SUBSHELL=1; system_update ) ;;
@@ -11410,6 +11575,7 @@ main_menu() {
             19) ( MENU_SUBSHELL=1; grub_repair_menu ) ;;
             20) ( MENU_SUBSHELL=1; create_usb_menu ) ;;
             21) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
+            22) ( MENU_SUBSHELL=1; desktop_theme_menu ) ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
                 exit 0

@@ -329,21 +329,7 @@ EOF
         echo -e "${GREEN}✓ Alacritty instalado (usando GPU para renderizado)${NC}"
     fi
 
-    case $DESKTOP in
-        kde)
-            if confirm "${CYAN}¿Aplicar tema Tokyo Night a Plasma y Konsole?${NC}"; then
-                install_tokyo_night_theme
-            fi ;;
-        gnome)
-            if confirm "${CYAN}¿Aplicar el tema Tokyo Night a GNOME (ventanas, apps y GNOME Terminal)?${NC}"; then
-                install_tokyo_night_gnome
-            elif confirm "${CYAN}¿Activar solo el modo oscuro de GNOME?${NC}"; then
-                gnome_dark_mode
-            fi ;;
-        *)
-            echo -e "${CYAN}ℹ El tema del escritorio se aplica en KDE Plasma y GNOME (Tokyo Night).${NC}"
-            echo -e "${CYAN}  Alacritty ya usa los colores Tokyo Night.${NC}" ;;
-    esac
+    echo -e "${CYAN}ℹ El tema Tokyo Night completo para el escritorio (Plasma o GNOME) está en la opción 22.${NC}"
 
     pause
 }

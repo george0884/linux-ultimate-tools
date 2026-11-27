@@ -78,7 +78,7 @@ Linux, base Debian 13) y el de Arch, por ahora, solo con sistemas simulados. Ús
 falle. Tienen el mismo menú y **los mismos números** que el de Ubuntu (ver la tabla de la [Descripción](#-descripción)).
 
 **Qué traen las betas:** actualizar, auditoría de seguridad, información del sistema, eliminar apps y accesos
-directos, software opcional, Alacritty y temas, deshacer, revertir, configuración, GPU y drivers, kernel,
+directos, software opcional, Alacritty, tema del escritorio Tokyo Night (22), deshacer, revertir, configuración, GPU y drivers, kernel,
 RAM/ZRAM, red y DNS, energía (incluidos Steam, Proton y herramientas de juego), el menú de arranque completo y
 crear un USB de instalación.
 **Todavía no:** los perfiles automáticos (18). Snap (5 y 9) no aplica en Debian ni en Arch.
@@ -634,6 +634,30 @@ Deja tu Ubuntu como vino de fábrica, sea cual sea el sabor (muestra cuál detec
 
 No cambia el kernel (opción 14) ni el arranque (opción 19). Los programas que instaló el script se quitan
 desde la opción 10.
+
+---
+
+## 🎨 Tema del escritorio: Tokyo Night completo (opción 22)
+
+![Tema del escritorio](screenshots/35-tema-escritorio.png)
+
+Un tema completo para todo el escritorio (la opción 8 queda solo para la terminal Alacritty, que ya trae los
+colores Tokyo Night). Funciona también si corres el script **por SSH** (por ejemplo desde Termux): se aplica en tu
+sesión abierta.
+
+| | KDE Plasma | GNOME |
+|---|---|---|
+| **Colores** | Esquema Tokyo Night: ventanas, panel, barras de título y apps GTK (Breeze los sigue) | Tema GTK **Tokyonight** (ventanas y apps de GNOME) y modo oscuro; **apps Qt** con los mismos colores |
+| **Íconos** | **Papirus-Dark** (repositorios oficiales) | **Papirus-Dark** |
+| **Fondo** | Fondo Tokyo Night (también en la **pantalla de bloqueo**) | Fondo Tokyo Night |
+| **Terminal** | Perfil Tokyo Night en **Konsole** | Perfil Tokyo Night en **GNOME Terminal** |
+
+El fondo de pantalla lo dibuja el script (una ciudad de noche con los colores del tema), así que no depende de
+descargas ni de licencias de terceros:
+
+![Fondo Tokyo Night](screenshots/36-fondo-tokyo-night.png)
+
+**Volver atrás:** 22 → 2 (o 11, Revertir) deja los colores, íconos, fondos y perfiles de terminal que tenías antes.
 
 ---
 
