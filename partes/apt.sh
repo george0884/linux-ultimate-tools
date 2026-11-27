@@ -335,11 +335,13 @@ EOF
                 install_tokyo_night_theme
             fi ;;
         gnome)
-            if confirm "${CYAN}¿Activar el modo oscuro de GNOME?${NC}"; then
+            if confirm "${CYAN}¿Aplicar el tema Tokyo Night a GNOME (ventanas, apps y GNOME Terminal)?${NC}"; then
+                install_tokyo_night_gnome
+            elif confirm "${CYAN}¿Activar solo el modo oscuro de GNOME?${NC}"; then
                 gnome_dark_mode
             fi ;;
         *)
-            echo -e "${CYAN}ℹ El tema del escritorio solo se aplica en KDE Plasma (Tokyo Night) y GNOME (modo oscuro).${NC}"
+            echo -e "${CYAN}ℹ El tema del escritorio se aplica en KDE Plasma y GNOME (Tokyo Night).${NC}"
             echo -e "${CYAN}  Alacritty ya usa los colores Tokyo Night.${NC}" ;;
     esac
 

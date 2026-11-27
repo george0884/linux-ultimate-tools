@@ -36,7 +36,7 @@ el escritorio** y adaptan sus opciones:
 - 🛡️ **Auditar la seguridad** con Lynis y linaudit (puntaje y consejos) y llevar un registro de auditoría
 - ⚡ **Cambiar de kernel** (Liquorix, XanMod, oficial LTS/HWE, backports...) y **reparar o personalizar GRUB**
 - 🎮 **Optimizar** GPU, RAM, red, DNS y energía, o aplicar un **perfil automático** (gaming, productividad...)
-- 📦 **Instalar** software popular, la terminal Alacritty con tema Tokyo Night o **un escritorio completo**
+- 📦 **Instalar** software popular, la terminal Alacritty y el tema **Tokyo Night** para KDE Plasma y GNOME, o **un escritorio completo**
 - 💿 **Descargar sistemas y crear un USB de instalación**: descarga la imagen ISO oficial de más de 40 sistemas (Ubuntu, Mint, Zorin, Pop!_OS, Debian, MX, Kali, Arch, Manjaro, CachyOS, Fedora, AlmaLinux, Rocky, openSUSE, Slackware, Gentoo, NixOS...), la verifica y la graba en un pendrive sin riesgo de borrar otro disco, o solo la descarga. Con **Ventoy**, varios sistemas en un mismo pendrive, con persistencia
 - ↩️ **Deshacer** cualquier cambio o **revertir** a la distribución original
 - 🖥️ **Ver** toda la información del sistema y del hardware, con fastfetch e inxi sin instalar
@@ -53,7 +53,7 @@ el escritorio** y adaptan sus opciones:
 
 | Sabor | Escritorio | Notas |
 |-------|------------|-------|
-| **Ubuntu** (completo o mínimo) | GNOME | Modo oscuro, dock e indexador de GNOME |
+| **Ubuntu** (completo o mínimo) | GNOME | Tema Tokyo Night (o solo modo oscuro), dock e indexador de GNOME |
 | **Kubuntu** | KDE Plasma | Tema Tokyo Night, panel de Plasma, Baloo y KDE Rolling Release (backports, solo Kubuntu) |
 | **Xubuntu** | Xfce | |
 | **Lubuntu** | LXQt | |
@@ -627,7 +627,7 @@ Deja tu Ubuntu como vino de fábrica, sea cual sea el sabor (muestra cuál detec
 - Solo en Kubuntu, si activaste KDE Rolling Release: quita el PPA backports y **baja Plasma a la versión
   oficial** (quitar el PPA no lo hace solo).
 - Restaura los íconos del escritorio, el panel o el dock, y el **tema** (los colores de Plasma y el perfil de
-  Konsole anteriores a Tokyo Night, o el estilo de GNOME anterior al modo oscuro).
+  Konsole anteriores a Tokyo Night; en GNOME, el tema, el estilo, el perfil de GNOME Terminal y tu `gtk.css` de antes).
 - Vuelve a fábrica todos los ajustes (RAM, DNS, ZRAM, energía, indexador...).
 - En Ubuntu Server hace lo que aplica: paquetes, Snap y ajustes.
 

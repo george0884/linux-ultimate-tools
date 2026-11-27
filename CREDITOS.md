@@ -19,6 +19,7 @@ reconocimiento a sus autores; la licencia que vale siempre es la que publica cad
 | Proyecto | Autor | Licencia | Uso |
 |---|---|---|---|
 | [Tokyo Night](https://github.com/enkia/tokyo-night-vscode-theme) | enkia | MIT | Los colores del tema Tokyo Night para KDE salen de esta paleta |
+| [Tokyonight GTK Theme](https://github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme) | Fausto-Korpsvart | GPL-3.0 | Externo: tema Tokyo Night para GNOME (opción 8). Se baja de su repositorio oficial y se instala con su propio instalador en `~/.themes` y `~/.config/gtk-4.0`; no se copia al script |
 
 ## ⚙️ Sistema y arranque
 
