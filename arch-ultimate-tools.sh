@@ -10668,6 +10668,95 @@ right_script_family() {
         echo arch
     fi
 }
+# Repositorio oficial: de acá se buscan las versiones nuevas al iniciar
+UT_RAW_URL="https://raw.githubusercontent.com/george0884/linux-ultimate-tools/main"
+
+# ¿La versión $1 es más nueva que $2? (1.10.0 > 1.9.0)
+update_version_newer() {
+    [ "$1" != "$2" ] && [ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | tail -n1)" = "$1" ]
+}
+
+# Al iniciar: busca en el repositorio si hay una versión nueva del script y ofrece actualizarlo.
+# Sin internet o si GitHub no responde, sigue sin decir nada. Se salta con UT_SIN_ACTUALIZAR=1.
+# Lo bajado se comprueba con las sumas SHA-256 publicadas (SHA256SUMS) y con bash -n antes de reemplazar.
+update_check() {
+    local name self here tmp remote answer want sum line
+    [ "${UT_SIN_ACTUALIZAR:-0}" = 1 ] && return 0
+    command -v curl &> /dev/null || return 0
+    name="$SCRIPT_FAMILY-ultimate-tools.sh"
+    self=$(readlink -f "$0")
+    here=$(dirname "$self")
+    tmp=$(mktemp -d) || return 0
+    echo -ne "${CYAN}🔎 Buscando actualizaciones...${NC}\r"
+    if ! curl -fsSL --connect-timeout 4 -m 20 -o "$tmp/$name" "$UT_RAW_URL/$name" 2>/dev/null; then
+        echo -ne "\033[2K"
+        rm -f "$tmp/$name"; rmdir "$tmp"
+        return 0
+    fi
+    echo -ne "\033[2K"
+    remote=$(sed -n 's/^UT_VERSION="\(.*\)"$/\1/p' "$tmp/$name" | head -n1)
+    if [ -z "$remote" ] || ! update_version_newer "$remote" "$UT_VERSION"; then
+        rm -f "$tmp/$name"; rmdir "$tmp"
+        return 0
+    fi
+    echo -e "${GREEN}${BOLD}⬆ Hay una versión nueva: ${remote}${NC} ${GREEN}(tienes ${UT_VERSION})${NC}"
+    # Qué cambió: los títulos y cambios de las versiones nuevas, del registro de cambios
+    curl -fsSL --connect-timeout 4 -m 15 "$UT_RAW_URL/CHANGELOG.md" 2>/dev/null | awk -v old="$UT_VERSION" '
+        /^## \[/ { v = $2; gsub(/[][]/, "", v); if (v == old) exit; f = 1; print "  " $0; next }
+        f && /^- / && n < 12 { print "    " $0; n++ }' | sed 's/^  ## /  /'
+    # Con un perfil automático o sin terminal no se pregunta: solo se avisa
+    if [ -n "${PROFILE:-}" ] || ! [ -t 0 ]; then
+        echo -e "${YELLOW}ℹ Para actualizar, abre el script sin opciones${NC}\n"
+        rm -f "$tmp/$name"; rmdir "$tmp"
+        return 0
+    fi
+    if [ -d "$here/.git" ]; then
+        echo -e "${YELLOW}ℹ Este script está en una copia de git: actualízalo con  git -C \"$here\" pull${NC}\n"
+        rm -f "$tmp/$name"; rmdir "$tmp"
+        return 0
+    fi
+    read -r -p "¿Actualizar ahora? (s/n): " answer
+    if ! [[ "$answer" =~ ^([sSyY]|[sS][iIíÍ])$ ]]; then
+        echo -e "${YELLOW}ℹ Sigues con la ${UT_VERSION}; se vuelve a ofrecer la próxima vez${NC}\n"
+        rm -f "$tmp/$name"; rmdir "$tmp"
+        return 0
+    fi
+    # Suma publicada del script nuevo (si no coincide, puede ser que GitHub aún no actualizó todo: unos minutos)
+    want=$(curl -fsSL --connect-timeout 4 -m 15 "$UT_RAW_URL/SHA256SUMS" 2>/dev/null | awk -v n="$name" '$2 == n || $2 == "*" n { print $1 }')
+    sum=$(sha256sum "$tmp/$name" | cut -d' ' -f1)
+    if [ -z "$want" ] || [ "$want" != "$sum" ]; then
+        echo -e "${RED}❌ No se pudo comprobar la descarga (la suma SHA-256 no coincide): no se cambió nada.${NC}"
+        echo -e "${YELLOW}   Prueba de nuevo en unos minutos.${NC}\n"
+        rm -f "$tmp/$name"; rmdir "$tmp"
+        return 0
+    fi
+    if ! bash -n "$tmp/$name" 2>/dev/null; then
+        echo -e "${RED}❌ La descarga está dañada: no se cambió nada${NC}\n"
+        rm -f "$tmp/$name"; rmdir "$tmp"
+        return 0
+    fi
+    # Respaldo de la versión actual, por si hace falta volver
+    mkdir -p "$STATE_DIR/respaldos"
+    cp -f "$self" "$STATE_DIR/respaldos/$(basename "$self")-$UT_VERSION" 2>/dev/null
+    # Se reemplaza con mv (archivo nuevo): bash sigue leyendo el viejo sin romperse hasta el exec
+    chmod 755 "$tmp/$name"
+    if [ -w "$here" ]; then
+        line=$(mktemp -p "$here" ".actualizacion.XXXXXX") && cp -f "$tmp/$name" "$line" && chmod 755 "$line" && mv -f "$line" "$self"
+    else
+        echo -e "${YELLOW}🔑 El script está en $here: se necesita sudo para reemplazarlo${NC}"
+        sudo install -m 755 "$tmp/$name" "$self.nuevo" && sudo mv -f "$self.nuevo" "$self"
+    fi
+    local rc=$?
+    rm -f "$tmp/$name"; rmdir "$tmp"
+    if [ $rc -ne 0 ]; then
+        rm -f "$line" 2>/dev/null
+        echo -e "${RED}❌ No se pudo reemplazar $self: sigues con la ${UT_VERSION}${NC}\n"
+        return 0
+    fi
+    echo -e "${GREEN}✅ Actualizado a ${remote} (la anterior quedó en $STATE_DIR/respaldos)${NC}\n"
+    sleep 1
+    UT_SIN_ACTUALIZAR=1 exec bash "$self" "${UT_ARGS[@]}"
+}
 
 # Si se abrió el script de otra distribución, lo dice y ofrece abrir (o descargar) el correcto
 offer_right_script() {
@@ -10714,6 +10803,7 @@ if [ "$EUID" -eq 0 ]; then
     echo -e "${RED}❌ No ejecutes este script como root (no uses sudo)${NC}"
     exit 1
 fi
+UT_ARGS=("$@")   # para volver a abrirse igual después de actualizarse
 NOTICE_OK=false
 case ${1:-} in
     -h|--ayuda) echo "Uso: $0 [--entiendo]   (menú interactivo; versión beta para Arch y derivadas)"
@@ -10728,6 +10818,7 @@ set_terminal_title "Arch Ultimate Tools (beta) · $(os_release_value PRETTY_NAME
 
 # Antes de pedir la contraseña o tocar nada
 first_run_notice
+update_check
 offer_right_script
 if ! command -v sudo &> /dev/null; then
     echo -e "${RED}❌ Falta sudo. Instálalo como root: su -c 'pacman -S sudo'${NC}"

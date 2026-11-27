@@ -170,6 +170,14 @@ chmod +x *-ultimate-tools.sh
 💡 No hay que ejecutarlo como root: pide la contraseña de `sudo` cuando hace falta. La primera vez muestra un
 [aviso](#aviso-del-primer-uso) con la licencia y lo que hace.
 
+### 4. Actualizaciones
+
+Al abrirse, el script **busca solo si hay una versión nueva** en este repositorio. Si la hay, muestra qué cambió y
+pregunta si lo actualizas: baja el script nuevo, lo **comprueba con su suma SHA-256** publicada en
+[`SHA256SUMS`](SHA256SUMS), guarda el anterior de respaldo en `~/.local/share/<script>/respaldos` y se vuelve a abrir ya
+actualizado. Sin internet no dice nada y sigue normal. En una copia de Git solo avisa (se actualiza con `git pull`).
+Para no buscar: `UT_SIN_ACTUALIZAR=1 ./ubuntu-ultimate-tools.sh`.
+
 ---
 
 ## 🚀 Perfiles automáticos

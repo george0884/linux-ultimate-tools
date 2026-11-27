@@ -10,6 +10,8 @@
 #   bash armar.sh              arma ubuntu-, debian- y arch-ultimate-tools.sh
 #   bash armar.sh --comprobar  solo comprueba que los scripts del repositorio estén al día
 #
+# También escribe SHA256SUMS: los scripts la usan para comprobar lo que bajan al actualizarse.
+#
 # Quien usa el programa no necesita esto: baja un solo script, ya armado, como siempre.
 # ============================================================
 set -euo pipefail
@@ -83,4 +85,18 @@ for d in "${DISTROS[@]}"; do
         echo "✓ $destino ($(wc -l < "$destino") líneas)"
     fi
 done
+
+# Sumas SHA-256 de los tres scripts (para la actualización al iniciar)
+sumas=$(sha256sum "${DISTROS[@]/%/-ultimate-tools.sh}")
+if $comprobar; then
+    if [ "$sumas" = "$(cat SHA256SUMS 2>/dev/null)" ]; then
+        echo "✓ SHA256SUMS está al día"
+    else
+        echo "✗ SHA256SUMS no coincide con los scripts: corre \"bash armar.sh\" y sube el resultado" >&2
+        estado=1
+    fi
+else
+    echo "$sumas" > SHA256SUMS
+    echo "✓ SHA256SUMS"
+fi
 exit $estado
