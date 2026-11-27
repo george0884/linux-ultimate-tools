@@ -1285,7 +1285,7 @@ system_update() {
 #@parte comun: tokyo_color_group write_tokyo_night_colors write_tokyo_night_konsole
 
 THEME_BACKUP="$STATE_DIR/tema-anterior.txt"
-#@parte comun: save_theme_value theme_value kde_color_scheme install_tokyo_night_theme gnome_dark_mode
+#@parte comun: save_theme_value theme_value kde_color_scheme install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_gnome_terminal gnome_dark_mode
 #@parte apt: install_custom_software
 
 # ------------------------------------------------------------

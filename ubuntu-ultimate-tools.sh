@@ -2375,6 +2375,93 @@ install_tokyo_night_theme() {
     fi
     echo -e "${CYAN}ℹ Para volver a los colores originales: opción 11 (Revertir) o Preferencias del sistema → Colores${NC}"
 }
+# Tema GTK Tokyo Night de Fausto-Korpsvart (GPL-3.0): se baja de su repositorio oficial y se instala
+# con su propio instalador en ~/.themes (y en ~/.config/gtk-4.0 para las apps nuevas de GNOME)
+TOKYO_GTK_GIT="https://github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme"
+TOKYO_GTK_TGZ="https://codeload.github.com/Fausto-Korpsvart/Tokyonight-GTK-Theme/tar.gz/refs/heads/master"
+TOKYO_GTK_NAME="Tokyonight-Dark"
+TOKYO_TERMINAL_NAME="Tokyo Night"
+
+# Tokyo Night para GNOME: tema GTK (ventanas y apps de GNOME), modo oscuro y perfil de GNOME Terminal
+install_tokyo_night_gnome() {
+    local tmp f ok=false
+    echo -e "${CYAN}🎨 Aplicando Tokyo Night a GNOME...${NC}"
+    # Lo que necesita su instalador para armar el tema
+    if command -v apt-get &> /dev/null; then
+        apt_install_recorded sassc gtk2-engines-murrine gnome-themes-extra || return 1
+    elif command -v pacman &> /dev/null; then
+        pkg_install_recorded sassc gtk-engine-murrine gnome-themes-extra || return 1
+    fi
+    tmp=$(mktemp -d)
+    if command -v git &> /dev/null; then
+        git clone -q --depth 1 "$TOKYO_GTK_GIT" "$tmp/src" >> "$LOG_FILE" 2>&1
+    fi
+    if ! [ -f "$tmp/src/themes/install.sh" ]; then
+        mkdir -p "$tmp/src"
+        curl -sSfL -m 120 "$TOKYO_GTK_TGZ" 2>>"$LOG_FILE" | tar -xz --strip-components=1 -C "$tmp/src" 2>>"$LOG_FILE"
+    fi
+    if ! [ -f "$tmp/src/themes/install.sh" ]; then
+        rm -rf -- "$tmp"
+        log_error "No se pudo bajar el tema Tokyo Night (¿hay internet?)"
+        return 1
+    fi
+    # Si ya tenías tu propio estilo para las apps nuevas de GNOME, se guarda una copia
+    for f in gtk.css gtk-dark.css assets; do
+        if [ -e "$HOME/.config/gtk-4.0/$f" ] && ! [ -L "$HOME/.config/gtk-4.0/$f" ] \
+            && ! [ -e "$HOME/.config/gtk-4.0/$f.antes-de-ultimate-tools" ]; then
+            mv "$HOME/.config/gtk-4.0/$f" "$HOME/.config/gtk-4.0/$f.antes-de-ultimate-tools"
+        fi
+    done
+    echo -e "${BLUE}🔧 Armando el tema (un minuto)...${NC}"
+    ( cd "$tmp/src/themes" && bash ./install.sh -c dark -l ) >> "$LOG_FILE" 2>&1 \
+        && [ -d "$HOME/.themes/$TOKYO_GTK_NAME" ] && ok=true
+    rm -rf -- "$tmp"
+    if ! $ok; then
+        log_error "No se pudo instalar el tema Tokyo Night (detalles en $LOG_FILE)"
+        return 1
+    fi
+    save_theme_value gnome-estilo "$(gsettings get org.gnome.desktop.interface color-scheme 2>/dev/null)"
+    save_theme_value gnome-tema "$(gsettings get org.gnome.desktop.interface gtk-theme 2>/dev/null)"
+    gsettings set org.gnome.desktop.interface color-scheme prefer-dark 2>/dev/null
+    run "No se pudo aplicar el tema" gsettings set org.gnome.desktop.interface gtk-theme "$TOKYO_GTK_NAME" || return 1
+    log_success "Tema Tokyo Night aplicado (las apps abiertas lo toman al volver a abrirlas)"
+    tokyo_night_gnome_terminal
+    echo -e "${CYAN}ℹ Para volver al tema anterior: opción 11 (Revertir)${NC}"
+}
+
+# Perfil "Tokyo Night" en GNOME Terminal, como predeterminado (el anterior queda anotado para Revertir)
+tokyo_night_gnome_terminal() {
+    local list uuid base
+    if ! command -v gnome-terminal &> /dev/null || ! command -v dconf &> /dev/null; then
+        command -v ptyxis &> /dev/null \
+            && echo -e "${CYAN}ℹ En la terminal Ptyxis: Preferencias → Perfiles → elige una paleta oscura${NC}"
+        return 0
+    fi
+    list=$(gsettings get org.gnome.Terminal.ProfilesList list 2>/dev/null)
+    # Si ya existe, se reutiliza
+    for uuid in $(grep -oE "[0-9a-f-]{36}" <<< "$list"); do
+        [ "$(dconf read "/org/gnome/terminal/legacy/profiles:/:$uuid/visible-name")" = "'$TOKYO_TERMINAL_NAME'" ] && break
+        uuid=""
+    done
+    if [ -z "$uuid" ]; then
+        uuid=$(cat /proc/sys/kernel/random/uuid)
+        base="/org/gnome/terminal/legacy/profiles:/:$uuid"
+        dconf write "$base/visible-name" "'$TOKYO_TERMINAL_NAME'"
+        dconf write "$base/use-theme-colors" false
+        dconf write "$base/background-color" "'#1a1b26'"
+        dconf write "$base/foreground-color" "'#c0caf5'"
+        dconf write "$base/palette" "['#15161e', '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7', '#7dcfff', '#a9b1d6', '#414868', '#f7768e', '#9ece6a', '#e0af68', '#7aa2f7', '#bb9af7', '#7dcfff', '#c0caf5']"
+        if [ "$list" = "@as []" ] || [ -z "$list" ]; then
+            list="['$uuid']"
+        else
+            list="${list%]}, '$uuid']"
+        fi
+        gsettings set org.gnome.Terminal.ProfilesList list "$list"
+    fi
+    save_theme_value gnome-terminal-perfil "$(gsettings get org.gnome.Terminal.ProfilesList default 2>/dev/null)"
+    gsettings set org.gnome.Terminal.ProfilesList default "'$uuid'" \
+        && log_success "GNOME Terminal usará Tokyo Night en las ventanas nuevas"
+}
 
 # Modo oscuro de GNOME: estilo oscuro y, con el tema Yaru de Ubuntu, su variante oscura
 gnome_dark_mode() {
@@ -2438,11 +2525,13 @@ EOF
                 install_tokyo_night_theme
             fi ;;
         gnome)
-            if confirm "${CYAN}¿Activar el modo oscuro de GNOME?${NC}"; then
+            if confirm "${CYAN}¿Aplicar el tema Tokyo Night a GNOME (ventanas, apps y GNOME Terminal)?${NC}"; then
+                install_tokyo_night_gnome
+            elif confirm "${CYAN}¿Activar solo el modo oscuro de GNOME?${NC}"; then
                 gnome_dark_mode
             fi ;;
         *)
-            echo -e "${CYAN}ℹ El tema del escritorio solo se aplica en KDE Plasma (Tokyo Night) y GNOME (modo oscuro).${NC}"
+            echo -e "${CYAN}ℹ El tema del escritorio se aplica en KDE Plasma y GNOME (Tokyo Night).${NC}"
             echo -e "${CYAN}  Alacritty ya usa los colores Tokyo Night.${NC}" ;;
     esac
 
@@ -4200,9 +4289,24 @@ restore_theme() {
                         gsettings set org.gnome.desktop.interface "${value%%:*}" "$(theme_value "${value#*:}")"
                     fi
                 done
+                value=$(theme_value gnome-terminal-perfil)
+                [ -n "$value" ] && gsettings set org.gnome.Terminal.ProfilesList default "$value" 2>/dev/null
                 log_success "Tema de GNOME restaurado"
             else
                 echo -e "  ${GREEN}✓ El script no cambió el tema de GNOME${NC}"
+            fi
+            # Tema Tokyo Night: los enlaces de las apps nuevas de GNOME y el tema en ~/.themes
+            local f
+            for f in gtk.css gtk-dark.css assets; do
+                if [ -L "$HOME/.config/gtk-4.0/$f" ] && [[ "$(readlink "$HOME/.config/gtk-4.0/$f")" == *Tokyonight* ]]; then
+                    rm -f "$HOME/.config/gtk-4.0/$f"
+                fi
+                [ -e "$HOME/.config/gtk-4.0/$f.antes-de-ultimate-tools" ] && ! [ -e "$HOME/.config/gtk-4.0/$f" ] \
+                    && mv "$HOME/.config/gtk-4.0/$f.antes-de-ultimate-tools" "$HOME/.config/gtk-4.0/$f"
+            done
+            if compgen -G "$HOME/.themes/Tokyonight*" > /dev/null; then
+                rm -rf -- "$HOME"/.themes/Tokyonight*
+                log_success "Tema Tokyo Night quitado"
             fi
             ;;
         *) echo -e "  ${GREEN}✓ El script no cambia el tema de ${DESKTOP_NAME}${NC}" ;;

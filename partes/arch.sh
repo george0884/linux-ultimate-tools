@@ -1470,7 +1470,7 @@ system_update() {
 #@parte comun: tokyo_color_group write_tokyo_night_colors write_tokyo_night_konsole
 
 THEME_BACKUP="$STATE_DIR/tema-anterior.txt"
-#@parte comun: save_theme_value theme_value kde_color_scheme install_tokyo_night_theme gnome_dark_mode
+#@parte comun: save_theme_value theme_value kde_color_scheme install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_gnome_terminal gnome_dark_mode
 
 install_custom_software() {
     if ! has_desktop; then
@@ -1521,11 +1521,13 @@ EOF
                 install_tokyo_night_theme
             fi ;;
         gnome)
-            if confirm "${CYAN}¿Activar el modo oscuro de GNOME?${NC}"; then
+            if confirm "${CYAN}¿Aplicar el tema Tokyo Night a GNOME (ventanas, apps y GNOME Terminal)?${NC}"; then
+                install_tokyo_night_gnome
+            elif confirm "${CYAN}¿Activar solo el modo oscuro de GNOME?${NC}"; then
                 gnome_dark_mode
             fi ;;
         *)
-            echo -e "${CYAN}ℹ El tema del escritorio solo se aplica en KDE Plasma (Tokyo Night) y GNOME (modo oscuro).${NC}"
+            echo -e "${CYAN}ℹ El tema del escritorio se aplica en KDE Plasma y GNOME (Tokyo Night).${NC}"
             echo -e "${CYAN}  Alacritty ya usa los colores Tokyo Night.${NC}" ;;
     esac
 
