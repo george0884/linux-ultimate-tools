@@ -1470,7 +1470,7 @@ system_update() {
 #@parte comun: tokyo_color_group write_tokyo_night_colors write_tokyo_night_konsole
 
 THEME_BACKUP="$STATE_DIR/tema-anterior.txt"
-#@parte comun: save_theme_value theme_value kde_color_scheme install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_qt tokyo_night_gnome_terminal gnome_dark_mode
+#@parte comun: save_theme_value theme_value kde_color_scheme theme_session_env theme_install_pkgs tokyo_icons_ready tokyo_night_wallpaper tokyo_theme_active desktop_theme_menu apply_tokyo_night_full install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_qt tokyo_night_gnome_terminal gnome_dark_mode
 
 install_custom_software() {
     if ! has_desktop; then
@@ -1515,21 +1515,7 @@ EOF
         echo -e "${GREEN}✓ Alacritty instalado (usando GPU para renderizado)${NC}"
     fi
 
-    case $DESKTOP in
-        kde)
-            if confirm "${CYAN}¿Aplicar tema Tokyo Night a Plasma y Konsole?${NC}"; then
-                install_tokyo_night_theme
-            fi ;;
-        gnome)
-            if confirm "${CYAN}¿Aplicar el tema Tokyo Night a GNOME (ventanas, apps y GNOME Terminal)?${NC}"; then
-                install_tokyo_night_gnome
-            elif confirm "${CYAN}¿Activar solo el modo oscuro de GNOME?${NC}"; then
-                gnome_dark_mode
-            fi ;;
-        *)
-            echo -e "${CYAN}ℹ El tema del escritorio se aplica en KDE Plasma y GNOME (Tokyo Night).${NC}"
-            echo -e "${CYAN}  Alacritty ya usa los colores Tokyo Night.${NC}" ;;
-    esac
+    echo -e "${CYAN}ℹ El tema Tokyo Night completo para el escritorio (Plasma o GNOME) está en la opción 22.${NC}"
 
     pause
 }
@@ -3867,7 +3853,8 @@ main_menu() {
         echo -e "  ${CYAN} 6)${NC} 🧹 Quitar accesos directos (escritorio y panel)"
         echo ""
         echo -e "  ${CYAN} 7)${NC} 📦 Instalar software opcional"
-        echo -e "  ${CYAN} 8)${NC} 💻 Instalar Alacritty (terminal GPU) y temas"
+        echo -e "  ${CYAN} 8)${NC} 💻 Instalar Alacritty (terminal GPU, con colores Tokyo Night)"
+        echo -e "  ${CYAN}22)${NC} 🎨 TEMA DEL ESCRITORIO: Tokyo Night completo (Plasma o GNOME)"
         echo -e "  ${CYAN}10)${NC} 🩹 Deshacer optimizaciones / quitar programas"
         echo -e "  ${CYAN}11)${NC} ⏪ Revertir a la instalación original"
         echo ""
@@ -3886,7 +3873,7 @@ main_menu() {
         echo -e "\n${YELLOW}ℹ Versión beta: los números son los mismos que en Ubuntu. Snap (5 y 9) no aplica en${NC}"
         echo -e "${YELLOW}  Arch y los perfiles automáticos (18) llegan en una próxima versión.${NC}"
         echo ""
-        read -r -p "🔢 Opción (0-21): " option
+        read -r -p "🔢 Opción (0-22): " option
 
         case $option in
             1) ( MENU_SUBSHELL=1; system_update ) ;;
@@ -3907,6 +3894,7 @@ main_menu() {
             19) ( MENU_SUBSHELL=1; grub_repair_menu ) ;;
             20) ( MENU_SUBSHELL=1; create_usb_menu ) ;;
             21) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
+            22) ( MENU_SUBSHELL=1; desktop_theme_menu ) ;;
             4|8) echo -e "${YELLOW}ℹ Snap no se usa en Arch${NC}"; sleep 2 ;;
             18) echo -e "${YELLOW}ℹ Los perfiles automáticos llegan en una próxima versión${NC}"; sleep 2 ;;
             0)

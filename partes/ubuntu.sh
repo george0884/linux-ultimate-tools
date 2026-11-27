@@ -1160,7 +1160,7 @@ system_update() {
 #@parte comun: tokyo_color_group write_tokyo_night_colors write_tokyo_night_konsole
 
 THEME_BACKUP="$STATE_DIR/tema-anterior.txt"
-#@parte comun: save_theme_value theme_value kde_color_scheme install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_qt tokyo_night_gnome_terminal gnome_dark_mode
+#@parte comun: save_theme_value theme_value kde_color_scheme theme_session_env theme_install_pkgs tokyo_icons_ready tokyo_night_wallpaper tokyo_theme_active desktop_theme_menu apply_tokyo_night_full install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_qt tokyo_night_gnome_terminal gnome_dark_mode
 #@parte apt: install_custom_software
 
 # ------------------------------------------------------------
@@ -4315,7 +4315,8 @@ main_menu() {
         else
             echo -e "  ${CYAN} 7)${NC} 📦 Instalar software opcional o un ESCRITORIO (KDE, GNOME, Xfce...)"
         fi
-        echo -e "  ${CYAN} 8)${NC} 💻 Instalar Alacritty (terminal GPU) y temas"
+        echo -e "  ${CYAN} 8)${NC} 💻 Instalar Alacritty (terminal GPU, con colores Tokyo Night)"
+        echo -e "  ${CYAN}22)${NC} 🎨 TEMA DEL ESCRITORIO: Tokyo Night completo (Plasma o GNOME)"
         echo -e "  ${CYAN} 9)${NC} 📥 Reinstalar Snap"
         echo -e "  ${CYAN}10)${NC} 🩹 Deshacer optimizaciones / quitar programas"
         echo -e "  ${CYAN}11)${NC} ⏪ Revertir a distribución original"
@@ -4338,7 +4339,7 @@ main_menu() {
         echo -e "  ${CYAN}21)${NC} 🔌 Apagar / Reiniciar sistema"
         echo -e "\n  ${CYAN} 0)${NC} ❌ Salir"
         echo ""
-        read -r -p "🔢 Opción (0-21): " option
+        read -r -p "🔢 Opción (0-22): " option
 
         case $option in
             1) ( MENU_SUBSHELL=1; system_update ) ;;
@@ -4362,6 +4363,7 @@ main_menu() {
             19) ( MENU_SUBSHELL=1; grub_repair_menu ) ;;
             20) ( MENU_SUBSHELL=1; create_usb_menu ) ;;
             21) ( MENU_SUBSHELL=1; shutdown_menu ) ;;
+            22) ( MENU_SUBSHELL=1; desktop_theme_menu ) ;;
             0)
                 echo -e "\n${GREEN}✅ ¡Hasta luego!${NC}"
                 exit 0
