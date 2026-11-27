@@ -47,6 +47,18 @@ armar() {
 comprobar=false
 [ "${1:-}" = --comprobar ] && comprobar=true
 estado=0
+
+# La versión (partes/comun.sh) tiene que tener su entrada en CHANGELOG.md
+version=$(sed -n 's/^UT_VERSION="\(.*\)"$/\1/p' partes/comun.sh)
+if [ -z "$version" ]; then
+    echo "✗ No encontré UT_VERSION en partes/comun.sh" >&2
+    exit 1
+fi
+if ! grep -q "^## \[$version\]" CHANGELOG.md 2>/dev/null; then
+    echo "✗ La versión $version no tiene su entrada en CHANGELOG.md (\"## [$version] — fecha\")" >&2
+    exit 1
+fi
+echo "✓ Versión $version (con su entrada en CHANGELOG.md)"
 for d in "${DISTROS[@]}"; do
     destino="$d-ultimate-tools.sh"
     tmp=$(mktemp)

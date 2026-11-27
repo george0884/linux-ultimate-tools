@@ -1,6 +1,11 @@
 #@ partes/comun.sh — Base compartida por los tres scripts: mensajes, confirmaciones, barra de avance, menús de selección, RAM y swap, red, energía, temas, accesos directos, información del sistema y avisos.
 #@ Pieza para armar los scripts: no se ejecuta sola. Después de editarla corre "bash armar.sh".
 #@ Cada "#@@ nombre" empieza una función o un bloque; las líneas "#@" no pasan a los scripts.
+#@@ datos_version
+# Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
+# CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
+UT_VERSION="3.2.0"
+UT_VERSION_DATE="2026-11-27"
 #@@ log
 
 # ============================================================
