@@ -446,10 +446,10 @@ con 0 no se pide "Presiona Enter".
 | | **10** USB | Dispositivos conectados |
 | 🩺 | **11** Diagnóstico | Servicios que fallaron, errores del último arranque, qué hace lento el arranque y procesos que más consumen |
 | | **12** Cambios del script | Kernel, GRUB, apps quitadas e instaladas y todos los ajustes aplicados |
-| 🧰 | **13** Buscar | Escribe una palabra (nvidia, temp, wifi, error...) y la busca en **toda** la información |
-| | **14** Guardar informe | Todo en `~/informe-sistema-<fecha>.txt`, **sin datos personales** (números de serie, MAC, IP, UUID, usuario, equipo y Wi-Fi) |
-| | **15** Rendimiento | Velocidad de lectura y escritura del disco, latencia y velocidad de descarga |
-| 🩺 | **16** Procesos en vivo | **htop**: qué consume CPU y memoria, con colores y por núcleo. Si no lo tienes, ofrece instalarlo (~400 KB); si no, usa `top` |
+| | **13** Procesos en vivo | **htop**: qué consume CPU y memoria, con colores y por núcleo. Si no lo tienes, ofrece instalarlo (~400 KB); si no, usa `top` |
+| 🧰 | **14** Buscar | Escribe una palabra (nvidia, temp, wifi, error...) y la busca en **toda** la información |
+| | **15** Guardar informe | Todo en `~/informe-sistema-<fecha>.txt`, **sin datos personales** (números de serie, MAC, IP, UUID, usuario, equipo y Wi-Fi) |
+| | **16** Rendimiento | Velocidad de lectura y escritura del disco, latencia y velocidad de descarga |
 
 ---
 
