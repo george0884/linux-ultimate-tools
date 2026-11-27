@@ -8187,11 +8187,11 @@ sysinfo_menu() {
         echo -e "\n${CYAN}🩺 Estado del sistema:${NC}"
         echo -e "  ${CYAN}11)${NC} Diagnóstico: servicios fallidos, errores, arranque y procesos"
         echo -e "  ${CYAN}12)${NC} Qué cambió este script"
-        echo -e "  ${CYAN}16)${NC} Procesos en vivo con htop (qué consume CPU y memoria)"
+        echo -e "  ${CYAN}13)${NC} Procesos en vivo con htop (qué consume CPU y memoria)"
         echo -e "\n${CYAN}🧰 Herramientas:${NC}"
-        echo -e "  ${CYAN}13)${NC} Buscar en toda la información"
-        echo -e "  ${CYAN}14)${NC} Guardar informe completo para compartir (sin datos personales)"
-        echo -e "  ${CYAN}15)${NC} Prueba de rendimiento (disco e internet)"
+        echo -e "  ${CYAN}14)${NC} Buscar en toda la información"
+        echo -e "  ${CYAN}15)${NC} Guardar informe completo para compartir (sin datos personales)"
+        echo -e "  ${CYAN}16)${NC} Prueba de rendimiento (disco e internet)"
         echo -e "\n  ${CYAN} 0)${NC} 🔙 Volver"
         echo ""
         read -r -p "📌 Opción (0-16): " option
@@ -8210,10 +8210,10 @@ sysinfo_menu() {
             10) submenu_run info_usb ;;
             11) submenu_run info_diagnostics ;;
             12) submenu_run info_script_changes ;;
-            13) submenu_run info_search ;;
-            14) submenu_run info_save_report ;;
-            15) submenu_run info_benchmark ;;
-            16) submenu_run info_htop ;;
+            13) submenu_run info_htop ;;
+            14) submenu_run info_search ;;
+            15) submenu_run info_save_report ;;
+            16) submenu_run info_benchmark ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
