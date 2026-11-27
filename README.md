@@ -53,7 +53,7 @@ el escritorio** y adaptan sus opciones:
 
 | Sabor | Escritorio | Notas |
 |-------|------------|-------|
-| **Ubuntu** (completo o mínimo) | GNOME | Tema Tokyo Night (o solo modo oscuro), dock e indexador de GNOME |
+| **Ubuntu** (completo o mínimo) | GNOME | Tema Tokyo Night (GTK, apps de GNOME, **apps Qt** y GNOME Terminal) o solo modo oscuro, dock e indexador de GNOME |
 | **Kubuntu** | KDE Plasma | Tema Tokyo Night, panel de Plasma, Baloo y KDE Rolling Release (backports, solo Kubuntu) |
 | **Xubuntu** | Xfce | |
 | **Lubuntu** | LXQt | |
@@ -627,7 +627,8 @@ Deja tu Ubuntu como vino de fábrica, sea cual sea el sabor (muestra cuál detec
 - Solo en Kubuntu, si activaste KDE Rolling Release: quita el PPA backports y **baja Plasma a la versión
   oficial** (quitar el PPA no lo hace solo).
 - Restaura los íconos del escritorio, el panel o el dock, y el **tema** (los colores de Plasma y el perfil de
-  Konsole anteriores a Tokyo Night; en GNOME, el tema, el estilo, el perfil de GNOME Terminal y tu `gtk.css` de antes).
+  Konsole anteriores a Tokyo Night; en GNOME, el tema, el estilo, el perfil de GNOME Terminal, los colores de las
+  apps Qt y tu `gtk.css` de antes).
 - Vuelve a fábrica todos los ajustes (RAM, DNS, ZRAM, energía, indexador...).
 - En Ubuntu Server hace lo que aplica: paquetes, Snap y ajustes.
 
