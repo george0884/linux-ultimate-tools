@@ -1473,7 +1473,8 @@ system_update() {
 
 THEME_BACKUP="$STATE_DIR/tema-anterior.txt"
 #@parte comun: save_theme_value theme_value kde_color_scheme theme_session_env theme_install_pkgs tokyo_icons_ready tokyo_night_wallpaper tokyo_theme_active desktop_theme_menu apply_tokyo_night_full install_tokyo_night_theme datos_tokyo_gtk install_tokyo_night_gnome tokyo_night_qt tokyo_night_gnome_terminal gnome_dark_mode
-#@parte comun: periph_available periph_installed periph_install periph_is_apt periph_usb_list periph_detect periph_show periph_summary periph_printers periph_uri_name periph_scanners periph_cameras periph_bluetooth periph_gamepads periph_fingerprint periph_tablets periph_install_detected peripherals_menu
+#@parte comun: periph_available periph_installed periph_install pkgs_reinstall periph_result periph_is_apt periph_usb_list periph_detect periph_show periph_summary periph_printers periph_queue_state periph_printer_driver periph_printer_add periph_printer_fix periph_printer_ready periph_uri_name periph_scanners periph_cameras periph_bluetooth periph_gamepads periph_fingerprint periph_tablets periph_install_detected periph_reinstall peripherals_menu
+#@parte comun: drivers_test install_drivers_tested reinstall_system_drivers
 
 install_custom_software() {
     if ! has_desktop; then
