@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.3.0](#330--2026-11-27) | 2026-11-27 | Pruebas y reinstalar controladores | 8 | | |
 | [3.2.0](#320--2026-11-27) | 2026-11-27 | Temas, periféricos y versionado | 7 | 3.025 | 284 |
 | [3.1.0](#310--2026-11-26) | 2026-11-26 | Descargar sistemas, Ventoy y código en piezas | 14 | 24.386 | 727 |
 | [3.0.0](#300--2026-11-24) | 2026-11-24 | Linux Ultimate Tools | 20 | 5.932 | 692 |
@@ -22,10 +23,27 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **83** | **59.153** | **3.784** |
+| **Total** | | | **91** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.3.0] — 2026-11-27
+
+**Pruebas y reinstalar controladores.** Cada instalación de periféricos y controladores se prueba sola y dice si
+funciona; los controladores se pueden reinstalar desde los menús. Incluye los arreglos de la prueba en una PC real
+(Debian 13 con una HP Ink Tank 110).
+
+8 cambios
+
+- Periféricos: prueba automática después de preparar cada uno (✓ funciona / ✗ falla y por qué): impresora habilitada y página de prueba que sale de la cola, escaneo de prueba, imagen de la cámara, Bluetooth encendido y dispositivos cerca, mando, huella registrada y tableta reconocidos
+- Periféricos → 9: reinstalar los controladores de un periférico, reiniciar su servicio y volver a probar
+- GPU (13 → 5) y Red (16 → 8): reinstalar los controladores de video, Wi-Fi, firmware y microcódigo instalados, recompilar DKMS, rehacer el arranque y probar
+- Red → 6: después de instalar los drivers recomendados, prueba qué controlador usa cada placa (y si NVIDIA responde y el Wi-Fi aparece)
+- Arreglo: los controladores USB de la placa ("xHCI Host Controller") ya no aparecen como mandos de juego
+- Arreglo: las impresoras ya configuradas se reconocen con su controlador y estado, y se arreglan (controlador del modelo, hpcups para HP; habilitada y aceptando trabajos)
+- Arreglo: las impresoras USB nuevas se agregan primero con el controlador de su modelo y después sin controlador
+- Cómo ver la impresora en Chrome después de configurarla
 
 ## [3.2.0] — 2026-11-27
 

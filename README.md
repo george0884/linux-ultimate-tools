@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
-[![Versión](https://img.shields.io/badge/Versión-3.2.0-7aa2f7.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Versión-3.3.0-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -680,6 +680,17 @@ quita en 10 → 1.
 | **6** Mandos de juego | Reglas para Xbox, PlayStation, Nintendo, 8BitDo y Steam Controller (`steam-devices`) |
 | **7** Lector de huella | `fprintd`, registrar la huella y (Ubuntu/Debian) usarla para iniciar sesión y `sudo` |
 | **8** Tabletas gráficas | Soporte de Wacom, Huion y XP-Pen (`libwacom`); la presión y los botones, en la configuración del escritorio |
+| **9** Reinstalar controladores | Si algo dejó de andar: reinstala los paquetes del periférico que elijas, reinicia su servicio y lo vuelve a probar |
+
+**Cada opción termina con una prueba** (🧪 ✓ funciona / ✗ falla y por qué): la impresora habilitada y la página de
+prueba que sale de la cola (si queda trabada, avisa qué revisar), un escaneo de prueba, una imagen de la cámara,
+Bluetooth encendido y los dispositivos cerca, y que el sistema reconozca el mando, la huella y la tableta. Si una
+impresora **ya estaba configurada** pero no imprime (o Chrome no la ve), la muestra con su controlador y estado y le
+pone el de su modelo (para HP, `hpcups`).
+
+Los **controladores de video y Wi-Fi** se reinstalan en **13 → 5** (GPU) o **16 → 8** (Red): reinstala los que ya
+tienes (NVIDIA, Mesa, firmware, microcódigo), recompila los módulos externos y rehace el arranque; después prueba
+qué controlador usa cada placa. **16 → 6** (instalar los recomendados) también termina con esa prueba.
 
 ---
 
@@ -940,7 +951,7 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 
 ## 🔖 Versiones
 
-Versión actual: **3.2.0** (2026-11-27). Todos los cambios, contados por versión, están en
+Versión actual: **3.3.0** (2026-11-27). Todos los cambios, contados por versión, están en
 [CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
 tu distribución); también aparece en la cabecera del menú.
 

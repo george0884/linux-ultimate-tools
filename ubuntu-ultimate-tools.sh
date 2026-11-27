@@ -41,7 +41,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.2.0"
+UT_VERSION="3.3.0"
 UT_VERSION_DATE="2026-11-27"
 
 # ============================================================
@@ -1250,15 +1250,17 @@ optimize_gpu_menu() {
         echo -e "  ${PURPLE}2)${NC} AMD   - Optimización completa"
         echo -e "  ${PURPLE}3)${NC} Intel - Optimización completa"
         echo -e "  ${PURPLE}4)${NC} Detectar automáticamente y optimizar"
+        echo -e "  ${PURPLE}5)${NC} 🔁 Reinstalar los controladores (video, Wi-Fi y firmware) y probar"
         echo -e "\n  ${PURPLE}0)${NC} 🔙 Volver"
         echo ""
-        read -r -p "📌 Opción (0-4): " gpu_option
+        read -r -p "📌 Opción (0-5): " gpu_option
 
         case $gpu_option in
             1) submenu_run optimize_nvidia ;;
             2) submenu_run optimize_amd ;;
             3) submenu_run optimize_intel ;;
             4) submenu_run auto_detect_gpu ;;
+            5) submenu_run reinstall_system_drivers ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
@@ -2689,6 +2691,13 @@ periph_install() {
         printf '%s\n' "${want[@]}" | grep -qx -- "$p" || missing+=("$p")
     done
     [ ${#missing[@]} -gt 0 ] && echo -e "${YELLOW}ℹ No están en tus repositorios (se omiten): ${missing[*]}${NC}"
+    # Reinstalar (opción 9): todos los que existan, estén o no instalados
+    if [ "${PERIPH_REINSTALL:-false}" = true ]; then
+        [ ${#want[@]} -gt 0 ] || return 0
+        echo -e "${BLUE}🔁 Reinstalando: ${want[*]}${NC}"
+        pkgs_reinstall "${want[@]}"
+        return
+    fi
     mapfile -t have < <(periph_installed "${want[@]}")
     local new=()
     for p in "${want[@]}"; do
@@ -2701,6 +2710,24 @@ periph_install() {
     echo -e "${BLUE}📦 Instalando: ${new[*]}${NC}"
     declare -F apt_update > /dev/null && apt_update
     theme_install_pkgs "${new[@]}"
+}
+
+# Vuelve a instalar paquetes que ya están (por si se dañaron o se borró algún archivo)
+pkgs_reinstall() {
+    if declare -F apt_install_recorded > /dev/null; then
+        run "No se pudieron reinstalar: $*" sudo apt-get install -y --reinstall "$@"
+    else
+        run "No se pudieron reinstalar: $*" sudo pacman -S --noconfirm "$@"
+    fi
+}
+
+# Resultado de una prueba: ✓ o ✗ con el motivo
+periph_result() {
+    if [ "$1" = ok ]; then
+        echo -e "  ${GREEN}🧪 ✓ $2${NC}"
+    else
+        echo -e "  ${RED}🧪 ✗ $2${NC}"
+    fi
 }
 
 # ¿Este script es de la familia apt (Ubuntu/Debian)? Se decide por el script, no por lo instalado
@@ -2744,8 +2771,14 @@ periph_detect() {
             06cb|04f3) [[ "$low" == *finger* ]] && PERIPH_FINGER+="$name"$'\n' ;;
             056a|256c|28bd) PERIPH_TABLET+="$name"$'\n' ;;
         esac
-        if [[ "$low" =~ controller|gamepad|joystick|xbox|dualsense|dualshock|8bitdo ]] || [ "$v" = 2dc8 ] || [ "$v" = 28de ]; then
-            PERIPH_PAD+="$name"$'\n'
+        # Mandos: dispositivos de entrada (HID) o de fabricantes de mandos; nunca hubs ni los
+        # controladores USB de la placa ("xHCI Host Controller")
+        if [[ " $classes" != *" 09"* ]] && [[ "$low" != *"host controller"* ]] && [ "$v" != 1d6b ]; then
+            if [[ "$v" =~ ^(2dc8|28de)$ ]] \
+                || { [[ "$low" =~ gamepad|joystick|xbox|dualsense|dualshock|controller ]] \
+                     && { [[ " $classes" == *" 03"* ]] || [[ "$v" =~ ^(045e|054c|057e|046d|0e6f|24c6|0079|20d6)$ ]]; }; }; then
+                PERIPH_PAD+="$name"$'\n'
+            fi
         fi
     done < <(periph_usb_list)
     # Cámaras web (USB o integradas) y Bluetooth (USB o integrado)
@@ -2820,36 +2853,145 @@ periph_printers() {
         && sudo usermod -aG lpadmin "$(id -un)" && log_success "Tu usuario puede administrar impresoras (grupo lpadmin)"
     echo -e "\n${BLUE}🔍 Buscando impresoras (USB y de red, unos segundos)...${NC}"
     mapfile -t uris < <(sudo lpinfo --timeout 15 -v 2>/dev/null | awk '$2 ~ /^(usb|ipp|ipps|dnssd):/ {print $2}' | sort -u)
-    if [ -n "$(lpstat -e 2>/dev/null)" ]; then
-        echo -e "${GREEN}✓ Impresoras ya configuradas:${NC}"
-        lpstat -e 2>/dev/null | sed 's/^/   /'
-    fi
-    if [ ${#uris[@]} -eq 0 ]; then
-        echo -e "${YELLOW}ℹ No encontré impresoras nuevas. Enciéndela y conéctala (USB o a tu misma red Wi-Fi) y vuelve a probar.${NC}"
+    # Las que ya están configuradas: "cola|dirección"
+    local queues=() entries=() q quri found kind entry
+    mapfile -t queues < <(LC_ALL=C lpstat -v 2>/dev/null | sed -n 's/^device for \([^:]*\): \(.*\)$/\1|\2/p')
+    for q in "${queues[@]}"; do
+        entries+=("cola|${q%%|*}|${q#*|}")
+    done
+    for uri in "${uris[@]}"; do
+        found=false
+        for q in "${queues[@]}"; do
+            quri=${q#*|}
+            [ "${quri%%\?*}" = "${uri%%\?*}" ] && found=true
+        done
+        $found || entries+=("nueva||$uri")
+    done
+    if [ ${#entries[@]} -eq 0 ]; then
+        echo -e "${YELLOW}ℹ No encontré impresoras. Enciéndela y conéctala (USB o a tu misma red Wi-Fi) y vuelve a probar.${NC}"
         return 0
     fi
-    echo -e "\n${CYAN}🖨 Impresoras encontradas:${NC}"
+    echo -e "\n${CYAN}🖨 Impresoras:${NC}"
     i=1
-    for uri in "${uris[@]}"; do
-        printf "  ${CYAN}%d)${NC} %s\n" "$i" "$(periph_uri_name "$uri")"
+    for entry in "${entries[@]}"; do
+        IFS='|' read -r kind name uri <<< "$entry"
+        if [ "$kind" = cola ]; then
+            printf "  ${CYAN}%d)${NC} %s ${GREEN}(ya configurada)${NC} — %s\n" "$i" "$name" "$(periph_queue_state "$name")"
+        else
+            printf "  ${CYAN}%d)${NC} %s ${YELLOW}(nueva)${NC}\n" "$i" "$(periph_uri_name "$uri")"
+        fi
         i=$((i + 1))
     done
     echo -e "  ${CYAN}0)${NC} Volver"
-    read -r -p "🔢 ¿Cuál agrego? " choice
-    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#uris[@]} ] || return 2
-    uri=${uris[$((choice - 1))]}
-    name=$(periph_uri_name "$uri" | sed 's/ ([^)]*)$//' | tr -c 'A-Za-z0-9_-' '_' | sed 's/__*/_/g; s/^_//; s/_$//' | cut -c1-30)
-    # Sin controlador (IPP Everywhere): sirve para casi todas las impresoras de los últimos 10 años
-    if sudo lpadmin -p "${name:-Impresora}" -E -v "$uri" -m everywhere 2>>"$LOG_FILE"; then
-        sudo lpadmin -d "${name:-Impresora}" 2>/dev/null
-        log_success "Impresora agregada y elegida como predeterminada: ${name:-Impresora}"
-        if confirm "${CYAN}¿Imprimir una página de prueba?${NC}"; then
-            lp -d "${name:-Impresora}" /usr/share/cups/data/testprint &> /dev/null \
-                && log_success "Página de prueba enviada" || log_warning "No se pudo enviar la página de prueba"
-        fi
+    read -r -p "🔢 ¿Cuál preparo? " choice
+    [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#entries[@]} ] || return 2
+    IFS='|' read -r kind name uri <<< "${entries[$((choice - 1))]}"
+    if [ "$kind" = cola ]; then
+        periph_printer_fix "$name" "$uri"
     else
-        log_warning "Esta impresora necesita su controlador: agrégala en Configuración → Impresoras (lo elige solo)"
+        periph_printer_add "$uri"
     fi
+}
+
+# "controlador · estado" de una cola de CUPS
+periph_queue_state() {
+    local q="$1" model state
+    model=$(lpoptions -p "$q" 2>/dev/null | grep -o "printer-make-and-model='[^']*'" | cut -d"'" -f2)
+    state=$(LC_ALL=C lpstat -p "$q" 2>/dev/null | head -1)
+    case $state in
+        *disabled*) state="${RED}deshabilitada${NC}" ;;
+        *idle*|*printing*) state="lista" ;;
+        *) state="estado desconocido" ;;
+    esac
+    echo -e "${model:-sin controlador} · $state"
+}
+
+# El mejor controlador instalado para un modelo ("HP Ink Tank 110 series"): el de HP (hpcups) si es HP,
+# si no el primero que no sea "sin controlador"
+periph_printer_driver() {
+    local list
+    list=$(sudo lpinfo -m --make-and-model "$1" 2>/dev/null | awk '{print $1}' | grep -v '^everywhere$\|driverless')
+    grep -m1 'hpcups' <<< "$list" || head -1 <<< "$list"
+}
+
+# Agrega una impresora nueva: por USB primero con el controlador de su modelo; por red, sin controlador
+periph_printer_add() {
+    local uri="$1" pretty model name drv ok=false
+    pretty=$(periph_uri_name "$uri")
+    model=${pretty% (*}
+    name=$(tr -c 'A-Za-z0-9_-' '_' <<< "$model" | sed 's/__*/_/g; s/^_//; s/_$//' | cut -c1-30)
+    name=${name:-Impresora}
+    drv=$(periph_printer_driver "$model")
+    if [[ "$uri" == usb:* ]] && [ -n "$drv" ]; then
+        sudo lpadmin -p "$name" -E -v "$uri" -m "$drv" 2>>"$LOG_FILE" && ok=true
+    fi
+    # Sin controlador (IPP Everywhere): casi todas las impresoras de red de los últimos años
+    $ok || { sudo lpadmin -p "$name" -E -v "$uri" -m everywhere 2>>"$LOG_FILE" && ok=true; }
+    $ok || { [ -n "$drv" ] && sudo lpadmin -p "$name" -E -v "$uri" -m "$drv" 2>>"$LOG_FILE" && ok=true; }
+    if ! $ok; then
+        log_warning "No encontré un controlador para $model: agrégala en Configuración → Impresoras"
+        [[ "${model,,}" == hp* ]] && echo -e "${CYAN}  Para HP también sirve: sudo hp-setup -i${NC}"
+        return 1
+    fi
+    log_success "Impresora agregada: $name ($(periph_queue_state "$name"))"
+    periph_printer_ready "$name"
+}
+
+# Una impresora ya configurada que no imprime (o que Chrome no ve): controlador del modelo, habilitada
+periph_printer_fix() {
+    local q="$1" uri="$2" model drv current
+    current=$(lpoptions -p "$q" 2>/dev/null | grep -o "printer-make-and-model='[^']*'" | cut -d"'" -f2)
+    model=$(periph_uri_name "$uri")
+    model=${model% (*}
+    echo -e "\n   ${BOLD}$q${NC}: ${current:-sin controlador}"
+    drv=$(periph_printer_driver "$model")
+    if [ -n "$drv" ] && [[ "$current" != *hpcups* ]] && [[ "$drv" == *hpcups* || -z "$current" || "${current,,}" == *raw* || "${current,,}" == *everywhere* || "${current,,}" == *driverless* ]]; then
+        if confirm "${CYAN}¿Ponerle el controlador de su modelo ($(basename "$drv" .ppd))?${NC}"; then
+            sudo lpadmin -p "$q" -m "$drv" 2>>"$LOG_FILE" \
+                && log_success "Controlador actualizado: $(periph_queue_state "$q")" \
+                || log_warning "No se pudo cambiar el controlador (detalles en $LOG_FILE)"
+        fi
+    fi
+    periph_printer_ready "$q"
+}
+
+# Deja la impresora habilitada, aceptando trabajos y (si quieres) como predeterminada; página de prueba
+periph_printer_ready() {
+    local q="$1"
+    sudo cupsenable "$q" 2>/dev/null
+    sudo cupsaccept "$q" 2>/dev/null
+    if ! LC_ALL=C lpstat -d 2>/dev/null | grep -q "destination: $q\$" \
+        && confirm "${CYAN}¿Usarla como impresora predeterminada?${NC}"; then
+        sudo lpadmin -d "$q" 2>/dev/null && log_success "$q es la impresora predeterminada"
+    fi
+    echo -e "\n${BLUE}🧪 Probando la impresora...${NC}"
+    if LC_ALL=C lpstat -p "$q" 2>/dev/null | grep -q disabled; then
+        periph_result fail "$q está deshabilitada: $(LC_ALL=C lpstat -p "$q" 2>/dev/null | tail -1 | sed 's/^[[:space:]]*//')"
+    elif ! LC_ALL=C lpstat -a "$q" 2>/dev/null | grep -q accepting; then
+        periph_result fail "$q no acepta trabajos"
+    else
+        periph_result ok "$q está habilitada y acepta trabajos ($(periph_queue_state "$q"))"
+    fi
+    if confirm "${CYAN}¿Imprimir una página de prueba?${NC}"; then
+        local job i
+        job=$(lp -d "$q" /usr/share/cups/data/testprint 2>/dev/null | grep -o "$q-[0-9]*")
+        if [ -z "$job" ]; then
+            periph_result fail "No se pudo enviar la página de prueba"
+        else
+            echo -e "  Esperando a que la impresora la tome (hasta 60 s)..."
+            for i in $(seq 30); do
+                LC_ALL=C lpstat -W not-completed -o "$q" 2>/dev/null | grep -q "^$job " || break
+                sleep 2
+            done
+            if LC_ALL=C lpstat -W not-completed -o "$q" 2>/dev/null | grep -q "^$job "; then
+                periph_result fail "La página quedó en la cola: revisa que esté encendida, con papel y conectada ($(LC_ALL=C lpstat -p "$q" | tail -1 | sed 's/^[[:space:]]*//'))"
+            else
+                periph_result ok "La impresora recibió la página de prueba"
+            fi
+        fi
+    fi
+    echo -e "${CYAN}💡 Chrome y otros programas la ven al volver a abrirlos: cierra Chrome del todo (también el ícono${NC}"
+    echo -e "${CYAN}   de la bandeja) y ábrelo; en Imprimir → Destino → Ver más.${NC}"
 }
 
 # Nombre legible de una dirección de impresora de CUPS
@@ -2882,6 +3024,16 @@ periph_scanners() {
     if [ -n "$list" ]; then
         echo -e "${GREEN}✓ Escáneres listos:${NC}"
         sed "s/^device \`\([^']*\)' is a /   • /" <<< "$list"
+        local dev out
+        dev=$(sed -n "1s/^device \`\([^']*\)'.*/\1/p" <<< "$list")
+        if [ -n "$dev" ] && confirm "${CYAN}¿Probar con un escaneo rápido (baja calidad, deja la tapa cerrada)?${NC}"; then
+            out="$HOME/escaneo-de-prueba.png"
+            if timeout 120 scanimage -d "$dev" --resolution 75 --format=png -o "$out" 2>>"$LOG_FILE" && [ -s "$out" ]; then
+                periph_result ok "El escáner funciona: $out"
+            else
+                periph_result fail "El escaneo no salió (detalles en $LOG_FILE): revisa que esté encendido y libre"
+            fi
+        fi
         has_desktop && echo -e "${CYAN}💡 Para escanear: $([ "$DESKTOP" = kde ] && echo Skanpage || echo "Escáner de documentos")${NC}"
     else
         echo -e "${YELLOW}ℹ No encontré escáneres. Enciéndelo y conéctalo (USB o a tu misma red) y vuelve a probar.${NC}"
@@ -2907,6 +3059,18 @@ periph_cameras() {
         gphoto2 --auto-detect 2>/dev/null | tail -n +3 | sed 's/^/   /'
     fi
     has_desktop && echo -e "${CYAN}💡 Para probar la cámara: $([ "$DESKTOP" = kde ] && echo Kamoso || echo guvcview)${NC}"
+    # Prueba: tomar una imagen de la primera cámara
+    local dev
+    for dev in /dev/video*; do
+        [ -e "$dev" ] || continue
+        if command -v v4l2-ctl &> /dev/null \
+            && timeout 15 v4l2-ctl -d "$dev" --stream-mmap --stream-count=1 --stream-to=/dev/null &> /dev/null; then
+            periph_result ok "La cámara $dev entrega imagen"
+            return 0
+        fi
+    done
+    [ -n "$PERIPH_CAMERA" ] && periph_result fail "La cámara no entrega imagen (¿la usa otra app o tiene una tapa o tecla para apagarla?)"
+    return 0
 }
 
 # Bluetooth: BlueZ, el servicio activo y el adaptador encendido
@@ -2923,6 +3087,14 @@ periph_bluetooth() {
     fi
     bluetoothctl power on &> /dev/null
     log_success "Bluetooth listo y encendido: vincula tus dispositivos desde la configuración del escritorio"
+    # Prueba: encendido y ve dispositivos cerca
+    if bluetoothctl show 2>/dev/null | grep -q 'Powered: yes'; then
+        local n
+        n=$(timeout 12 bluetoothctl --timeout 8 scan on 2>/dev/null | grep -c 'NEW.*Device')
+        periph_result ok "Bluetooth encendido; encontró $n dispositivo(s) cerca"
+    else
+        periph_result fail "El adaptador no se encendió (rfkill list muestra si está bloqueado)"
+    fi
 }
 
 # Mandos de juego: reglas para que Steam y los juegos los usen sin ser administrador
@@ -2934,6 +3106,12 @@ periph_gamepads() {
         log_success "Mandos listos (Xbox, PlayStation, Nintendo, 8BitDo, Steam Controller): desconéctalo y conéctalo"
     else
         echo -e "${CYAN}ℹ En Arch los mandos funcionan con el kernel y las reglas vienen con Steam (opción 7 o 17 → 6).${NC}"
+    fi
+    # Prueba: el sistema lo ve como mando
+    if grep -qE 'js[0-9]' /proc/bus/input/devices 2>/dev/null; then
+        periph_result ok "El sistema reconoce el mando: $(grep -B5 -E 'js[0-9]' /proc/bus/input/devices | sed -n 's/^N: Name="\(.*\)"/\1/p' | head -1)"
+    else
+        periph_result fail "No hay un mando conectado ahora (conéctalo por cable o vincúlalo por Bluetooth y vuelve a probar)"
     fi
 }
 
@@ -2951,6 +3129,15 @@ periph_fingerprint() {
     if command -v pam-auth-update &> /dev/null && confirm "${CYAN}¿Usar la huella para iniciar sesión y para sudo?${NC}"; then
         run "No se pudo activar la huella" sudo pam-auth-update --enable fprintd && log_success "Huella activada para iniciar sesión y sudo"
     fi
+    # Prueba: huellas registradas
+    if fprintd-list "$(id -un)" 2>/dev/null | grep -q ' - #'; then
+        periph_result ok "Huella registrada: $(fprintd-list "$(id -un)" 2>/dev/null | grep -c ' - #') dedo(s)"
+        confirm "${CYAN}¿Probarla ahora (apoya el dedo)?${NC}" && { fprintd-verify "$(id -un)" 2>/dev/null | tail -1; }
+    elif fprintd-list "$(id -un)" 2>&1 | grep -qi 'no devices'; then
+        periph_result fail "fprintd no encuentra el lector: puede que no sea compatible"
+    else
+        periph_result fail "Todavía no hay huellas registradas"
+    fi
 }
 
 # Tabletas gráficas (Wacom, Huion, XP-Pen)
@@ -2961,6 +3148,12 @@ periph_tablets() {
         periph_install libwacom xf86-input-wacom || return 1
     fi
     log_success "Soporte de tabletas listo; la presión y los botones se ajustan en la configuración del escritorio (Tableta gráfica)"
+    # Prueba: el sistema la ve como tableta
+    if grep -qiE 'wacom|huion|xp-pen|ugtablet|tablet' /proc/bus/input/devices 2>/dev/null; then
+        periph_result ok "El sistema reconoce la tableta: $(grep -iE '^N: Name=.*(wacom|huion|xp-pen|ugtablet|tablet)' /proc/bus/input/devices | head -1 | sed 's/^N: Name=//; s/"//g')"
+    else
+        periph_result fail "No hay una tableta conectada ahora"
+    fi
 }
 
 # Instala el soporte de todo lo detectado (sin preguntas de más: una confirmación al principio)
@@ -2986,6 +3179,27 @@ periph_install_detected() {
     done
 }
 
+# Opción 9: reinstala los paquetes de un periférico, reinicia su servicio y lo vuelve a probar
+periph_reinstall() {
+    local choice
+    echo -e "\n${CYAN}🔁 ¿Qué reinstalo?${NC}"
+    echo -e "  ${CYAN}1)${NC} Impresoras   ${CYAN}2)${NC} Escáneres   ${CYAN}3)${NC} Cámaras   ${CYAN}4)${NC} Bluetooth"
+    echo -e "  ${CYAN}5)${NC} Mandos       ${CYAN}6)${NC} Huella      ${CYAN}7)${NC} Tabletas  ${CYAN}0)${NC} Volver"
+    read -r -p "🔢 Opción: " choice
+    PERIPH_REINSTALL=true
+    case $choice in
+        1) periph_printers; sudo systemctl restart cups.service 2>/dev/null ;;
+        2) periph_scanners ;;
+        3) periph_cameras ;;
+        4) periph_bluetooth; sudo systemctl restart bluetooth.service 2>/dev/null ;;
+        5) periph_gamepads ;;
+        6) periph_fingerprint ;;
+        7) periph_tablets ;;
+        *) PERIPH_REINSTALL=false; return 2 ;;
+    esac
+    PERIPH_REINSTALL=false
+}
+
 peripherals_menu() {
     local option
     while true; do
@@ -3004,8 +3218,9 @@ peripherals_menu() {
         echo -e "  ${CYAN}6)${NC} 🎮 Mandos de juego"
         echo -e "  ${CYAN}7)${NC} 👆 Lector de huella"
         echo -e "  ${CYAN}8)${NC} 📝 Tabletas gráficas"
+        echo -e "  ${CYAN}9)${NC} 🔁 Reinstalar controladores (si algo dejó de andar) y probar"
         echo -e "  ${CYAN}0)${NC} 🔙 Volver\n"
-        read -r -p "📌 Opción (0-8): " option
+        read -r -p "📌 Opción (0-9): " option
         case $option in
             1) submenu_run periph_install_detected ;;
             2) submenu_run periph_printers ;;
@@ -3015,11 +3230,83 @@ peripherals_menu() {
             6) submenu_run periph_gamepads ;;
             7) submenu_run periph_fingerprint ;;
             8) submenu_run periph_tablets ;;
+            9) submenu_run periph_reinstall ;;
             0|"") return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
         menu_pause
     done
+}
+
+# Prueba de los controladores: qué usa cada placa de video y de red, y si el Wi-Fi está
+drivers_test() {
+    local line dev drv ok=true
+    echo -e "\n${BLUE}🧪 Probando los controladores...${NC}"
+    if command -v lspci &> /dev/null; then
+        while IFS= read -r line; do
+            dev=$(sed 's/^[0-9a-f:.]* //' <<< "$line")
+            drv=$(lspci -k -s "${line%% *}" 2>/dev/null | sed -n 's/.*Kernel driver in use: //p')
+            if [ -n "$drv" ]; then
+                periph_result ok "${dev:0:60} → controlador $drv"
+            else
+                periph_result fail "${dev:0:60} → sin controlador en uso"
+                ok=false
+            fi
+        done < <(lspci 2>/dev/null | grep -Ei 'vga|3d controller|display|network|wireless|ethernet')
+    fi
+    if lspci 2>/dev/null | grep -qi nvidia && command -v nvidia-smi &> /dev/null; then
+        if nvidia-smi -L &> /dev/null; then
+            periph_result ok "NVIDIA responde: $(nvidia-smi -L 2>/dev/null | head -1)"
+        else
+            periph_result fail "El driver de NVIDIA está instalado pero no responde: reinicia (y si sigue, revisa Secure Boot)"
+            ok=false
+        fi
+    fi
+    if compgen -G "/sys/class/net/*/wireless" > /dev/null; then
+        periph_result ok "Wi-Fi presente: $(basename "$(dirname "$(compgen -G "/sys/class/net/*/wireless" | head -1)")")"
+    elif lspci 2>/dev/null | grep -qiE 'network controller|wireless'; then
+        periph_result fail "Hay una placa Wi-Fi pero no aparece la interfaz: falta su firmware o hay que reiniciar"
+        ok=false
+    fi
+    $ok && echo -e "  ${CYAN}ℹ Si acabas de instalar o reinstalar, los cambios se ven del todo al reiniciar${NC}"
+    return 0
+}
+
+# 16 → 6: instalar los recomendados y probarlos
+install_drivers_tested() {
+    install_recommended_drivers
+    drivers_test
+}
+
+# Reinstala los controladores que ya tienes (video, Wi-Fi, firmware y microcódigo), recompila los
+# módulos externos (DKMS) y rehace el arranque; después prueba. No instala nada nuevo
+reinstall_system_drivers() {
+    local pkgs=()
+    if declare -F apt_install_recorded > /dev/null; then
+        mapfile -t pkgs < <(installed_pkgs 'nvidia-driver-*' 'libnvidia-gl-*' 'nvidia-dkms-*' 'xserver-xorg-video-*' \
+            libgl1-mesa-dri mesa-vulkan-drivers 'linux-firmware*' 'firmware-*' intel-microcode amd64-microcode | sort -u)
+    else
+        mapfile -t pkgs < <(pkg_installed 'nvidia' 'nvidia-open' 'nvidia-dkms' 'nvidia-open-dkms' 'nvidia-utils' 'lib32-nvidia-utils' \
+            mesa lib32-mesa 'vulkan-radeon' 'vulkan-intel' 'xf86-video-*' 'linux-firmware*' intel-ucode amd-ucode | sort -u)
+    fi
+    if [ ${#pkgs[@]} -eq 0 ]; then
+        log_warning "No encontré controladores instalados para reinstalar: usa 16 → 6 para instalar los recomendados"
+        return 1
+    fi
+    echo -e "${CYAN}Se van a reinstalar:${NC} ${pkgs[*]}"
+    confirm "${CYAN}¿Continuar? (no se quita nada; después conviene reiniciar)${NC}" || return 2
+    declare -F apt_update > /dev/null && apt_update
+    pkgs_reinstall "${pkgs[@]}" || return 1
+    if command -v dkms &> /dev/null; then
+        run "No se pudieron recompilar los módulos (DKMS)" sudo dkms autoinstall
+    fi
+    if command -v update-initramfs &> /dev/null; then
+        run "No se pudo rehacer el arranque (initramfs)" sudo update-initramfs -u
+    elif command -v mkinitcpio &> /dev/null; then
+        run "No se pudo rehacer el arranque (mkinitcpio)" sudo mkinitcpio -P
+    fi
+    log_success "Controladores reinstalados"
+    drivers_test
 }
 
 install_custom_software() {
@@ -8160,9 +8447,10 @@ network_menu() {
         echo -e "  ${BLUE}5)${NC} Activar/desactivar ahorro de energía del Wi-Fi (menos latencia y cortes)"
         echo -e "  ${BLUE}6)${NC} Drivers: detectar e instalar los recomendados (GPU, Wi-Fi...)"
         echo -e "  ${BLUE}7)${NC} Actualizar firmware (BIOS, SSD...)"
+        echo -e "  ${BLUE}8)${NC} 🔁 Reinstalar los controladores (video, Wi-Fi y firmware) y probar"
         echo -e "\n  ${BLUE}0)${NC} 🔙 Volver"
         echo ""
-        read -r -p "📌 Opción (0-7): " net_option
+        read -r -p "📌 Opción (0-8): " net_option
 
         case $net_option in
             1)
@@ -8188,8 +8476,9 @@ network_menu() {
             3) submenu_run reset_dns ;;
             4) submenu_run toggle_bbr ;;
             5) submenu_run toggle_wifi_powersave ;;
-            6) submenu_run install_recommended_drivers ;;
+            6) submenu_run install_drivers_tested ;;
             7) submenu_run update_firmware ;;
+            8) submenu_run reinstall_system_drivers ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
