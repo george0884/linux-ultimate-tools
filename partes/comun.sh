@@ -4,7 +4,7 @@
 #@@ datos_version
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.5.0"
+UT_VERSION="3.5.1"
 UT_VERSION_DATE="2026-11-28"
 #@@ log
 
