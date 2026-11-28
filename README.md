@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
-[![Versión](https://img.shields.io/badge/Versión-3.5.1-7aa2f7.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Versión-3.5.2-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -66,7 +66,7 @@ el escritorio** y adaptan sus opciones:
 | **Edubuntu** | GNOME | Igual que Ubuntu |
 | **Ubuntu Kylin** | UKUI | Sin lista propia de apps: solo las comunes |
 | **Ubuntu Server** | sin escritorio | Kernel, GRUB, red, RAM, Snap y actualizaciones. **Opción 7: instalar un escritorio** |
-| **KDE neon** | KDE Plasma | Se actualiza (opción 1) con su comando oficial, `pkcon refresh` y `pkcon update`, en vez de `apt full-upgrade` |
+| **KDE neon** | KDE Plasma | Se reconoce como KDE neon (no como Kubuntu): se actualiza (opción 1) con su comando oficial, `pkcon refresh` y `pkcon update`, y no se le ofrece el PPA de Kubuntu |
 
 El sabor se detecta por su meta-paquete (`kubuntu-desktop`, `xubuntu-desktop`...). Si lo quitaste con la
 opción 12, se reconoce por su escritorio. Las opciones que no aplican a tu escritorio lo explican y no hacen nada.
@@ -973,7 +973,7 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 
 ## 🔖 Versiones
 
-Versión actual: **3.5.1** (2026-11-28). Todos los cambios, contados por versión, están en
+Versión actual: **3.5.2** (2026-11-28). Todos los cambios, contados por versión, están en
 [CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
 tu distribución); también aparece en la cabecera del menú.
 

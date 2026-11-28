@@ -133,6 +133,16 @@ detect_flavor() {
     else
         FLAVOR=server FLAVOR_NAME="Ubuntu Server" FLAVOR_META="" DESKTOP=none DESKTOP_NAME="sin escritorio"
     fi
+    # KDE neon tiene Plasma como Kubuntu, pero no es Kubuntu: sus propios repositorios (sin el PPA
+    # de Kubuntu), su meta-paquete (neon-desktop) y se actualiza con pkcon
+    if [ "$(os_release_value ID)" = neon ]; then
+        local variant
+        variant=$(os_release_value VARIANT)   # "User Edition", "Testing Edition"...
+        FLAVOR=neon FLAVOR_META=""
+        FLAVOR_NAME="KDE neon${variant:+ $variant}"
+        installed_pkgs neon-desktop | grep -qx neon-desktop && FLAVOR_META=neon-desktop
+        [ "$DESKTOP" = none ] && DESKTOP=kde DESKTOP_NAME="KDE Plasma"
+    fi
 }
 #@parte comun: has_desktop desktop_only
 

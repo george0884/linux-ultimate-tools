@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.2](#352--2026-11-28) | 2026-11-28 | KDE neon y actualización sin caché | 2 | | |
 | [3.5.1](#351--2026-11-28) | 2026-11-28 | Actualizar KDE neon | 2 | | |
 | [3.5.0](#350--2026-11-28) | 2026-11-28 | Kernel de kernel.org | 4 | | |
 | [3.4.0](#340--2026-11-27) | 2026-11-27 | Quitar periféricos y actualización al iniciar | 8 | | |
@@ -26,10 +27,19 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **105** | **59.153** | **3.784** |
+| **Total** | | | **107** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.2] — 2026-11-28
+
+**KDE neon y actualización sin caché.** Arreglos de la prueba en una PC real con KDE neon.
+
+2 cambios
+
+- Arreglo: la actualización al iniciar baja del último commit exacto de GitHub; antes, en los 5 minutos después de publicar una versión, GitHub podía entregar la anterior (se actualizaba a la 3.5.0 en vez de la 3.5.1)
+- Arreglo: KDE neon se reconoce como "KDE neon" (con su edición, p. ej. Testing Edition) y no como Kubuntu: no se le ofrece el PPA KDE Rolling Release de Kubuntu y su meta-paquete es `neon-desktop`
 
 ## [3.5.1] — 2026-11-28
 
