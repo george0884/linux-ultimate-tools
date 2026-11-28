@@ -3985,7 +3985,7 @@ if ! command -v sudo &> /dev/null; then
     exit 1
 fi
 
-echo "=== Arch Ultimate Tools (beta) - $(date) ===" > "$LOG_FILE"
+echo "=== Arch Ultimate Tools (beta) ${UT_VERSION} - $(date) ===" > "$LOG_FILE"
 
 # Pide la contraseña una sola vez y la mantiene activa mientras corre el script
 echo -e "${YELLOW}🔑 Se necesitan permisos de administrador${NC}"

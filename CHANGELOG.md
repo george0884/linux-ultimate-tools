@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.6.4](#364--2026-11-28) | 2026-11-28 | Adaptar los paquetes del kernel antes de instalar | 2 | | |
 | [3.6.3](#363--2026-11-28) | 2026-11-28 | Kernels de kernel.org en Ubuntu 24.04 | 1 | | |
 | [3.6.2](#362--2026-11-28) | 2026-11-28 | Comprobación de apt sin sudo | 1 | | |
 | [3.6.1](#361--2026-11-28) | 2026-11-28 | Kernel dañado y barra de avance | 2 | | |
@@ -38,10 +39,19 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **130** | **59.153** | **3.784** |
+| **Total** | | | **132** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.6.4] — 2026-11-28
+
+**Adaptar los paquetes del kernel antes de instalar.** Arreglo de la prueba en la PC real con KDE neon.
+
+2 cambios
+
+- Arreglo: los kernels de kernel.org seguían fallando con "run-parts: missing operand" en Ubuntu 24.04 y KDE neon. Ahora, antes de instalar, se adaptan los scripts de los paquetes (imagen y módulos) para que llamen a `run-parts` con una sola carpeta; el kernel y los módulos no se tocan (los 6958 archivos quedan idénticos, comprobado con las sumas del paquete original). El `run-parts` de transición queda como respaldo
+- El registro anota la versión del script en la primera línea, para saber cuál corrió
 
 ## [3.6.3] — 2026-11-28
 
