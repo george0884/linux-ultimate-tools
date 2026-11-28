@@ -447,6 +447,7 @@ con 0 no se pide "Presiona Enter".
 | 👀 | **1** Resumen rápido | Sabor, kernel, CPU, GPU, RAM, disco, tiempo encendido y temperatura. Sin internet ni instalar nada |
 | | **2** Fastfetch | El instalado o, si no lo tienes, uno **temporal** (descarga oficial que se borra al terminar) |
 | | **3** inxi | Igual: el instalado o el paquete oficial de tu distribución usado **sin instalar**. Nivel normal o muy detallado |
+| | **13** htop (procesos en vivo) | **htop**: qué consume CPU y memoria, con colores y por núcleo. Si no lo tienes, ofrece instalarlo (~400 KB); si no, usa `top` |
 | 🔩 | **4** CPU y RAM | Modelo, núcleos, frecuencias y **cada módulo de RAM** (tamaño, tipo, velocidad, ranuras libres) |
 | | **5** Gráfica | Modelo y **driver en uso**; avisa si una NVIDIA usa el driver libre |
 | | **6** Discos | Particiones, espacio y **salud SMART** (horas de uso, desgaste, errores; instala `smartmontools` si hace falta) |
@@ -456,7 +457,6 @@ con 0 no se pide "Presiona Enter".
 | | **10** USB | Dispositivos conectados |
 | 🩺 | **11** Diagnóstico | Servicios que fallaron, errores del último arranque, qué hace lento el arranque y procesos que más consumen |
 | | **12** Cambios del script | Kernel, GRUB, apps quitadas e instaladas y todos los ajustes aplicados |
-| | **13** Procesos en vivo | **htop**: qué consume CPU y memoria, con colores y por núcleo. Si no lo tienes, ofrece instalarlo (~400 KB); si no, usa `top` |
 | 🧰 | **14** Buscar | Escribe una palabra (nvidia, temp, wifi, error...) y la busca en **toda** la información |
 | | **15** Guardar informe | Todo en `~/informe-sistema-<fecha>.txt`, **sin datos personales** (números de serie, MAC, IP, UUID, usuario, equipo y Wi-Fi) |
 | | **16** Rendimiento | Velocidad de lectura y escritura del disco, latencia y velocidad de descarga |
