@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
-[![Versión](https://img.shields.io/badge/Versión-3.6.1-7aa2f7.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Versión-3.6.2-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -985,7 +985,7 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 
 ## 🔖 Versiones
 
-Versión actual: **3.6.1** (2026-11-28). Todos los cambios, contados por versión, están en
+Versión actual: **3.6.2** (2026-11-28). Todos los cambios, contados por versión, están en
 [CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
 tu distribución); también aparece en la cabecera del menú.
 

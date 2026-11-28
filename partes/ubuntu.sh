@@ -876,7 +876,10 @@ repair_broken_packages() {
 }
 
 # ¿apt tiene dependencias rotas? (lo que pide "apt --fix-broken install")
-apt_unmet() { ! LC_ALL=C apt-get check > /dev/null 2>&1; }
+# Sin sudo: con Debug::NoLocking no necesita el bloqueo de apt (sin eso, como usuario siempre "falla")
+apt_unmet() {
+    LC_ALL=C apt-get check -o Debug::NoLocking=1 2>&1 | grep -qiE 'unmet dependencies|fix-broken'
+}
 
 # ¿Está el archivo del kernel en /boot?
 kernel_file_ok() { [ -e "/boot/vmlinuz-$1" ]; }
