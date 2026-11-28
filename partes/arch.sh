@@ -3948,7 +3948,7 @@ first_run_notice() {
 #@parte comun: notice_save
 
 SCRIPT_FAMILY=arch
-#@parte comun: right_script_family datos_update update_version_newer update_check offer_right_script
+#@parte comun: right_script_family datos_update update_version_newer update_check update_with_git offer_right_script
 
 # ============================================================
 # INICIO
