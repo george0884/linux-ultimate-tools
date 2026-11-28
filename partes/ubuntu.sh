@@ -872,6 +872,96 @@ dpkg_broken_pkgs() {
     dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 2>/dev/null | awk 'substr($1, 2, 1) ~ /[UFHWt]/ { print $2 }'
 }
 
+# ------------------------------------------------------------
+# Instalar un kernel resolviendo las fallas: si apt falla, se busca la causa en su salida, se resuelve
+# y se sigue con la instalación (hasta 3 reintentos). Solo si no hay forma, quien llama vuelve atrás.
+# ------------------------------------------------------------
+
+KERNEL_DKMS_SKIPPED=""   # Controladores DKMS que no se pudieron compilar para el kernel nuevo
+
+# Espera a que otro programa (Discover, actualizaciones automáticas) suelte apt
+wait_for_apt_lock() {
+    local i=0
+    while sudo fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock &> /dev/null; do
+        [ $i -eq 0 ] && echo -e "${YELLOW}⏳ Otro programa está instalando paquetes; esperando a que termine...${NC}"
+        i=$((i + 1))
+        if [ $i -ge 60 ]; then
+            log_error "apt sigue ocupado después de 5 minutos: cierra Discover y vuelve a intentar"
+            return 1
+        fi
+        sleep 5
+    done
+    return 0
+}
+
+kernel_install_retry() {
+    local desc="$1" try start out madeflag=false
+    shift
+    KERNEL_DKMS_SKIPPED=""
+    for try in 1 2 3 4; do
+        start=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
+        if run_visible "$desc" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install "$@" \
+            && [ -z "$(dpkg_broken_pkgs)" ] && ! apt_unmet; then
+            $madeflag && sudo rm -f /etc/dkms/no-autoinstall
+            return 0
+        fi
+        [ "$try" -eq 4 ] && break
+        out=$(tail -n +"$((start + 1))" "$LOG_FILE" 2>/dev/null)
+        echo -e "\n${CYAN}🔧 Falló el intento $try: se busca la causa para resolverla y seguir...${NC}"
+        if grep -qiE 'dkms' <<< "$out" && [ -z "$KERNEL_DKMS_SKIPPED" ]; then
+            KERNEL_DKMS_SKIPPED=$(grep -oE 'failed for .*' <<< "$out" | head -n1 | sed 's/^failed for //')
+            KERNEL_DKMS_SKIPPED=${KERNEL_DKMS_SKIPPED:-controladores DKMS}
+            echo -e "   Causa: DKMS no pudo compilar ${BOLD}$KERNEL_DKMS_SKIPPED${NC} para el kernel nuevo"
+            echo -e "   ${GREEN}→ Se termina la instalación sin compilarlos (con tu kernel actual siguen funcionando)${NC}"
+            if [ ! -e /etc/dkms/no-autoinstall ]; then
+                sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+            fi
+            run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+        elif grep -qiE 'Could not get lock|Unable to acquire|is locked|dpkg was interrupted' <<< "$out"; then
+            echo -e "   Causa: otro programa estaba usando apt, o una instalación quedó interrumpida"
+            echo -e "   ${GREEN}→ Se espera a que termine y se completa lo pendiente${NC}"
+            wait_for_apt_lock || break
+            run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+        elif grep -qiE 'No space left|not enough free space|enough free space' <<< "$out"; then
+            echo -e "   Causa: falta espacio en el disco (suele ser /boot)"
+            echo -e "   ${GREEN}→ Se quitan los kernels viejos que ya no se usan y la caché de paquetes${NC}"
+            run "Falló autoremove" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" autoremove --purge
+            run "Falló apt clean" sudo apt-get clean
+        elif grep -qiE 'Failed to fetch|Temporary failure|Could not resolve|Connection (failed|timed out)|Hash Sum mismatch|File has unexpected size' <<< "$out"; then
+            echo -e "   Causa: falló la descarga de algún paquete"
+            echo -e "   ${GREEN}→ Se actualiza la lista de paquetes y se reintenta${NC}"
+            run "Falló 'apt update'" sudo apt-get update
+            sleep 3
+        elif grep -qiE 'unmet dependencies|fix-broken|held broken|dependency problems' <<< "$out" || apt_unmet || [ -n "$(dpkg_broken_pkgs)" ]; then
+            echo -e "   Causa: dependencias sin resolver"
+            echo -e "   ${GREEN}→ Se reparan (como apt --fix-broken install) y se sigue${NC}"
+            if [ ! -e /etc/dkms/no-autoinstall ] && grep -qiE 'dkms' <<< "$out"; then
+                sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+            fi
+            run "apt no pudo reparar las dependencias" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -f install
+        else
+            echo -e "   ${YELLOW}No se reconoce la causa (detalle en $LOG_FILE): no se puede resolver sola${NC}"
+            break
+        fi
+    done
+    $madeflag && sudo rm -f /etc/dkms/no-autoinstall
+    return 1
+}
+
+# Si el kernel nuevo quedó sin algún controlador DKMS (p. ej. NVIDIA), se pregunta si arrancarlo por defecto.
+# Devuelve 1 si se queda arrancando el kernel actual.
+kernel_default_ok() {
+    [ -n "$KERNEL_DKMS_SKIPPED" ] || return 0
+    echo -e "\n${YELLOW}⚠ El kernel nuevo quedó instalado, pero sin: ${BOLD}$KERNEL_DKMS_SKIPPED${NC}"
+    echo -e "${YELLOW}  Con ese kernel esos controladores no funcionan (si es NVIDIA, el video queda con el controlador libre).${NC}"
+    if confirm "${BLUE}¿Arrancar igual con el kernel nuevo por defecto?${NC}"; then
+        return 0
+    fi
+    grub_select "$(uname -r)"
+    echo -e "${GREEN}✓ Se queda arrancando tu kernel de siempre ($(uname -r)); el nuevo está en 'Opciones avanzadas' de GRUB${NC}"
+    return 1
+}
+
 # Comprobaciones antes de instalar un kernel de terceros
 check_custom_kernel_requirements() {
     if [ "$(dpkg --print-architecture)" != "amd64" ]; then
@@ -938,7 +1028,7 @@ finish_custom_kernel() {
         return 1
     fi
 
-    grub_select "$version"
+    kernel_default_ok && grub_select "$version"
 
     echo ""
     log_success "Kernel $label instalado: $version"
@@ -967,7 +1057,8 @@ install_liquorix_kernel() {
 
     echo -e "${BLUE}[2/4] Instalando kernel Liquorix (puede tardar varios minutos)...${NC}"
     kernel_txn_begin || return 1
-    apt_install linux-image-liquorix-amd64 linux-headers-liquorix-amd64 || { kernel_txn_rollback; return 1; }
+    kernel_install_retry "No se pudo instalar Liquorix" linux-image-liquorix-amd64 linux-headers-liquorix-amd64 \
+        || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/4] Eliminando XanMod si existe...${NC}"
     remove_kernel_family xanmod
@@ -1020,7 +1111,7 @@ install_xanmod_kernel() {
 
     echo -e "${BLUE}[2/5] Instalando kernel XanMod (puede tardar varios minutos)...${NC}"
     kernel_txn_begin || return 1
-    apt_install "$package" || { kernel_txn_rollback; return 1; }
+    kernel_install_retry "No se pudo instalar XanMod" "$package" || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/5] Eliminando Liquorix si existe...${NC}"
     remove_kernel_family liquorix
@@ -1314,8 +1405,7 @@ kernel_org_install() {
     if $nodkms && [ ! -e /etc/dkms/no-autoinstall ]; then
         sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
     fi
-    run_visible "No se pudo instalar el kernel $build" \
-        sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install "${files[@]}"
+    kernel_install_retry "No se pudo instalar el kernel $build" "${files[@]}"
     rc=$?
     $madeflag && sudo rm -f /etc/dkms/no-autoinstall
     kernel_org_cleanup "$tmp"
@@ -1327,7 +1417,7 @@ kernel_org_install() {
     fi
 
     echo -e "${BLUE}[4/4] Configurando GRUB...${NC}"
-    grub_select "$kver"
+    kernel_default_ok && grub_select "$kver"
     echo ""
     log_success "Kernel de kernel.org instalado: $kver"
     echo -e "${YELLOW}⚠ Reinicia para usarlo. Si no arranca, elige el kernel oficial en 'Opciones avanzadas' de GRUB${NC}"
@@ -1492,7 +1582,7 @@ switch_to_official_kernel() {
             fi ;;
     esac
     kernel_txn_begin || return 1
-    apt_install "${pkgs[@]}" || { kernel_txn_rollback; return 1; }
+    kernel_install_retry "No se pudo instalar el kernel oficial" "${pkgs[@]}" || { kernel_txn_rollback; return 1; }
 
     case $kind in
         ga) version=$(meta_kernel_version linux-image-generic) ;;
@@ -1525,7 +1615,8 @@ switch_to_official_kernel() {
     fi
 
     echo -e "${BLUE}[4/5] Limpiando kernels antiguos...${NC}"
-    if confirm "${BLUE}¿Dejar SOLO el kernel $version y borrar las demás versiones oficiales?${NC}"; then
+    # Si el nuevo quedó sin algún controlador, los anteriores se conservan como respaldo
+    if [ -z "$KERNEL_DKMS_SKIPPED" ] && confirm "${BLUE}¿Dejar SOLO el kernel $version y borrar las demás versiones oficiales?${NC}"; then
         for v in $(kernel_versions generic); do
             [ "$v" != "$version" ] && purge_official_kernel_version "$v"
         done
@@ -1533,6 +1624,7 @@ switch_to_official_kernel() {
     run "Falló la limpieza de kernels antiguos" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" autoremove --purge
 
     echo -e "${BLUE}[5/5] Configurando GRUB...${NC}"
+    kernel_default_ok || return 0
     rm -f "$GRUB_TEMP_PIN_FILE"
     if [ "$kind" = "specific" ]; then
         grub_select "$version" || return 1
