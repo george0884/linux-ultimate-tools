@@ -64,7 +64,7 @@ print_header() {
 AUTO_MODE=false
 ASSUME_YES=false
 ACTIVE_PROFILE=""
-#@parte comun: clear pause confirm submenu_run menu_pause run progress_wanted progress_draw run_with_progress set_terminal_title run_visible
+#@parte comun: clear pause confirm submenu_run menu_pause run show_command_errors progress_wanted progress_draw run_with_progress set_terminal_title run_visible
 
 # Las salidas que el script interpreta se piden en inglés: con el sistema en español,
 # apt-cache escribe "Candidato:" o "Depende:" en lugar de "Candidate:" o "Depends:",

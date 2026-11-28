@@ -41,7 +41,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.5.6"
+UT_VERSION="3.5.7"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -145,6 +145,7 @@ run() {
     local desc="$1"
     shift
     echo "[$(date '+%H:%M:%S')] \$ $*" >> "$LOG_FILE"
+    RUN_LOG_START=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
     # Instalar, quitar o actualizar paquetes puede tardar minutos: con terminal se muestra el avance
     if [ -t 1 ] && progress_wanted "$@"; then
         run_with_progress "$desc" "$@"
@@ -154,8 +155,20 @@ run() {
     local rc=$?
     if [ $rc -ne 0 ]; then
         log_error "$desc (código $rc). Detalles en: $LOG_FILE"
+        show_command_errors "$RUN_LOG_START"
     fi
     return $rc
+}
+
+# Muestra el motivo de una falla: las líneas de error que el comando dejó en el registro (desde la línea $1)
+show_command_errors() {
+    local lines
+    lines=$(tail -n +"$((${1:-0} + 1))" "$LOG_FILE" 2>/dev/null \
+        | grep -a -E '^(E|W): |^Error|^dpkg: |[Ee]rror!|unmet dependencies|Depends: |exited with return code|failed for|not installable|Sub-process|errors were encountered|Errors were encountered' \
+        | grep -av 'unsandboxed' | tail -n 8)
+    [ -n "$lines" ] || return 0
+    echo -e "${YELLOW}   Motivo:${NC}"
+    sed 's/^/     /' <<< "$lines"
 }
 
 # ¿El comando es apt-get o pacman cambiando paquetes? (no las consultas rápidas)
@@ -254,6 +267,7 @@ run_with_progress() {
     [ -n "$status" ] && rm -f "$status"
     if [ $rc -ne 0 ]; then
         log_error "$desc (código $rc). Detalles en: $LOG_FILE"
+        show_command_errors "${RUN_LOG_START:-0}"
     elif [ $((SECONDS - start)) -ge 3 ]; then
         echo -e "  ${GREEN}✓ Listo en $(printf '%02d:%02d' $(((SECONDS - start) / 60)) $(((SECONDS - start) % 60)))${NC}"
     fi
@@ -1799,6 +1813,40 @@ mainline_installed() {
     installed_pkgs 'linux-image-unsigned-*' | sed 's/^linux-image-unsigned-//' | grep -E -- '-[0-9]{6}(rc[0-9]+)?-generic$' | sort -V
 }
 
+# Controladores que se compilan con DKMS (nvidia, virtualbox...)
+dkms_modules() {
+    command -v dkms &> /dev/null || return 0
+    dkms status 2>/dev/null | sed -n 's|^\([^/,]*\)[/,].*|\1|p' | sort -u
+}
+
+# Paquetes de un kernel de kernel.org que quedaron a medio instalar (un intento que falló)
+kernel_org_broken() {
+    dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'linux-image-unsigned-*' 'linux-modules-*' 'linux-headers-*' 2>/dev/null \
+        | awk 'substr($1, 2, 1) ~ /[UFHWt]/ && $2 ~ /-[0-9][0-9][0-9][0-9][0-9][0-9](rc[0-9]+)?(-generic)?$/ { print $2 }'
+}
+
+# Quita esos paquetes: mientras estén, apt intenta terminarlos en cada instalación y falla (código 100)
+kernel_org_clean_broken() {
+    local broken=()
+    mapfile -t broken < <(kernel_org_broken | grep -v -- "$(uname -r)")
+    [ ${#broken[@]} -gt 0 ] || return 0
+    echo -e "${YELLOW}🧹 Quedó a medio instalar un kernel de kernel.org (de un intento que falló): se quita${NC}"
+    echo -e "   ${broken[*]}"
+    # Sin DKMS mientras se quita: fue lo que lo dejó a medias
+    local madeflag=false
+    if [ ! -e /etc/dkms/no-autoinstall ]; then
+        sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+    fi
+    run_visible "No se pudo quitar el kernel a medio instalar" sudo env DEBIAN_FRONTEND=noninteractive dpkg --purge "${broken[@]}"
+    $madeflag && sudo rm -f /etc/dkms/no-autoinstall
+    run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+    if [ -n "$(kernel_org_broken)" ]; then
+        log_error "Siguen paquetes a medio instalar: corre  sudo dpkg --purge ${broken[*]}"
+        return 1
+    fi
+    log_success "Listo: apt vuelve a funcionar normal"
+}
+
 # Borra la carpeta temporal de la descarga
 kernel_org_cleanup() {
     rm -f -- "${1:?}"/*.deb "${1:?}/CHECKSUMS"
@@ -1924,19 +1972,45 @@ kernel_org_install() {
         [[ "$d" == linux-headers-* ]] || noheaders+=("$tmp/$d")
     done
 
-    echo -e "${BLUE}[3/4] Instalando...${NC}"
-    if ! apt_install "${files[@]}"; then
-        # Los headers a veces piden bibliotecas más nuevas que las de tu Ubuntu: sin ellos el kernel
-        # arranca igual, pero no se pueden compilar módulos externos (NVIDIA, VirtualBox)
-        echo -e "${YELLOW}⚠ No se pudieron instalar los headers: se instala el kernel sin ellos (no compilan NVIDIA ni VirtualBox)${NC}"
-        if ! apt_install "${noheaders[@]}"; then
+    # Se simula antes (sin tocar nada): los headers de las compilaciones nuevas suelen pedir bibliotecas
+    # de una versión de Ubuntu más nueva (p. ej. libssl4), y sin headers DKMS no puede compilar
+    # controladores (NVIDIA, VirtualBox...): en ese caso dkms corta y toda la instalación falla
+    local sim need mods=() nodkms=false madeflag=false rc
+    if ! sim=$(LC_ALL=C apt-get install -s "${files[@]}" 2>&1); then
+        need=$(grep -oE 'Depends: [^ ]+ .*(not installable|not going to be installed)' <<< "$sim" | head -n1 | awk '{print $2}')
+        if ! sim=$(LC_ALL=C apt-get install -s "${noheaders[@]}" 2>&1); then
+            log_error "El kernel $build no se puede instalar en tu sistema (no se tocó nada):"
+            grep -A4 'unmet dependencies' <<< "$sim" | sed 's/^/     /'
             kernel_org_cleanup "$tmp"
             return 1
         fi
+        files=("${noheaders[@]}")
+        echo -e "${YELLOW}ℹ Sus headers piden ${need:-bibliotecas} de una versión de Ubuntu más nueva que la tuya: se instala sin headers${NC}"
+        mapfile -t mods < <(dkms_modules)
+        if [ ${#mods[@]} -gt 0 ]; then
+            echo -e "${YELLOW}⚠ Tienes controladores que se compilan con DKMS: ${BOLD}${mods[*]}${NC}"
+            echo -e "${YELLOW}  Sin headers no se pueden compilar para $build y harían fallar toda la instalación.${NC}"
+            echo -e "${YELLOW}  Se puede instalar igual salteando DKMS solo para este kernel: arranca, pero con $build${NC}"
+            echo -e "${YELLOW}  no van a funcionar ${mods[*]} (con tu kernel actual siguen igual).${NC}"
+            confirm "${BLUE}¿Instalar $build sin esos controladores?${NC}" || { kernel_org_cleanup "$tmp"; return 2; }
+            nodkms=true
+        fi
     fi
+
+    echo -e "${BLUE}[3/4] Instalando...${NC}"
+    if $nodkms && [ ! -e /etc/dkms/no-autoinstall ]; then
+        sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+    fi
+    run_visible "No se pudo instalar el kernel $build" \
+        sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install "${files[@]}"
+    rc=$?
+    $madeflag && sudo rm -f /etc/dkms/no-autoinstall
     kernel_org_cleanup "$tmp"
-    if [ ! -e "/boot/vmlinuz-$kver" ]; then
-        log_error "El kernel $kver no quedó instalado en /boot"
+    if [ $rc -ne 0 ] || [ ! -e "/boot/vmlinuz-$kver" ] || [ -n "$(kernel_org_broken)" ]; then
+        log_error "El kernel $build no se pudo instalar"
+        # Nunca dejarlo a medio instalar: si no, cada instalación con apt vuelve a fallar
+        kernel_org_clean_broken \
+            && echo -e "${GREEN}✓ No quedó nada a medio instalar: sigues con tu kernel ($(uname -r)) y apt funciona normal${NC}"
         return 1
     fi
 
@@ -2014,6 +2088,15 @@ purge_official_kernel_version() {
     [ ${#pkgs[@]} -gt 0 ] && purge_kernel_pkgs "${pkgs[@]}"
 }
 
+# "tu versión LTS de Ubuntu" o "tu versión de Ubuntu", sin el número (que cambia con los años)
+ubuntu_release_label() {
+    if [[ "$(os_release_value VERSION_ID)" =~ ^[0-9]*[02468]\.04$ ]]; then
+        echo "tu versión LTS de Ubuntu"
+    else
+        echo "tu versión de Ubuntu"
+    fi
+}
+
 # Muestra los kernels oficiales disponibles y deja la elección en OFFICIAL_VERSION
 choose_specific_kernel_version() {
     local versions v i=0 mark choice running
@@ -2034,7 +2117,7 @@ choose_specific_kernel_version() {
         [ "$v" = "$running" ] && mark=" ${GREEN}(en uso)${NC}"
         echo -e "  ${BLUE}[$(printf '%2s' "$i")]${NC} $v$mark"
     done
-    echo -e "\n${CYAN}ℹ Estas son las que publica Ubuntu $(os_release_value VERSION_ID). Las más nuevas de kernel.org${NC}"
+    echo -e "\n${CYAN}ℹ Estas son las que publica Ubuntu para $(ubuntu_release_label). Las más nuevas de kernel.org${NC}"
     echo -e "${CYAN}  (estables y de prueba) están en el menú del kernel, opción 6.${NC}"
     echo -e "\n  ${BLUE}[ 0]${NC} 🔙 Volver"
     echo ""
@@ -2057,9 +2140,9 @@ choose_official_kernel() {
     [ -n "$(available_pkgs "linux-generic-hwe-$release")" ] && hwe_available=true
 
     echo -e "${BLUE}📋 ¿Qué kernel oficial quieres usar?${NC}\n"
-    echo -e "  ${BLUE}1)${NC} LTS / GA (linux-generic): el kernel con el que salió Ubuntu $release, máxima estabilidad"
+    echo -e "  ${BLUE}1)${NC} LTS / GA (linux-generic): el kernel con el que salió $(ubuntu_release_label), máxima estabilidad"
     if $hwe_available; then
-        echo -e "  ${BLUE}2)${NC} HWE (linux-generic-hwe-$release): más reciente, mejor soporte para hardware nuevo"
+        echo -e "  ${BLUE}2)${NC} HWE: el más reciente que Ubuntu publica para $(ubuntu_release_label), mejor soporte para hardware nuevo"
     else
         echo -e "  ${BLUE}2)${NC} HWE ${YELLOW}(no disponible: solo existe en versiones LTS)${NC}"
     fi
@@ -13122,6 +13205,7 @@ if ubuntu_based; then
     detect_flavor
     boot_detect   # otra vez, ahora con el nombre del sabor
     cleanup_pending_kernels
+    kernel_org_clean_broken
 else
     BOOT_ONLY=true
     FLAVOR_NAME="$BOOT_DISTRO" DESKTOP_NAME="modo arranque"
