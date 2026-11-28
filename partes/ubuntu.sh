@@ -2704,6 +2704,71 @@ restore_removed_snaps() {
     rm -f "$REMOVED_SNAPS"
 }
 
+# ¿Firefox ya es el .deb de verdad (no el "puente" de Ubuntu que instala el snap)?
+firefox_deb_installed() {
+    local status
+    status=$(dpkg-query -W -f='${db:Status-Abbrev}|${Version}' firefox 2>/dev/null)
+    [[ "$status" == ?i* ]] && [[ "$status" != *snap* ]]
+}
+
+# Espacio que ocupan los snaps descargados (en MB)
+snap_space_mb() {
+    sudo du -smc /var/lib/snapd/snaps /var/lib/snapd/cache 2>/dev/null | awk 'END {print $1+0}'
+}
+
+# Muestra qué hay de Snap en el sistema. Devuelve 1 si no hay nada que eliminar.
+snap_detect_report() {
+    local apps=() bases=() pkgs=() line name ver notes found=false
+    echo -e "${CYAN}🔎 Snap en este sistema:${NC}"
+    mapfile -t pkgs < <(installed_pkgs snapd gnome-software-plugin-snap snapd-xdg-open plasma-discover-backend-snap)
+    if [ ${#pkgs[@]} -gt 0 ]; then
+        found=true
+        echo -e "  ${YELLOW}•${NC} Paquetes del sistema: ${pkgs[*]}"
+        if systemctl is-active --quiet snapd.service 2>/dev/null || systemctl is-active --quiet snapd.socket 2>/dev/null; then
+            echo -e "  ${YELLOW}•${NC} Servicio snapd: ${GREEN}activo${NC}"
+        else
+            echo -e "  ${YELLOW}•${NC} Servicio snapd: detenido"
+        fi
+    else
+        echo -e "  ${GREEN}✓${NC} El paquete snapd no está instalado"
+    fi
+    if command -v snap &> /dev/null; then
+        while read -r name ver _ _ _ notes; do
+            [ -n "$name" ] || continue
+            if [[ "$notes" =~ base|core|snapd ]] || [[ "$name" =~ ^(gtk-common-themes|gtk2-common-themes|gnome-[0-9]|kf[56]-|mesa-|bare$) ]]; then
+                bases+=("$name")
+            else
+                apps+=("$name ($ver)")
+            fi
+        done < <(snap list 2>/dev/null | awk 'NR>1')
+    fi
+    if [ ${#apps[@]} -gt 0 ]; then
+        found=true
+        echo -e "  ${YELLOW}•${NC} Apps snap (${#apps[@]}): se anotan para poder reinstalarlas con la opción 9"
+        printf '      %s\n' "${apps[@]}"
+    elif [ ${#pkgs[@]} -gt 0 ]; then
+        echo -e "  ${GREEN}✓${NC} No hay apps snap instaladas"
+    fi
+    if [ ${#bases[@]} -gt 0 ]; then
+        found=true
+        echo -e "  ${YELLOW}•${NC} Bases y bibliotecas snap (${#bases[@]}): ${bases[*]}"
+    fi
+    if [ -d /var/lib/snapd ] || [ -d /snap ]; then
+        found=true
+        echo -e "  ${YELLOW}•${NC} Espacio que ocupa: $(snap_space_mb) MB (/var/lib/snapd, /snap)"
+    fi
+    if [ -f /etc/apt/preferences.d/nosnap.pref ]; then
+        echo -e "  ${GREEN}✓${NC} La reinstalación de snapd ya está bloqueada"
+    fi
+    if firefox_deb_installed; then
+        echo -e "  ${GREEN}✓${NC} Firefox es .deb (no depende de Snap)"
+    elif snap list firefox &> /dev/null; then
+        echo -e "  ${YELLOW}•${NC} Firefox es snap: al quitar Snap se ofrece el .deb de Mozilla (se copian tus marcadores)"
+    fi
+    echo ""
+    $found
+}
+
 do_snap_removal() {
     echo -e "${RED}☢️ Iniciando eliminación nuclear de Snap...${NC}\n"
 
@@ -2715,7 +2780,9 @@ do_snap_removal() {
     record_removed_snaps
     local snap_name
     for snap_name in $(snap list 2>/dev/null | awk 'NR>1 && $NF !~ /base|core|snapd/ {print $1}'); do
-        run "No se pudo eliminar el snap $snap_name" sudo snap remove --purge "$snap_name"
+        if run "No se pudo eliminar el snap $snap_name" sudo snap remove --purge "$snap_name"; then
+            echo -e "  ${GREEN}✓ $snap_name${NC}"
+        fi
     done
 
     echo -e "${RED}[2/11] Eliminando snaps del sistema (bases y runtimes)...${NC}"
@@ -2723,7 +2790,7 @@ do_snap_removal() {
     local _
     for _ in 1 2 3; do
         for snap_name in $(snap list 2>/dev/null | awk 'NR>1 && $1 != "snapd" {print $1}'); do
-            sudo snap remove --purge "$snap_name" >> "$LOG_FILE" 2>&1
+            sudo snap remove --purge "$snap_name" >> "$LOG_FILE" 2>&1 && echo -e "  ${GREEN}✓ $snap_name${NC}"
         done
     done
     sudo snap remove --purge snapd >> "$LOG_FILE" 2>&1
@@ -2743,7 +2810,12 @@ do_snap_removal() {
     echo -e "${RED}[6/11] Eliminando paquetes snapd...${NC}"
     local snap_pkgs
     mapfile -t snap_pkgs < <(installed_pkgs snapd gnome-software-plugin-snap snapd-xdg-open plasma-discover-backend-snap)
-    [ ${#snap_pkgs[@]} -gt 0 ] && purge_and_record "${snap_pkgs[@]}"
+    if [ ${#snap_pkgs[@]} -gt 0 ]; then
+        echo -e "  ${snap_pkgs[*]}"
+        purge_and_record "${snap_pkgs[@]}"
+    else
+        echo -e "  ${GREEN}✓ No estaban instalados${NC}"
+    fi
     run "Falló autoremove" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" autoremove --purge
 
     echo -e "${RED}[7/11] Bloqueando reinstalación...${NC}"
@@ -2779,7 +2851,19 @@ nuclear_snap_removal() {
     echo "╚══════════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
 
-    echo -e "\n${RED}${BOLD}⚠️ ⚠️ ⚠️  ADVERTENCIA  ⚠️ ⚠️ ⚠️${NC}"
+    local before
+    if ! snap_detect_report; then
+        echo -e "${GREEN}✓ Snap no está instalado: no hay nada que eliminar${NC}"
+        if [ ! -f /etc/apt/preferences.d/nosnap.pref ] && confirm "${BLUE}¿Bloquear que se instale snapd en el futuro?${NC}"; then
+            printf 'Package: snapd\nPin: release *\nPin-Priority: -1\n' | sudo tee /etc/apt/preferences.d/nosnap.pref > /dev/null
+            log_success "Reinstalación de snapd bloqueada (la opción 9 lo desbloquea)"
+        fi
+        pause
+        return 0
+    fi
+    before=$(snap_space_mb)
+
+    echo -e "${RED}${BOLD}⚠️ ⚠️ ⚠️  ADVERTENCIA  ⚠️ ⚠️ ⚠️${NC}"
     echo -e "${RED}Esta acción es IRREVERSIBLE y eliminará COMPLETAMENTE Snap${NC}\n"
     echo -e "${RED}📋 Lo que se eliminará:${NC}"
     echo -e "  • Todos los paquetes snap instalados"
@@ -2802,11 +2886,26 @@ nuclear_snap_removal() {
 
     do_snap_removal
 
-    echo -e "${CYAN}ℹ Sin Snap, Ubuntu no trae Firefox. Puedes instalarlo como .deb del repositorio de Mozilla.${NC}"
-    echo -e "${CYAN}  Si lo instalas y después no lo quieres: opción 10 → Quitar programas.${NC}"
-    if confirm "${BLUE}¿Instalar Firefox .deb (repositorio oficial de Mozilla)?${NC}"; then
-        install_firefox_deb
+    if firefox_deb_installed; then
+        echo -e "${GREEN}✓ Firefox ya es .deb: no depende de Snap${NC}"
+    else
+        echo -e "${CYAN}ℹ Sin Snap no queda Firefox. Puedes instalarlo como .deb del repositorio de Mozilla.${NC}"
+        echo -e "${CYAN}  Si lo instalas y después no lo quieres: opción 10 → Quitar programas.${NC}"
+        if confirm "${BLUE}¿Instalar Firefox .deb (repositorio oficial de Mozilla)?${NC}"; then
+            install_firefox_deb
+        fi
     fi
+    echo ""
+    echo -e "${CYAN}📋 Resultado:${NC}"
+    if command -v snap &> /dev/null || installed_pkgs snapd | grep -qx snapd; then
+        echo -e "  ${RED}✗ snapd sigue instalado (revisa $LOG_FILE)${NC}"
+    else
+        echo -e "  ${GREEN}✓ snapd quitado y bloqueado${NC}"
+    fi
+    [ -d /var/lib/snapd ] || [ -d /snap ] \
+        && echo -e "  ${YELLOW}⚠ Quedaron carpetas de Snap${NC}" \
+        || echo -e "  ${GREEN}✓ Carpetas de Snap borradas: ${before:-0} MB liberados${NC}"
+    [ -s "$REMOVED_SNAPS" ] && echo -e "  ${GREEN}✓ Apps anotadas para reinstalar con la opción 9: $(cut -d' ' -f1 "$REMOVED_SNAPS" | tr '\n' ' ')${NC}"
     echo ""
     echo -e "${GREEN}✓ ¡ELIMINACIÓN NUCLEAR DE SNAP COMPLETADA!${NC}"
     echo -e "${YELLOW}⚠ Snap ha sido borrado y bloqueado (la opción 9 permite reinstalarlo)${NC}"
