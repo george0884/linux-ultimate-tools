@@ -809,6 +809,15 @@ kernel_txn_rollback() {
 # Al abrir el script: si una instalación anterior se cortó y dejó paquetes a medias (apt trabado),
 # se reparan solos. Si es un kernel, se termina sin DKMS y GRUB sigue con el kernel en uso.
 repair_broken_packages() {
+    local rc
+    runparts_shim_on > /dev/null
+    repair_broken_packages_steps
+    rc=$?
+    runparts_shim_off
+    return $rc
+}
+
+repair_broken_packages_steps() {
     local broken=() running madeflag=false sim removes=() p
     mapfile -t broken < <(dpkg_broken_pkgs)
     if [ ${#broken[@]} -eq 0 ] && ! apt_unmet; then
@@ -1227,6 +1236,68 @@ mainline_installed() {
     installed_pkgs 'linux-image-unsigned-*' | sed 's/^linux-image-unsigned-//' | grep -E -- '-[0-9]{6}(rc[0-9]+)?-generic$' | sort -V
 }
 
+# ------------------------------------------------------------
+# Los kernels de kernel.org de ahora se compilan para la Ubuntu más nueva: sus scripts llaman a run-parts
+# con dos carpetas (/etc/kernel/X.d y /usr/share/kernel/X.d), y el run-parts de versiones anteriores
+# solo acepta una ("missing operand"): la instalación falla antes de copiar nada.
+# Mientras se instala o se quita uno de esos kernels se pone un run-parts de transición que acepta
+# varias carpetas; al terminar se corrigen los scripts ya instalados de esos kernels y se saca.
+# ------------------------------------------------------------
+
+RUNPARTS_SHIM="/usr/local/sbin/run-parts"
+RUNPARTS_SHIM_MARK="run-parts de transición (Linux Ultimate Tools)"
+
+# ¿El run-parts del sistema acepta varias carpetas?
+runparts_multi_ok() {
+    ! LC_ALL=C /usr/bin/run-parts --list /nonexistent-a /nonexistent-b 2>&1 | grep -q 'missing operand'
+}
+
+runparts_shim_on() {
+    runparts_multi_ok && return 0
+    [ -e "$RUNPARTS_SHIM" ] && return 0
+    sudo tee "$RUNPARTS_SHIM" > /dev/null << 'EOF_SHIM'
+#!/bin/bash
+# run-parts de transición (Linux Ultimate Tools): acepta varias carpetas, como el de Ubuntu más nueva,
+# y las recorre de a una con el run-parts del sistema. Se quita al terminar de instalar el kernel.
+real=/usr/bin/run-parts
+[ -x "$real" ] || real=/bin/run-parts
+opts=() dirs=()
+for a in "$@"; do
+    case $a in
+        -*) opts+=("$a") ;;
+        /*) dirs+=("$a") ;;
+        *) exec "$real" "$@" ;;
+    esac
+done
+[ ${#dirs[@]} -le 1 ] && exec "$real" "$@"
+for d in "${dirs[@]}"; do
+    [ -d "$d" ] || continue
+    "$real" "${opts[@]}" "$d" || exit $?
+done
+exit 0
+EOF_SHIM
+    sudo chmod 755 "$RUNPARTS_SHIM"
+    echo -e "${CYAN}ℹ Este kernel se armó para una Ubuntu más nueva: se adapta su instalación a tu sistema${NC}"
+}
+
+# Corrige los scripts instalados de los kernels de kernel.org (para quitarlos o actualizarlos sin
+# el run-parts de transición) y lo saca
+runparts_shim_off() {
+    local f
+    for f in /var/lib/dpkg/info/linux-image-unsigned-*.preinst /var/lib/dpkg/info/linux-image-unsigned-*.postinst \
+             /var/lib/dpkg/info/linux-image-unsigned-*.prerm /var/lib/dpkg/info/linux-image-unsigned-*.postrm \
+             /var/lib/dpkg/info/linux-modules-*.postinst /var/lib/dpkg/info/linux-modules-*.postrm /usr/lib/linux/triggers/*; do
+        [ -f "$f" ] || continue
+        grep -q '/usr/share/kernel/[a-z]*\.d' "$f" || continue
+        # Sin /usr/share/kernel (como en Ubuntu 24.04) queda solo /etc/kernel/X.d, que es lo que usa el sistema
+        [ -d /usr/share/kernel ] && continue
+        sudo sed -i -E 's#(/etc/kernel/[a-z]+\.d) /usr/share/kernel/[a-z]+\.d#\1#g' "$f"
+    done
+    if [ -f "$RUNPARTS_SHIM" ] && grep -q "$RUNPARTS_SHIM_MARK" "$RUNPARTS_SHIM"; then
+        sudo rm -f "$RUNPARTS_SHIM"
+    fi
+}
+
 # Controladores que se compilan con DKMS (nvidia, virtualbox...)
 dkms_modules() {
     command -v dkms &> /dev/null || return 0
@@ -1252,8 +1323,10 @@ kernel_org_clean_broken() {
         sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
     fi
     # --force-remove-reinstreq: si dpkg lo marcó "necesita ser reinstalado", sin esto se niega a quitarlo
+    runparts_shim_on
     run "No se pudo quitar el kernel a medio instalar" sudo env DEBIAN_FRONTEND=noninteractive \
         dpkg --purge --force-remove-reinstreq --force-depends "${broken[@]}"
+    runparts_shim_off
     $madeflag && sudo rm -f /etc/dkms/no-autoinstall
     run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
     if [ -n "$(kernel_org_broken)" ]; then
@@ -1344,7 +1417,17 @@ kernel_org_menu() {
 }
 
 # Baja, comprueba e instala una compilación: kernel_org_install VERSIÓN DEBS...
+# (con el run-parts de transición puesto mientras dura, si el sistema lo necesita)
 kernel_org_install() {
+    local rc
+    runparts_shim_on
+    kernel_org_install_steps "$@"
+    rc=$?
+    runparts_shim_off
+    return $rc
+}
+
+kernel_org_install_steps() {
     local build="$1" tmp d want got kver files=() noheaders=()
     shift
     kver=$(mainline_kver "$@")
@@ -1476,7 +1559,11 @@ kernel_org_remove() {
         return 1
     fi
     confirm "${YELLOW}¿Quitar el kernel $v?${NC}" || return 2
-    purge_official_kernel_version "$v" || return 1
+    runparts_shim_on
+    purge_official_kernel_version "$v"
+    local prc=$?
+    runparts_shim_off
+    [ $prc -eq 0 ] || return 1
     if [ -e "/boot/vmlinuz-$v" ]; then
         log_error "$v sigue en /boot"
         return 1

@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.6.3](#363--2026-11-28) | 2026-11-28 | Kernels de kernel.org en Ubuntu 24.04 | 1 | | |
 | [3.6.2](#362--2026-11-28) | 2026-11-28 | Comprobación de apt sin sudo | 1 | | |
 | [3.6.1](#361--2026-11-28) | 2026-11-28 | Kernel dañado y barra de avance | 2 | | |
 | [3.6.0](#360--2026-11-28) | 2026-11-28 | Instalar kernels resolviendo las fallas | 3 | | |
@@ -37,10 +38,18 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **129** | **59.153** | **3.784** |
+| **Total** | | | **130** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.6.3] — 2026-11-28
+
+**Kernels de kernel.org en Ubuntu 24.04.** Causa real de la falla en la PC con KDE neon, encontrada en su registro.
+
+1 cambio
+
+- Arreglo: los kernels de kernel.org de ahora se compilan para la Ubuntu más nueva y sus scripts llaman a `run-parts` con dos carpetas; el `run-parts` de Ubuntu 24.04 (y KDE neon) solo acepta una ("missing operand") y la instalación fallaba antes de copiar nada. Mientras se instala o se quita uno de esos kernels se pone un `run-parts` de transición que acepta varias carpetas; al terminar se corrigen los scripts instalados de esos kernels (para poder quitarlos después sin él) y se saca. Probado con los scripts reales del paquete 7.3.6
 
 ## [3.6.2] — 2026-11-28
 
