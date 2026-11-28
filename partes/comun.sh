@@ -4,7 +4,7 @@
 #@@ datos_version
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.5.1"
+UT_VERSION="3.5.2"
 UT_VERSION_DATE="2026-11-28"
 #@@ log
 
@@ -2636,7 +2636,8 @@ right_script_family() {
 }
 #@@ datos_update
 # Repositorio oficial: de acá se buscan las versiones nuevas al iniciar
-UT_RAW_URL="https://raw.githubusercontent.com/george0884/linux-ultimate-tools/main"
+UT_REPO="george0884/linux-ultimate-tools"
+UT_RAW_URL="https://raw.githubusercontent.com/$UT_REPO/main"
 #@@ update_version_newer
 
 # ¿La versión $1 es más nueva que $2? (1.10.0 > 1.9.0)
@@ -2657,7 +2658,13 @@ update_check() {
     here=$(dirname "$self")
     tmp=$(mktemp -d) || return 0
     echo -ne "${CYAN}🔎 Buscando actualizaciones...${NC}\r"
-    if ! curl -fsSL --connect-timeout 4 -m 20 -o "$tmp/$name" "$UT_RAW_URL/$name" 2>/dev/null; then
+    # Lo publicado en "main" queda en caché hasta 5 minutos: se pregunta a GitHub cuál es el último
+    # commit y se baja de ese commit exacto (script, sumas y registro de cambios del mismo momento)
+    local sha base="$UT_RAW_URL"
+    sha=$(curl -fsSL --connect-timeout 4 -m 10 -H 'Accept: application/vnd.github.sha' \
+        "https://api.github.com/repos/$UT_REPO/commits/main" 2>/dev/null)
+    [[ "$sha" =~ ^[0-9a-f]{40}$ ]] && base="https://raw.githubusercontent.com/$UT_REPO/$sha"
+    if ! curl -fsSL --connect-timeout 4 -m 20 -o "$tmp/$name" "$base/$name" 2>/dev/null; then
         echo -ne "\033[2K"
         rm -f "$tmp/$name"; rmdir "$tmp"
         return 0
@@ -2670,7 +2677,7 @@ update_check() {
     fi
     echo -e "${GREEN}${BOLD}⬆ Hay una versión nueva: ${remote}${NC} ${GREEN}(tienes ${UT_VERSION})${NC}"
     # Qué cambió: los títulos y cambios de las versiones nuevas, del registro de cambios
-    curl -fsSL --connect-timeout 4 -m 15 "$UT_RAW_URL/CHANGELOG.md" 2>/dev/null | awk -v old="$UT_VERSION" '
+    curl -fsSL --connect-timeout 4 -m 15 "$base/CHANGELOG.md" 2>/dev/null | awk -v old="$UT_VERSION" '
         /^## \[/ { v = $2; gsub(/[][]/, "", v); if (v == old) exit; f = 1; print "  " $0; next }
         f && /^- / && n < 12 { print "    " $0; n++ }' | sed 's/^  ## /  /'
     # Con un perfil automático o sin terminal no se pregunta: solo se avisa
@@ -2691,7 +2698,7 @@ update_check() {
         return 0
     fi
     # Suma publicada del script nuevo (si no coincide, puede ser que GitHub aún no actualizó todo: unos minutos)
-    want=$(curl -fsSL --connect-timeout 4 -m 15 "$UT_RAW_URL/SHA256SUMS" 2>/dev/null | awk -v n="$name" '$2 == n || $2 == "*" n { print $1 }')
+    want=$(curl -fsSL --connect-timeout 4 -m 15 "$base/SHA256SUMS" 2>/dev/null | awk -v n="$name" '$2 == n || $2 == "*" n { print $1 }')
     sum=$(sha256sum "$tmp/$name" | cut -d' ' -f1)
     if [ -z "$want" ] || [ "$want" != "$sum" ]; then
         echo -e "${RED}❌ No se pudo comprobar la descarga (la suma SHA-256 no coincide): no se cambió nada.${NC}"
