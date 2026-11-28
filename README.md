@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
-[![Versión](https://img.shields.io/badge/Versión-3.4.0-7aa2f7.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Versión-3.5.0-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -605,6 +605,18 @@ script no lo toca y te avisa.
 | 2 | XanMod | Repositorio oficial de XanMod; elige x64v2/x64v3 según tu CPU |
 | 3 | Oficial de Ubuntu | Elige **LTS (GA)**, **HWE** o una **versión específica**; elimina Liquorix/XanMod |
 | 4 | Oficial + Livepatch | LTS o HWE + Ubuntu Pro (solo versiones LTS, requiere Snap) |
+| 6 | De kernel.org | Los **3 estables más nuevos** y el **de prueba (rc)**, como en la portada de kernel.org; se instalan las compilaciones para Ubuntu de `kernel.ubuntu.com/mainline`, solo amd64 |
+
+Dentro de la opción 6:
+
+- La lista sale de kernel.org (`releases.json`); si no responde, se calcula con las compilaciones de Ubuntu.
+- Si Ubuntu todavía no compiló la versión más nueva, avisa e instala la más nueva compilada de esa serie.
+- Cada paquete se **comprueba con su suma SHA-256** publicada antes de instalar nada.
+- Si los headers piden bibliotecas más nuevas que las de tu Ubuntu, instala el kernel sin ellos y avisa
+  (sin headers no compilan NVIDIA ni VirtualBox).
+- GRUB queda arrancando el kernel nuevo; el oficial sigue de respaldo. **Quitar** (última opción de la lista)
+  borra un kernel de kernel.org que no esté en uso.
+- No se actualizan solos: para pasar a una versión más nueva, vuelve a 14 → 6.
 
 Dentro de la opción 3:
 
@@ -614,7 +626,7 @@ Dentro de la opción 3:
 - Al final se puede dejar **solo esa versión**, borrando el resto de kernels oficiales.
 - El kernel en uso nunca se borra en caliente: se elimina al reiniciar y volver a abrir el script.
 
-- Liquorix y XanMod **no están firmados**: requieren **Secure Boot desactivado** (el script lo comprueba).
+- Liquorix, XanMod y los de kernel.org **no están firmados**: requieren **Secure Boot desactivado** (el script lo comprueba).
 - El kernel oficial se conserva siempre como respaldo. Si un kernel no arranca, elige el `generic`
   en *Opciones avanzadas* de GRUB (Shift/Esc al encender) y usa la opción 3.
 - Los errores se muestran en pantalla y el detalle completo queda en el log (`~/ubuntu-ultimate-tools.log`).
@@ -960,7 +972,7 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 
 ## 🔖 Versiones
 
-Versión actual: **3.4.0** (2026-11-27). Todos los cambios, contados por versión, están en
+Versión actual: **3.5.0** (2026-11-28). Todos los cambios, contados por versión, están en
 [CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
 tu distribución); también aparece en la cabecera del menú.
 
