@@ -39,7 +39,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.5.2"
+UT_VERSION="3.5.3"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -10717,9 +10717,10 @@ update_check() {
         rm -f "$tmp/$name"; rmdir "$tmp"
         return 0
     fi
+    # Copia hecha con git clone: se actualiza toda la copia con git pull (no solo este archivo)
     if [ -d "$here/.git" ]; then
-        echo -e "${YELLOW}ℹ Este script está en una copia de git: actualízalo con  git -C \"$here\" pull${NC}\n"
         rm -f "$tmp/$name"; rmdir "$tmp"
+        update_with_git "$here" "$self" "$remote"
         return 0
     fi
     read -r -p "¿Actualizar ahora? (s/n): " answer
@@ -10761,6 +10762,36 @@ update_check() {
         return 0
     fi
     echo -e "${GREEN}✅ Actualizado a ${remote} (la anterior quedó en $STATE_DIR/respaldos)${NC}\n"
+    sleep 1
+    UT_SIN_ACTUALIZAR=1 exec bash "$self" "${UT_ARGS[@]}"
+}
+
+# El script está en una copia de git (git clone): ofrece "git pull" y se vuelve a abrir.
+# Solo si no hay cambios tuyos en los archivos del repositorio y se puede avanzar sin mezclar (--ff-only).
+update_with_git() {
+    local here="$1" self="$2" remote="$3" answer now
+    echo -e "${CYAN}ℹ Este script está en una copia de git ($here): se actualiza con git pull${NC}"
+    if ! command -v git &> /dev/null; then
+        echo -e "${YELLOW}  git no está instalado: instálalo o baja el script de nuevo${NC}\n"
+        return 0
+    fi
+    if [ -n "$(git -C "$here" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+        echo -e "${YELLOW}  Tienes cambios propios en la copia: guárdalos y corre  git -C \"$here\" pull${NC}\n"
+        return 0
+    fi
+    read -r -p "¿Actualizar ahora con git pull? (s/n): " answer
+    if ! [[ "$answer" =~ ^([sSyY]|[sS][iIíÍ])$ ]]; then
+        echo -e "${YELLOW}ℹ Sigues con la ${UT_VERSION}; se vuelve a ofrecer la próxima vez${NC}\n"
+        return 0
+    fi
+    git -C "$here" pull --ff-only 2>&1 | tail -n 3
+    now=$(sed -n 's/^UT_VERSION="\(.*\)"$/\1/p' "$self" | head -n1)
+    if [ "$now" = "$UT_VERSION" ] || ! bash -n "$self" 2>/dev/null; then
+        echo -e "${RED}❌ git pull no trajo la versión nueva (¿la copia apunta a otra rama o hay cambios sin subir?).${NC}"
+        echo -e "${YELLOW}   Revisa con  git -C \"$here\" status  y sigue con la ${UT_VERSION}${NC}\n"
+        return 0
+    fi
+    echo -e "${GREEN}✅ Actualizado a ${now:-$remote} con git pull${NC}\n"
     sleep 1
     UT_SIN_ACTUALIZAR=1 exec bash "$self" "${UT_ARGS[@]}"
 }
