@@ -39,7 +39,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.6.3"
+UT_VERSION="3.6.4"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -10879,7 +10879,7 @@ if ! command -v sudo &> /dev/null; then
     exit 1
 fi
 
-echo "=== Arch Ultimate Tools (beta) - $(date) ===" > "$LOG_FILE"
+echo "=== Arch Ultimate Tools (beta) ${UT_VERSION} - $(date) ===" > "$LOG_FILE"
 
 # Pide la contraseña una sola vez y la mantiene activa mientras corre el script
 echo -e "${YELLOW}🔑 Se necesitan permisos de administrador${NC}"

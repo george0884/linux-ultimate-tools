@@ -41,7 +41,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.6.3"
+UT_VERSION="3.6.4"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -2176,8 +2176,31 @@ kernel_org_clean_broken() {
 
 # Borra la carpeta temporal de la descarga
 kernel_org_cleanup() {
+    rm -rf -- "${1:?}/adaptar"
     rm -f -- "${1:?}"/*.deb "${1:?}/CHECKSUMS"
     rmdir -- "${1:?}" 2>/dev/null
+}
+
+# Adapta los scripts de los paquetes al run-parts de este sistema: donde llaman a run-parts con
+# /etc/kernel/X.d y /usr/share/kernel/X.d queda solo /etc/kernel/X.d (la que usa Ubuntu 24.04).
+# Solo cambian esos scripts; el kernel y los módulos no se tocan (ya se comprobaron con SHA-256).
+kernel_org_adapt_debs() {
+    local tmp="$1" d f w
+    shift
+    w="$tmp/adaptar"
+    for d in "$@"; do
+        rm -rf -- "${w:?}"
+        dpkg-deb -R "$d" "$w" 2>> "$LOG_FILE" || return 1
+        if grep -qs '/usr/share/kernel/[a-z]*\.d' "$w"/DEBIAN/*; then
+            for f in "$w"/DEBIAN/preinst "$w"/DEBIAN/postinst "$w"/DEBIAN/prerm "$w"/DEBIAN/postrm; do
+                [ -f "$f" ] && sed -i -E 's#(/etc/kernel/[a-z]+\.d) /usr/share/kernel/[a-z]+\.d#\1#g' "$f"
+            done
+            dpkg-deb --root-owner-group -Zzstd -z1 -b "$w" "$d.nuevo" >> "$LOG_FILE" 2>&1 || return 1
+            mv -f "$d.nuevo" "$d"
+            echo -e "  ${GREEN}✓ Adaptado: $(basename "$d")${NC}"
+        fi
+    done
+    rm -rf -- "${w:?}"
 }
 
 kernel_org_menu() {
@@ -2313,6 +2336,15 @@ kernel_org_install_steps() {
     # de una versión de Ubuntu más nueva (p. ej. libssl4), y sin headers DKMS no puede compilar
     # controladores (NVIDIA, VirtualBox...): en ese caso dkms corta y toda la instalación falla
     local sim need mods=() nodkms=false madeflag=false rc
+    # Compilado para una Ubuntu más nueva: sus scripts usan run-parts con dos carpetas
+    if ! runparts_multi_ok; then
+        echo -e "${CYAN}ℹ Este kernel se armó para una Ubuntu más nueva: se adaptan sus scripts de instalación a tu sistema${NC}"
+        if ! kernel_org_adapt_debs "$tmp" "${files[@]}"; then
+            log_error "No se pudieron adaptar los paquetes: no se instala nada"
+            kernel_org_cleanup "$tmp"
+            return 1
+        fi
+    fi
     # apt tiene que estar sano antes de simular (si no, todo da "unmet dependencies")
     if ! repair_broken_packages; then
         log_error "apt tiene paquetes rotos que no se pudieron reparar: no se instala nada"
@@ -13539,7 +13571,7 @@ first_run_notice
 update_check
 offer_right_script
 
-echo "=== Ubuntu Ultimate Tools - $(date) ===" > "$LOG_FILE"
+echo "=== Ubuntu Ultimate Tools ${UT_VERSION} - $(date) ===" > "$LOG_FILE"
 
 # Pide la contraseña una sola vez y la mantiene activa mientras corre el script
 echo -e "${YELLOW}🔑 Se necesitan permisos de administrador${NC}"
