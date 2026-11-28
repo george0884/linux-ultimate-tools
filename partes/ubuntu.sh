@@ -731,6 +731,116 @@ XANMOD_LIST="/etc/apt/sources.list.d/xanmod-release.list"
 #@parte apt: kernel_versions
 #@parte arranque: secure_boot_enabled
 
+# ------------------------------------------------------------
+# Vuelta atrás al instalar un kernel: si algo falla, se quita lo que entró en ese intento
+# (aunque haya quedado a medio instalar) y GRUB vuelve a arrancar el kernel que estaba por defecto.
+# Así nunca queda apt trabado ni la PC arrancando un kernel que no funciona.
+# ------------------------------------------------------------
+
+KERNEL_TXN_PKGS=""
+KERNEL_TXN_SAVED=""
+KERNEL_TXN_DEFAULT=""
+
+# Paquetes de kernel presentes (instalados o a medias)
+kernel_pkgs_present() {
+    dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'linux-image-*' 'linux-modules-*' 'linux-headers-*' 'linux-generic*' 2>/dev/null \
+        | awk 'substr($1, 2, 1) !~ /[nc]/ { print $2 }' | sort -u
+}
+
+# Antes de instalar: anota los kernels que hay y a cuál arranca GRUB
+kernel_txn_begin() {
+    KERNEL_TXN_PKGS=$(kernel_pkgs_present)
+    KERNEL_TXN_SAVED=$(sudo grub-editenv list 2>/dev/null | sed -n 's/^saved_entry=//p')
+    KERNEL_TXN_DEFAULT=$(sed -n 's/^GRUB_DEFAULT=//p' /etc/default/grub 2>/dev/null | head -n1)
+}
+
+# Algo falló: se deja todo como estaba antes de kernel_txn_begin
+kernel_txn_rollback() {
+    local new=() left=() running madeflag=false
+    running=$(uname -r)
+    echo -e "\n${YELLOW}↩ Volviendo a como estaba antes (kernel $running)...${NC}"
+    # Sin DKMS mientras se arregla: suele ser lo que hizo fallar (controladores que no compilan)
+    if [ ! -e /etc/dkms/no-autoinstall ]; then
+        sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+    fi
+    mapfile -t new < <(kernel_pkgs_present | comm -23 - <(printf '%s\n' "$KERNEL_TXN_PKGS") | grep -v -- "$running")
+    if [ ${#new[@]} -gt 0 ]; then
+        echo -e "   Se quita lo que entró en este intento: ${new[*]}"
+        # Lo que otro paquete necesita no se puede quitar: se resuelve en el paso siguiente
+        # shellcheck disable=SC2024  # el registro es del usuario: se escribe sin sudo
+        sudo env DEBIAN_FRONTEND=noninteractive dpkg --purge "${new[@]}" >> "$LOG_FILE" 2>&1
+    fi
+    # Lo que no se pudo quitar (otro paquete lo necesita) se termina de configurar, sin DKMS
+    run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+    [ -n "$(dpkg_broken_pkgs)" ] && run "apt no pudo reparar las dependencias" \
+        sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -f install
+    $madeflag && sudo rm -f /etc/dkms/no-autoinstall
+    mapfile -t left < <(kernel_pkgs_present | comm -23 - <(printf '%s\n' "$KERNEL_TXN_PKGS") | grep -v -- "$running")
+
+    # GRUB: la misma configuración que antes y arrancando el kernel de antes
+    if [ -n "$KERNEL_TXN_DEFAULT" ] && ! grep -qx "GRUB_DEFAULT=$KERNEL_TXN_DEFAULT" /etc/default/grub; then
+        sudo sed -i "s|^GRUB_DEFAULT=.*|GRUB_DEFAULT=$KERNEL_TXN_DEFAULT|" /etc/default/grub
+    fi
+    run "Falló update-grub" sudo update-grub
+    if [ ${#left[@]} -gt 0 ]; then
+        # Quedó un kernel nuevo que no se pudo quitar: GRUB se fija en el que estabas usando
+        grub_select "$running"
+        echo -e "${YELLOW}ℹ No se pudo quitar ${left[*]} (lo necesita otro paquete): quedó instalado sin${NC}"
+        echo -e "${YELLOW}  controladores DKMS, pero GRUB arranca tu kernel de siempre ($running)${NC}"
+    elif [ -n "$KERNEL_TXN_SAVED" ]; then
+        run "No se pudo fijar el kernel por defecto" sudo grub-set-default "$KERNEL_TXN_SAVED"
+    else
+        sudo grub-editenv - unset saved_entry 2>/dev/null
+    fi
+
+    if [ -n "$(dpkg_broken_pkgs)" ] || ! kernel_file_ok "$running"; then
+        log_error "No se pudo dejar todo como antes. Quedó pendiente: $(dpkg_broken_pkgs | tr '\n' ' ')"
+        echo -e "${YELLOW}   Tu kernel actual ($running) sigue instalado; detalle en $LOG_FILE${NC}"
+        return 1
+    fi
+    log_success "Listo: arranca con el kernel que tenías ($running) y apt funciona normal"
+}
+
+# Al abrir el script: si una instalación anterior se cortó y dejó paquetes a medias (apt trabado),
+# se reparan solos. Si es un kernel, se termina sin DKMS y GRUB sigue con el kernel en uso.
+repair_broken_packages() {
+    local broken=() running madeflag=false
+    mapfile -t broken < <(dpkg_broken_pkgs)
+    [ ${#broken[@]} -gt 0 ] || return 0
+    running=$(uname -r)
+    echo -e "${YELLOW}🩹 Una instalación anterior quedó cortada y dejó paquetes a medias: se reparan${NC}"
+    echo -e "   ${broken[*]}"
+    # Los de kernel.org a medias se quitan (no se pueden terminar sin headers)
+    kernel_org_clean_broken > /dev/null
+    # shellcheck disable=SC2024  # el registro es del usuario: se escribe sin sudo
+    sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a >> "$LOG_FILE" 2>&1
+    if [ -n "$(dpkg_broken_pkgs)" ] && printf '%s\n' "${broken[@]}" | grep -q '^linux-'; then
+        # Un kernel que no termina por DKMS: se termina sin compilar controladores para él
+        if [ ! -e /etc/dkms/no-autoinstall ]; then
+            sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+        fi
+        run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
+        $madeflag && sudo rm -f /etc/dkms/no-autoinstall
+        grub_select "$running"
+    fi
+    [ -n "$(dpkg_broken_pkgs)" ] && run "apt no pudo reparar las dependencias" \
+        sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -f install
+    if [ -n "$(dpkg_broken_pkgs)" ]; then
+        log_error "No se pudo reparar: $(dpkg_broken_pkgs | tr '\n' ' ')(detalle en $LOG_FILE)"
+        return 1
+    fi
+    log_success "Reparado: apt funciona normal y arranca tu kernel de siempre ($running)"
+    sleep 2
+}
+
+# ¿Está el archivo del kernel en /boot?
+kernel_file_ok() { [ -e "/boot/vmlinuz-$1" ]; }
+
+# Paquetes a medio instalar o configurar en todo el sistema
+dpkg_broken_pkgs() {
+    dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 2>/dev/null | awk 'substr($1, 2, 1) ~ /[UFHWt]/ { print $2 }'
+}
+
 # Comprobaciones antes de instalar un kernel de terceros
 check_custom_kernel_requirements() {
     if [ "$(dpkg --print-architecture)" != "amd64" ]; then
@@ -825,13 +935,14 @@ install_liquorix_kernel() {
     apt_update force || return 1
 
     echo -e "${BLUE}[2/4] Instalando kernel Liquorix (puede tardar varios minutos)...${NC}"
-    apt_install linux-image-liquorix-amd64 linux-headers-liquorix-amd64 || return 1
+    kernel_txn_begin
+    apt_install linux-image-liquorix-amd64 linux-headers-liquorix-amd64 || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/4] Eliminando XanMod si existe...${NC}"
     remove_kernel_family xanmod
 
     echo -e "${BLUE}[4/4] Configurando GRUB...${NC}"
-    finish_custom_kernel liquorix "Liquorix"
+    finish_custom_kernel liquorix "Liquorix" || { kernel_txn_rollback; return 1; }
 }
 
 install_xanmod_kernel() {
@@ -877,7 +988,8 @@ install_xanmod_kernel() {
     fi
 
     echo -e "${BLUE}[2/5] Instalando kernel XanMod (puede tardar varios minutos)...${NC}"
-    apt_install "$package" || return 1
+    kernel_txn_begin
+    apt_install "$package" || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/5] Eliminando Liquorix si existe...${NC}"
     remove_kernel_family liquorix
@@ -888,7 +1000,7 @@ install_xanmod_kernel() {
     [ ${#zen_pkgs[@]} -gt 0 ] && apt_purge "${zen_pkgs[@]}"
 
     echo -e "${BLUE}[5/5] Configurando GRUB...${NC}"
-    finish_custom_kernel xanmod "XanMod"
+    finish_custom_kernel xanmod "XanMod" || { kernel_txn_rollback; return 1; }
 }
 
 # ------------------------------------------------------------
@@ -1161,6 +1273,7 @@ kernel_org_install() {
     fi
 
     echo -e "${BLUE}[3/4] Instalando...${NC}"
+    kernel_txn_begin
     if $nodkms && [ ! -e /etc/dkms/no-autoinstall ]; then
         sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
     fi
@@ -1172,8 +1285,7 @@ kernel_org_install() {
     if [ $rc -ne 0 ] || [ ! -e "/boot/vmlinuz-$kver" ] || [ -n "$(kernel_org_broken)" ]; then
         log_error "El kernel $build no se pudo instalar"
         # Nunca dejarlo a medio instalar: si no, cada instalación con apt vuelve a fallar
-        kernel_org_clean_broken \
-            && echo -e "${GREEN}✓ No quedó nada a medio instalar: sigues con tu kernel ($(uname -r)) y apt funciona normal${NC}"
+        kernel_txn_rollback
         return 1
     fi
 
@@ -1342,7 +1454,8 @@ switch_to_official_kernel() {
                 return 1
             fi ;;
     esac
-    apt_install "${pkgs[@]}" || return 1
+    kernel_txn_begin
+    apt_install "${pkgs[@]}" || { kernel_txn_rollback; return 1; }
 
     case $kind in
         ga) version=$(meta_kernel_version linux-image-generic) ;;
@@ -1350,6 +1463,7 @@ switch_to_official_kernel() {
     esac
     if [ -z "$version" ] || [ ! -e "/boot/vmlinuz-$version" ]; then
         log_error "No se encontró el kernel oficial en /boot; no se eliminarán los demás kernels"
+        kernel_txn_rollback
         return 1
     fi
     log_success "Kernel oficial disponible: $version"
@@ -5019,8 +5133,8 @@ boot_detect
 if ubuntu_based; then
     detect_flavor
     boot_detect   # otra vez, ahora con el nombre del sabor
+    repair_broken_packages
     cleanup_pending_kernels
-    kernel_org_clean_broken
 else
     BOOT_ONLY=true
     FLAVOR_NAME="$BOOT_DISTRO" DESKTOP_NAME="modo arranque"
