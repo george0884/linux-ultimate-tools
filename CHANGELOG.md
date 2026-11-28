@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.6](#356--2026-11-28) | 2026-11-28 | Snap: qué hay antes de eliminar | 3 | | |
 | [3.5.5](#355--2026-11-28) | 2026-11-28 | Kernel de kernel.org más a la vista | 1 | | |
 | [3.5.4](#354--2026-11-28) | 2026-11-28 | KDE neon: respaldo con apt | 2 | | |
 | [3.5.3](#353--2026-11-28) | 2026-11-28 | Actualizar copias de git | 1 | | |
@@ -30,10 +31,20 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **111** | **59.153** | **3.784** |
+| **Total** | | | **114** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.6] — 2026-11-28
+
+**Snap: qué hay antes de eliminar.** Pedido de la prueba en una PC real con KDE neon.
+
+3 cambios
+
+- Eliminación nuclear de Snap (5): antes de las advertencias muestra lo detectado: paquetes y servicio snapd, cada app snap con su versión, bases y bibliotecas, espacio que ocupa, si ya está bloqueado y si Firefox es .deb o snap. Si no hay Snap, lo dice y solo ofrece bloquearlo
+- Durante la eliminación se ve cada snap y paquete quitado, y al final un resultado: snapd quitado, MB liberados y apps anotadas para reinstalar
+- Si Firefox ya es .deb (como en KDE neon), no se ofrece instalarlo de nuevo
 
 ## [3.5.5] — 2026-11-28
 
