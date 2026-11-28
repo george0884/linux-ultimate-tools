@@ -39,7 +39,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.6.4"
+UT_VERSION="3.6.5"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -8976,6 +8976,7 @@ sysinfo_menu() {
         echo -e "  ${CYAN} 1)${NC} Resumen rápido (sin internet ni instalar nada)"
         echo -e "  ${CYAN} 2)${NC} Fastfetch (el instalado o uno temporal)"
         echo -e "  ${CYAN} 3)${NC} inxi: informe completo (el instalado o uno temporal)"
+        echo -e "  ${CYAN}13)${NC} htop: procesos en vivo (qué consume CPU y memoria)"
         echo -e "\n${CYAN}🔩 Hardware en detalle:${NC}"
         echo -e "  ${CYAN} 4)${NC} CPU y memoria RAM (cada módulo y ranuras libres)"
         echo -e "  ${CYAN} 5)${NC} Tarjeta gráfica y driver en uso"
@@ -8987,7 +8988,6 @@ sysinfo_menu() {
         echo -e "\n${CYAN}🩺 Estado del sistema:${NC}"
         echo -e "  ${CYAN}11)${NC} Diagnóstico: servicios fallidos, errores, arranque y procesos"
         echo -e "  ${CYAN}12)${NC} Qué cambió este script"
-        echo -e "  ${CYAN}13)${NC} Procesos en vivo con htop (qué consume CPU y memoria)"
         echo -e "\n${CYAN}🧰 Herramientas:${NC}"
         echo -e "  ${CYAN}14)${NC} Buscar en toda la información"
         echo -e "  ${CYAN}15)${NC} Guardar informe completo para compartir (sin datos personales)"
