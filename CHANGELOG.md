@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.8](#358--2026-11-28) | 2026-11-28 | Si falla un kernel, vuelve solo al de antes | 3 | | |
 | [3.5.7](#357--2026-11-28) | 2026-11-28 | Kernel de kernel.org sin dejar apt trabado | 4 | | |
 | [3.5.6](#356--2026-11-28) | 2026-11-28 | Snap: qué hay antes de eliminar | 3 | | |
 | [3.5.5](#355--2026-11-28) | 2026-11-28 | Kernel de kernel.org más a la vista | 1 | | |
@@ -32,10 +33,20 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **118** | **59.153** | **3.784** |
+| **Total** | | | **121** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.8] — 2026-11-28
+
+**Si falla un kernel, vuelve solo al de antes.** Pedido de la prueba en una PC real con KDE neon.
+
+3 cambios
+
+- Si falla la instalación de cualquier kernel (Liquorix, XanMod, oficial, HWE o kernel.org), el script vuelve solo a como estaba: quita lo que entró en ese intento (aunque haya quedado a medias), repara apt y GRUB vuelve a arrancar el kernel que estaba por defecto
+- Si un kernel nuevo no se puede quitar porque otro paquete lo necesita, se termina de configurar sin DKMS y GRUB queda fijo en el kernel que estabas usando
+- Al abrir el script, si una instalación anterior quedó cortada y dejó paquetes a medias (apt trabado, código 100 en todo), se repara sola
 
 ## [3.5.7] — 2026-11-28
 
