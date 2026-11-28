@@ -1420,18 +1420,46 @@ pkcon_ok() {
     return "$rc"
 }
 
+# KDE neon con apt (la otra forma que acepta neon). Sirve cuando pkcon no puede: PackageKit nunca
+# quita paquetes, y a veces hay que quitar o volver a la versión de neon alguno (p. ej. packagekit-tools
+# viejo que exige un packagekit anterior). Muestra antes qué se quita o vuelve atrás y pide confirmación.
+neon_apt_upgrade() {
+    local sim removed=() downgraded=() opts=()
+    run_visible "Falló 'apt update'" sudo apt-get update || return 1
+    APT_LISTS_FRESH=true
+    sim=$(LC_ALL=C apt-get -s full-upgrade 2>&1)
+    mapfile -t removed < <(awk '/^The following packages will be REMOVED:/ {f=1; next} /^[^ ]/ {f=0} f' <<< "$sim" | tr ' ' '\n' | sed '/^$/d; s/\*$//')
+    mapfile -t downgraded < <(awk '/^The following packages will be DOWNGRADED:/ {f=1; next} /^[^ ]/ {f=0} f' <<< "$sim" | tr ' ' '\n' | sed '/^$/d')
+    if [ ${#removed[@]} -gt 0 ]; then
+        echo -e "${YELLOW}⚠ Para completar la actualización se QUITAN: ${removed[*]}${NC}"
+    fi
+    if [ ${#downgraded[@]} -gt 0 ]; then
+        echo -e "${YELLOW}ℹ Vuelven a la versión de KDE neon (neon las fija a propósito): ${downgraded[*]}${NC}"
+        opts=(--allow-downgrades)
+    fi
+    if [ ${#removed[@]} -gt 0 ] || [ ${#downgraded[@]} -gt 0 ]; then
+        confirm "${GREEN}¿Seguir con la actualización?${NC}" || return 1
+    fi
+    run_visible "Falló la actualización (apt full-upgrade)" \
+        sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" "${opts[@]}" full-upgrade
+}
+
 do_system_update() {
     if is_kde_neon; then
-        echo -e "${GREEN}[1/4] KDE neon: actualizando la lista de paquetes (pkcon refresh)...${NC}"
-        if ! command -v pkcon &> /dev/null; then
-            run_visible "Falló 'apt update'" sudo apt-get update || return 1
-            apt_install packagekit-tools || return 1
-        fi
-        run_visible "Falló 'pkcon refresh'" pkcon_ok refresh || return 1
-        APT_LISTS_FRESH=true   # pkcon refresh también actualiza las listas de apt
+        if command -v pkcon &> /dev/null; then
+            echo -e "${GREEN}[1/4] KDE neon: actualizando la lista de paquetes (pkcon refresh)...${NC}"
+            run_visible "Falló 'pkcon refresh'" pkcon_ok refresh || return 1
+            APT_LISTS_FRESH=true   # pkcon refresh también actualiza las listas de apt
 
-        echo -e "${GREEN}[2/4] KDE neon: actualizando el sistema (pkcon update)...${NC}"
-        run_visible "Falló la actualización (pkcon update)" pkcon_ok update -y || return 1
+            echo -e "${GREEN}[2/4] KDE neon: actualizando el sistema (pkcon update)...${NC}"
+            if ! run_visible "Falló la actualización (pkcon update)" pkcon_ok update -y; then
+                echo -e "${YELLOW}↪ pkcon no pudo resolver las dependencias: se completa con apt full-upgrade${NC}"
+                neon_apt_upgrade || return 1
+            fi
+        else
+            echo -e "${GREEN}[1-2/4] KDE neon: actualizando con apt (pkcon no está instalado)...${NC}"
+            neon_apt_upgrade || return 1
+        fi
     else
         echo -e "${GREEN}[1/4] Actualizando lista de paquetes...${NC}"
         run_visible "Falló 'apt update'" sudo apt-get update || return 1
@@ -1460,7 +1488,7 @@ system_update() {
     echo -e "\n${GREEN}📋 Se ejecutará:${NC}"
     if is_kde_neon; then
         echo -e "  • sudo pkcon refresh      ${CYAN}(KDE neon se actualiza con PackageKit, como indica su documentación)${NC}"
-        echo -e "  • sudo pkcon update -y"
+        echo -e "  • sudo pkcon update -y   ${CYAN}(si no puede, sudo apt full-upgrade mostrando antes qué cambia)${NC}"
     else
         echo -e "  • sudo apt update"
         echo -e "  • sudo apt full-upgrade -y"
