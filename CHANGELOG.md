@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.6.2](#362--2026-11-28) | 2026-11-28 | Comprobación de apt sin sudo | 1 | | |
 | [3.6.1](#361--2026-11-28) | 2026-11-28 | Kernel dañado y barra de avance | 2 | | |
 | [3.6.0](#360--2026-11-28) | 2026-11-28 | Instalar kernels resolviendo las fallas | 3 | | |
 | [3.5.9](#359--2026-11-28) | 2026-11-28 | Reparar apt con dependencias rotas | 2 | | |
@@ -36,10 +37,18 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **128** | **59.153** | **3.784** |
+| **Total** | | | **129** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.6.2] — 2026-11-28
+
+**Comprobación de apt sin sudo.** Arreglo con el registro de la PC real con KDE neon.
+
+1 cambio
+
+- Arreglo: la comprobación de apt (`apt-get check`) corría sin sudo y sin permisos siempre falla (no puede tomar el bloqueo de apt): el script veía apt "trabado" aunque estuviera sano y no instalaba el kernel. Ahora comprueba sin bloqueo y solo cuenta las dependencias rotas de verdad. Probado como usuario común, no como root
 
 ## [3.6.1] — 2026-11-28
 
