@@ -39,7 +39,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.6.0"
+UT_VERSION="3.6.1"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -214,8 +214,9 @@ run_with_progress() {
         esac
     done
     if $is_apt && [ "$1" = sudo ]; then
-        # apt informa su avance real por un descriptor aparte (APT::Status-Fd)
-        status=$(mktemp)
+        # apt informa su avance real por un descriptor aparte (APT::Status-Fd). El archivo va dentro de una
+        # carpeta propia: en /tmp directo, root no puede escribir en un archivo de otro usuario (fs.protected_regular)
+        status=$(mktemp -d)/avance && : > "$status"
         shift
         cmd=(sudo bash -c 'exec 3>>"$1"; shift; exec "$@"' _ "$status")
         for a in "$@"; do
@@ -262,7 +263,7 @@ run_with_progress() {
     wait "$pid"
     rc=$?
     printf '\r\033[K'
-    [ -n "$status" ] && rm -f "$status"
+    [ -n "$status" ] && rm -f "$status" && rmdir "${status%/avance}" 2>/dev/null
     if [ $rc -ne 0 ]; then
         log_error "$desc (código $rc). Detalles en: $LOG_FILE"
         show_command_errors "${RUN_LOG_START:-0}"

@@ -41,7 +41,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.6.0"
+UT_VERSION="3.6.1"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -216,8 +216,9 @@ run_with_progress() {
         esac
     done
     if $is_apt && [ "$1" = sudo ]; then
-        # apt informa su avance real por un descriptor aparte (APT::Status-Fd)
-        status=$(mktemp)
+        # apt informa su avance real por un descriptor aparte (APT::Status-Fd). El archivo va dentro de una
+        # carpeta propia: en /tmp directo, root no puede escribir en un archivo de otro usuario (fs.protected_regular)
+        status=$(mktemp -d)/avance && : > "$status"
         shift
         cmd=(sudo bash -c 'exec 3>>"$1"; shift; exec "$@"' _ "$status")
         for a in "$@"; do
@@ -264,7 +265,7 @@ run_with_progress() {
     wait "$pid"
     rc=$?
     printf '\r\033[K'
-    [ -n "$status" ] && rm -f "$status"
+    [ -n "$status" ] && rm -f "$status" && rmdir "${status%/avance}" 2>/dev/null
     if [ $rc -ne 0 ]; then
         log_error "$desc (código $rc). Detalles en: $LOG_FILE"
         show_command_errors "${RUN_LOG_START:-0}"
@@ -1493,7 +1494,7 @@ kernel_txn_rollback() {
         echo -e "   Se quita lo que entró en este intento: ${new[*]}"
         # Lo que otro paquete necesita no se puede quitar: se resuelve en el paso siguiente
         # shellcheck disable=SC2024  # el registro es del usuario: se escribe sin sudo
-        sudo env DEBIAN_FRONTEND=noninteractive dpkg --purge "${new[@]}" >> "$LOG_FILE" 2>&1
+        sudo env DEBIAN_FRONTEND=noninteractive dpkg --purge --force-remove-reinstreq "${new[@]}" >> "$LOG_FILE" 2>&1
     fi
     # Lo que no se pudo quitar (otro paquete lo necesita) se termina de configurar, sin DKMS
     run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
@@ -1538,7 +1539,21 @@ repair_broken_packages() {
     echo -e "${YELLOW}🩹 Una instalación anterior quedó cortada y dejó apt trabado: se repara${NC}"
     [ ${#broken[@]} -gt 0 ] && echo -e "   A medias: ${broken[*]}"
     # Los de kernel.org a medias se quitan (no se pueden terminar sin headers)
-    kernel_org_clean_broken > /dev/null
+    kernel_org_clean_broken
+    # Kernels que dpkg marcó "necesita ser reinstalado" y no están en uso: se quitan a la fuerza
+    local reinst=()
+    mapfile -t reinst < <(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'linux-*' 2>/dev/null \
+        | awk 'substr($1, 3, 1) == "R" { print $2 }' | grep -v -- "$running")
+    if [ ${#reinst[@]} -gt 0 ]; then
+        echo -e "   Kernel dañado (no se puede terminar ni reinstalar): se quita ${reinst[*]}"
+        if [ ! -e /etc/dkms/no-autoinstall ]; then
+            sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+        fi
+        run "No se pudo quitar el kernel dañado" sudo env DEBIAN_FRONTEND=noninteractive \
+            dpkg --purge --force-remove-reinstreq --force-depends "${reinst[@]}"
+        $madeflag && sudo rm -f /etc/dkms/no-autoinstall
+        madeflag=false
+    fi
     # shellcheck disable=SC2024  # el registro es del usuario: se escribe sin sudo
     sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a >> "$LOG_FILE" 2>&1
     if [ -n "$(dpkg_broken_pkgs)" ] && printf '%s\n' "${broken[@]}" | grep -q '^linux-'; then
@@ -2071,7 +2086,9 @@ kernel_org_clean_broken() {
     if [ ! -e /etc/dkms/no-autoinstall ]; then
         sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
     fi
-    run_visible "No se pudo quitar el kernel a medio instalar" sudo env DEBIAN_FRONTEND=noninteractive dpkg --purge "${broken[@]}"
+    # --force-remove-reinstreq: si dpkg lo marcó "necesita ser reinstalado", sin esto se niega a quitarlo
+    run "No se pudo quitar el kernel a medio instalar" sudo env DEBIAN_FRONTEND=noninteractive \
+        dpkg --purge --force-remove-reinstreq --force-depends "${broken[@]}"
     $madeflag && sudo rm -f /etc/dkms/no-autoinstall
     run "dpkg no pudo terminar la configuración" sudo env DEBIAN_FRONTEND=noninteractive dpkg --configure -a
     if [ -n "$(kernel_org_broken)" ]; then

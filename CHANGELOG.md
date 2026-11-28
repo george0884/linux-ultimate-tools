@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.6.1](#361--2026-11-28) | 2026-11-28 | Kernel dañado y barra de avance | 2 | | |
 | [3.6.0](#360--2026-11-28) | 2026-11-28 | Instalar kernels resolviendo las fallas | 3 | | |
 | [3.5.9](#359--2026-11-28) | 2026-11-28 | Reparar apt con dependencias rotas | 2 | | |
 | [3.5.8](#358--2026-11-28) | 2026-11-28 | Si falla un kernel, vuelve solo al de antes | 3 | | |
@@ -35,10 +36,19 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **126** | **59.153** | **3.784** |
+| **Total** | | | **128** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.6.1] — 2026-11-28
+
+**Kernel dañado y barra de avance.** Arreglos con el registro de la PC real con KDE neon.
+
+2 cambios
+
+- Arreglo: un kernel que dpkg marcó "necesita ser reinstalado" (estado muy malo e inconsistente) no se podía quitar y apt seguía trabado: ahora se quita a la fuerza (`--force-remove-reinstreq`), si no es el kernel en uso. Probado con el dpkg real
+- Arreglo: la barra de avance de apt fallaba con "Permiso denegado" en sistemas con `fs.protected_regular` (Ubuntu y derivadas): el archivo de avance ahora va en una carpeta propia
 
 ## [3.6.0] — 2026-11-28
 
