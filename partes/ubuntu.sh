@@ -1398,13 +1398,38 @@ install_standard_livepatch_kernel() {
 # OPCIÓN 1: ACTUALIZACIÓN DEL SISTEMA (COLOR: VERDE)
 # ============================================================
 
-do_system_update() {
-    echo -e "${GREEN}[1/4] Actualizando lista de paquetes...${NC}"
-    run_visible "Falló 'apt update'" sudo apt-get update || return 1
-    APT_LISTS_FRESH=true
+# KDE neon se actualiza con PackageKit (pkcon), como indica su documentación: con apt full-upgrade
+# choca con los paquetes que neon fija y falla con "se instalaron versiones anteriores... sin --allow-downgrades"
+is_kde_neon() { [ "$(os_release_value ID)" = neon ]; }
 
-    echo -e "${GREEN}[2/4] Actualizando paquetes del sistema...${NC}"
-    run_visible "Falló la actualización" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" full-upgrade || return 1
+# pkcon devuelve 5 cuando no hay nada para actualizar: eso no es un error
+pkcon_ok() {
+    sudo pkcon "$@"
+    local rc=$?
+    [ "$rc" -eq 5 ] && return 0
+    return "$rc"
+}
+
+do_system_update() {
+    if is_kde_neon; then
+        echo -e "${GREEN}[1/4] KDE neon: actualizando la lista de paquetes (pkcon refresh)...${NC}"
+        if ! command -v pkcon &> /dev/null; then
+            run_visible "Falló 'apt update'" sudo apt-get update || return 1
+            apt_install packagekit-tools || return 1
+        fi
+        run_visible "Falló 'pkcon refresh'" pkcon_ok refresh || return 1
+        APT_LISTS_FRESH=true   # pkcon refresh también actualiza las listas de apt
+
+        echo -e "${GREEN}[2/4] KDE neon: actualizando el sistema (pkcon update)...${NC}"
+        run_visible "Falló la actualización (pkcon update)" pkcon_ok update -y || return 1
+    else
+        echo -e "${GREEN}[1/4] Actualizando lista de paquetes...${NC}"
+        run_visible "Falló 'apt update'" sudo apt-get update || return 1
+        APT_LISTS_FRESH=true
+
+        echo -e "${GREEN}[2/4] Actualizando paquetes del sistema...${NC}"
+        run_visible "Falló la actualización" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" full-upgrade || return 1
+    fi
 
     echo -e "${GREEN}[3/4] Eliminando paquetes huérfanos...${NC}"
     run "Falló autoremove" sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" autoremove --purge
@@ -1423,8 +1448,13 @@ system_update() {
     echo -e "${NC}"
 
     echo -e "\n${GREEN}📋 Se ejecutará:${NC}"
-    echo -e "  • sudo apt update"
-    echo -e "  • sudo apt full-upgrade -y"
+    if is_kde_neon; then
+        echo -e "  • sudo pkcon refresh      ${CYAN}(KDE neon se actualiza con PackageKit, como indica su documentación)${NC}"
+        echo -e "  • sudo pkcon update -y"
+    else
+        echo -e "  • sudo apt update"
+        echo -e "  • sudo apt full-upgrade -y"
+    fi
     echo -e "  • sudo apt autoremove -y"
     echo -e "  • sudo apt autoclean -y"
     echo ""
@@ -1433,9 +1463,16 @@ system_update() {
         return 0
     fi
 
-    do_system_update
     echo ""
-    echo -e "${GREEN}✓ ¡SISTEMA ACTUALIZADO COMPLETAMENTE!${NC}"
+    if do_system_update; then
+        echo ""
+        echo -e "${GREEN}✓ ¡SISTEMA ACTUALIZADO COMPLETAMENTE!${NC}"
+        [ -f /var/run/reboot-required ] && echo -e "${YELLOW}⚠ Hay que reiniciar para terminar la actualización${NC}"
+    else
+        echo ""
+        echo -e "${RED}✗ La actualización NO terminó: el sistema quedó sin actualizar (o a medias).${NC}"
+        echo -e "${YELLOW}  Lee el error de arriba; el detalle completo está en $LOG_FILE${NC}"
+    fi
     pause
 }
 #@parte comun: tokyo_color_group write_tokyo_night_colors write_tokyo_night_konsole

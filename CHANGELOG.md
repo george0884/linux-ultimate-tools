@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.1](#351--2026-11-28) | 2026-11-28 | Actualizar KDE neon | 2 | | |
 | [3.5.0](#350--2026-11-28) | 2026-11-28 | Kernel de kernel.org | 4 | | |
 | [3.4.0](#340--2026-11-27) | 2026-11-27 | Quitar periféricos y actualización al iniciar | 8 | | |
 | [3.3.0](#330--2026-11-27) | 2026-11-27 | Pruebas y reinstalar controladores | 8 | | |
@@ -25,10 +26,19 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **103** | **59.153** | **3.784** |
+| **Total** | | | **105** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.1] — 2026-11-28
+
+**Actualizar KDE neon.** Arreglos de la opción 1 probada en una PC real con KDE neon.
+
+2 cambios
+
+- Arreglo: KDE neon se actualiza con su comando oficial (`pkcon refresh` y `pkcon update`); con `apt full-upgrade` fallaba porque quería volver a versiones anteriores de paquetes que neon fija
+- Arreglo: si la actualización falla ya no dice "¡Sistema actualizado completamente!": avisa que no terminó y dónde ver el error
 
 ## [3.5.0] — 2026-11-28
 
