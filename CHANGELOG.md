@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.9](#359--2026-11-28) | 2026-11-28 | Reparar apt con dependencias rotas | 2 | | |
 | [3.5.8](#358--2026-11-28) | 2026-11-28 | Si falla un kernel, vuelve solo al de antes | 3 | | |
 | [3.5.7](#357--2026-11-28) | 2026-11-28 | Kernel de kernel.org sin dejar apt trabado | 4 | | |
 | [3.5.6](#356--2026-11-28) | 2026-11-28 | Snap: qué hay antes de eliminar | 3 | | |
@@ -33,10 +34,19 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **121** | **59.153** | **3.784** |
+| **Total** | | | **123** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.9] — 2026-11-28
+
+**Reparar apt con dependencias rotas.** Arreglo de la prueba en una PC real con KDE neon.
+
+2 cambios
+
+- Arreglo: la reparación al abrir el script no detectaba un paquete instalado pero incompleto (un kernel 7.3.6 sin sus módulos, de un intento anterior): apt daba "unmet dependencies" en todo. Ahora se comprueba con `apt-get check` y se repara como `apt --fix-broken install` (si quitaría algo que no sea un kernel sin usar, pregunta antes)
+- La reparación corre también antes de instalar cualquier kernel (kernel.org, oficial, HWE, Liquorix, XanMod); si no se puede reparar, no se instala nada
 
 ## [3.5.8] — 2026-11-28
 
