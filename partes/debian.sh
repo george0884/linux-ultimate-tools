@@ -939,7 +939,9 @@ debian_official_kernel() {
         target=("linux-image-$arch/$codename" "linux-headers-$arch/$codename")
     fi
     echo -e "${BLUE}[1/3] Instalando el kernel oficial...${NC}"
-    apt_install --allow-downgrades "${target[@]}" || return 1
+    kernel_txn_begin || return 1
+    kernel_install_retry "No se pudo instalar el kernel oficial" --allow-downgrades "${target[@]}" \
+        || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[2/3] Kernels de terceros...${NC}"
     local fam
@@ -953,10 +955,12 @@ debian_official_kernel() {
     local version
     version=$(official_kernel_versions | grep -v bpo | tail -1)
     [ -n "$version" ] || version=$(official_kernel_versions | tail -1)
-    if [ -z "$version" ]; then
+    if [ -z "$version" ] || ! kernel_file_ok "$version"; then
         log_error "No quedó ningún kernel oficial instalado"
+        kernel_txn_rollback
         return 1
     fi
+    kernel_default_ok || return 0
     grub_select "$version"
     log_success "Kernel oficial: $version"
     echo -e "${YELLOW}⚠ Reinicia para usarlo. Los kernels viejos se quitan con 'Actualizar sistema' (opción 1).${NC}"
@@ -982,18 +986,21 @@ debian_backports_kernel() {
     codename=$(debian_codename)
     apt_update
     echo -e "${BLUE}[1/2] Instalando el kernel de ${codename}-backports...${NC}"
-    run_visible "No se pudo instalar el kernel de backports" sudo env DEBIAN_FRONTEND=noninteractive \
-        apt-get install -y -t "${codename}-backports" "linux-image-$arch" "linux-headers-$arch" || return 1
+    kernel_txn_begin || return 1
+    kernel_install_retry "No se pudo instalar el kernel de backports" \
+        -t "${codename}-backports" "linux-image-$arch" "linux-headers-$arch" || { kernel_txn_rollback; return 1; }
     if dpkg -l 'nvidia-driver' 2>/dev/null | grep -q '^ii'; then
         log_warning "Tienes el driver de NVIDIA: si después no carga, instala también su versión de backports"
         echo -e "${YELLOW}  sudo apt install -t ${codename}-backports nvidia-driver${NC}"
     fi
     echo -e "${BLUE}[2/2] Configurando GRUB...${NC}"
     version=$(official_kernel_versions | grep bpo | tail -1)
-    if [ -z "$version" ]; then
+    if [ -z "$version" ] || ! kernel_file_ok "$version"; then
         log_error "El kernel de backports no quedó instalado en /boot"
+        kernel_txn_rollback
         return 1
     fi
+    kernel_default_ok || return 0
     grub_select "$version"
     log_success "Kernel de backports: $version"
     echo -e "${YELLOW}⚠ Reinicia para usarlo. Si algo falla, elige el anterior en 'Opciones avanzadas' de GRUB${NC}"
@@ -1042,13 +1049,15 @@ install_liquorix_kernel() {
     fi
 
     echo -e "${BLUE}[2/4] Instalando kernel Liquorix (puede tardar varios minutos)...${NC}"
-    apt_install linux-image-liquorix-amd64 linux-headers-liquorix-amd64 || return 1
+    kernel_txn_begin || return 1
+    kernel_install_retry "No se pudo instalar Liquorix" linux-image-liquorix-amd64 linux-headers-liquorix-amd64 \
+        || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/4] Eliminando XanMod si existe...${NC}"
     remove_kernel_family xanmod
 
     echo -e "${BLUE}[4/4] Configurando GRUB...${NC}"
-    finish_custom_kernel liquorix "Liquorix"
+    finish_custom_kernel liquorix "Liquorix" || { kernel_txn_rollback; return 1; }
 }
 
 # ------------------------------------------------------------
@@ -1065,6 +1074,7 @@ XANMOD_LIST="/etc/apt/sources.list.d/xanmod-release.list"
 #@parte apt: kernel_versions
 #@parte arranque: secure_boot_enabled
 
+#@parte apt: datos_kernel_txn kernel_pkgs_present kernel_txn_begin kernel_txn_rollback repair_broken_packages repair_broken_packages_steps apt_unmet kernel_file_ok dpkg_broken_pkgs wait_for_apt_lock kernel_install_retry kernel_default_ok
 # Comprobaciones antes de instalar un kernel de terceros
 check_custom_kernel_requirements() {
     if [ "$(dpkg --print-architecture)" != "amd64" ]; then
@@ -1124,11 +1134,12 @@ GRUB_DEFAULT_BACKUP="/etc/default/grub.debian-ultimate-tools.orig"
 finish_custom_kernel() {
     local family="$1" label="$2" version
     version=$(kernel_versions "$family" | tail -1)
-    if [ -z "$version" ] || [ ! -e "/boot/vmlinuz-$version" ]; then
+    if [ -z "$version" ] || ! kernel_file_ok "$version"; then
         log_error "El kernel $label no quedó instalado en /boot"
         return 1
     fi
 
+    kernel_default_ok || return 0
     grub_select "$version"
 
     echo ""
@@ -1183,13 +1194,14 @@ install_xanmod_kernel() {
     fi
 
     echo -e "${BLUE}[2/4] Instalando kernel XanMod (puede tardar varios minutos)...${NC}"
-    apt_install "$package" || return 1
+    kernel_txn_begin || return 1
+    kernel_install_retry "No se pudo instalar XanMod" "$package" || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/4] Eliminando Liquorix si existe...${NC}"
     remove_kernel_family liquorix
 
     echo -e "${BLUE}[4/4] Configurando GRUB...${NC}"
-    finish_custom_kernel xanmod "XanMod"
+    finish_custom_kernel xanmod "XanMod" || { kernel_txn_rollback; return 1; }
 }
 #@parte apt: available_pkgs os_release_value cleanup_pending_kernels
 #@parte comun: enable_trim
@@ -1201,21 +1213,6 @@ install_xanmod_kernel() {
 # ============================================================
 # OPCIÓN 1: ACTUALIZACIÓN DEL SISTEMA (COLOR: VERDE)
 # ============================================================
-
-# Espera a que termine otra instalación (Discover, actualizaciones automáticas...)
-wait_for_apt_lock() {
-    local i=0
-    while sudo fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock &> /dev/null; do
-        [ $i -eq 0 ] && echo -e "${YELLOW}⏳ Otro programa está instalando paquetes; esperando a que termine...${NC}"
-        i=$((i + 1))
-        if [ $i -ge 60 ]; then
-            log_error "apt sigue ocupado después de 5 minutos: cierra Discover/Software y vuelve a intentar"
-            return 1
-        fi
-        sleep 5
-    done
-    return 0
-}
 
 do_system_update() {
     command -v fuser &> /dev/null && { wait_for_apt_lock || return 1; }
@@ -3437,6 +3434,7 @@ boot_detect
 if debian_based; then
     detect_flavor
     boot_detect   # otra vez, ahora con el nombre detectado
+    repair_broken_packages
     cleanup_pending_kernels
     if [ "$(os_release_value ID)" != debian ]; then
         echo -e "${YELLOW}⚠ Este script está probado en Debian; en $(os_release_value NAME) algunas opciones pueden variar${NC}"

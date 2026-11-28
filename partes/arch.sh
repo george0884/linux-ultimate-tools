@@ -1019,25 +1019,105 @@ running_kernel_pkg() {
 }
 
 arch_install_kernel() {
-    local k="$1"
+    local k="$1" had=() saved mark p
     if is_manjaro && command -v mhwd-kernel &> /dev/null; then
         manjaro_install_kernel
         return
     fi
+    mapfile -t had < <(pkg_installed "$k" "$k-headers")
+    saved=$(arch_grub_saved)
     echo -e "${BLUE}📦 Instalando $k y sus headers (para drivers como NVIDIA o VirtualBox)...${NC}"
-    pkg_install_recorded "$k" "$k-headers" || return 1
+    mark=$(log_mark)
+    if ! pkg_install_recorded "$k" "$k-headers"; then
+        # pacman no deja nada a medias. Si la falla fue de firmas, el llavero está viejo: se actualiza y se reintenta
+        if log_since "$mark" | grep -qE 'invalid or corrupted package|signature from .* is (unknown trust|invalid)|PGP signature|could not be looked up'; then
+            echo -e "${CYAN}🔧 Causa: las llaves de firma están viejas → se actualiza el llavero y se reintenta${NC}"
+            arch_refresh_keyrings && pkg_install_recorded "$k" "$k-headers" && mark=ok
+        fi
+        if [ "$mark" != ok ]; then
+            log_error "No se pudo instalar $k: no se cambió nada (pacman deshace todo) y sigues con tu kernel"
+            return 1
+        fi
+    fi
     # El driver nvidia-open sin DKMS solo sirve para el kernel "linux"
     if [ "$k" != linux ] && [ -n "$(pkg_installed nvidia-open nvidia)" ]; then
         log_warning "Tu driver de NVIDIA solo funciona con el kernel 'linux': con $k hace falta nvidia-open-dkms"
         confirm "${BLUE}¿Cambiarlo por nvidia-open-dkms?${NC}" && pkg_install_recorded nvidia-open-dkms
     fi
+    # Tiene que poder arrancar: vmlinuz e initramfs. Si falta el initramfs se genera de nuevo
+    if ! arch_kernel_boot_ok "$k"; then
+        echo -e "${CYAN}🔧 Falta el initramfs de $k: se vuelve a generar${NC}"
+        command -v mkinitcpio &> /dev/null && run_visible "mkinitcpio no pudo generar el initramfs" sudo mkinitcpio -p "$k"
+    fi
+    if ! arch_kernel_boot_ok "$k"; then
+        log_error "$k quedó sin poder arrancar (falta su initramfs): se vuelve a como estaba"
+        local new=()
+        for p in "$k" "$k-headers"; do
+            printf '%s\n' "${had[@]}" | grep -qx -- "$p" || new+=("$p")
+        done
+        [ ${#new[@]} -gt 0 ] && pkg_remove "${new[@]}"
+        arch_grub_restore "$saved"
+        log_success "Listo: sigues arrancando con tu kernel de siempre"
+        return 1
+    fi
     if grub_available; then
         run "No se pudo regenerar el menú de GRUB" grub_update
-        arch_grub_default "$k"
+        arch_kernel_dkms_ok "$k" && arch_grub_default "$k"
     else
         log_info "Sin GRUB (systemd-boot): el kernel nuevo aparece solo en el menú de arranque"
     fi
     log_success "Kernel $k instalado. Reinicia para usarlo; el anterior queda como respaldo"
+}
+
+# Entrada por defecto de GRUB guardada (para volver a ella)
+arch_grub_saved() { sudo grub-editenv list 2>/dev/null | sed -n 's/^saved_entry=//p'; }
+
+# Vuelve GRUB a como estaba
+arch_grub_restore() {
+    grub_available || return 0
+    run "No se pudo regenerar el menú de GRUB" grub_update
+    if [ -n "$1" ]; then
+        run "No se pudo fijar el kernel por defecto" grub_set_default "$1"
+    else
+        sudo grub-editenv - unset saved_entry 2>/dev/null
+    fi
+}
+
+# Actualiza el llavero de la distribución (firmas)
+arch_refresh_keyrings() {
+    local keyrings=(archlinux-keyring)
+    [ -n "$(pkg_installed manjaro-keyring)" ] && keyrings+=(manjaro-keyring)
+    [ -n "$(pkg_installed endeavouros-keyring)" ] && keyrings+=(endeavouros-keyring)
+    run_visible "No se pudo actualizar el llavero" sudo pacman -Sy --needed --noconfirm "${keyrings[@]}"
+}
+
+# ¿El kernel tiene lo que necesita para arrancar? (lo que pide su preset de mkinitcpio)
+arch_kernel_boot_ok() {
+    local k="$1" preset="${MKINITCPIO_PRESETS:-/etc/mkinitcpio.d}/$1.preset" kfile img
+    if [ -f "$preset" ]; then
+        kfile=$(sed -n 's/^ALL_kver="\(.*\)"/\1/p' "$preset" | head -n1)
+        img=$(sed -n 's/^default_image="\(.*\)"/\1/p' "$preset" | head -n1)
+        [ -e "${kfile:-/boot/vmlinuz-$k}" ] && { [ -z "$img" ] || [ -e "$img" ]; }
+    else
+        # Sin mkinitcpio (dracut, booster): al menos el kernel instalado
+        pacman -Ql "$k" 2>/dev/null | grep -q '/vmlinuz$'
+    fi
+}
+
+# Si DKMS no pudo compilar algún controlador para el kernel nuevo, se pregunta si arrancarlo por defecto
+arch_kernel_dkms_ok() {
+    local kver missing
+    command -v dkms &> /dev/null || return 0
+    kver=$(pacman -Ql "$1" 2>/dev/null | sed -n 's#.*/usr/lib/modules/\([^/]*\)/vmlinuz$#\1#p' | head -n1)
+    [ -n "$kver" ] || return 0
+    missing=$(dkms status 2>/dev/null | awk -F'[,:/ ]+' '{print $1}' | sort -u | while read -r m; do
+        dkms status -k "$kver" "$m" 2>/dev/null | grep -q 'installed' || echo "$m"; done | tr '\n' ' ')
+    [ -n "${missing// }" ] || return 0
+    echo -e "\n${YELLOW}⚠ $1 quedó instalado, pero sin: ${BOLD}$missing${NC}"
+    echo -e "${YELLOW}  Con ese kernel esos controladores no funcionan (si es NVIDIA, el video queda con el controlador libre).${NC}"
+    confirm "${BLUE}¿Arrancar igual con $1 por defecto?${NC}" && return 0
+    echo -e "${GREEN}✓ GRUB sigue arrancando tu kernel de siempre; $1 queda en 'Opciones avanzadas'${NC}"
+    return 1
 }
 
 # Que GRUB arranque por defecto el kernel elegido ("…, with Linux linux-zen")
@@ -1068,7 +1148,31 @@ manjaro_install_kernel() {
     read -r -p "📌 Kernel a instalar (0 = ninguno): " choice
     [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le ${#list[@]} ] || return 0
     k=${list[$((choice - 1))]}
-    run_visible "mhwd-kernel no pudo instalar $k" sudo mhwd-kernel -i "$k" || return 1
+    local saved mark
+    saved=$(arch_grub_saved)
+    mark=$(log_mark)
+    if ! run_visible "mhwd-kernel no pudo instalar $k" sudo mhwd-kernel -i "$k"; then
+        if log_since "$mark" | grep -qE 'invalid or corrupted package|signature from .* is (unknown trust|invalid)|PGP signature'; then
+            echo -e "${CYAN}🔧 Causa: las llaves de firma están viejas → se actualiza el llavero y se reintenta${NC}"
+            arch_refresh_keyrings && run_visible "mhwd-kernel no pudo instalar $k" sudo mhwd-kernel -i "$k" && mark=ok
+        fi
+        if [ "$mark" != ok ]; then
+            log_error "No se pudo instalar $k: sigues con tu kernel"
+            return 1
+        fi
+    fi
+    if ! arch_kernel_boot_ok "$k"; then
+        echo -e "${CYAN}🔧 Falta el initramfs de $k: se vuelve a generar${NC}"
+        run_visible "mkinitcpio no pudo generar el initramfs" sudo mkinitcpio -p "$k"
+    fi
+    if ! arch_kernel_boot_ok "$k"; then
+        log_error "$k quedó sin poder arrancar (falta su initramfs): se vuelve a como estaba"
+        run_visible "mhwd-kernel no pudo quitar $k" sudo mhwd-kernel -r "$k"
+        arch_grub_restore "$saved"
+        log_success "Listo: sigues arrancando con tu kernel de siempre"
+        return 1
+    fi
+    arch_kernel_dkms_ok "$k" || arch_grub_restore "$saved"
     log_success "Kernel $k instalado (mhwd-kernel regeneró GRUB). Reinicia para usarlo"
 }
 

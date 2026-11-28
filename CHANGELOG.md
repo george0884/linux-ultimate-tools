@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.7.0](#370--2026-11-28) | 2026-11-28 | Kernels sin fallas también en Debian y Arch | 4 | | |
 | [3.6.5](#365--2026-11-28) | 2026-11-28 | htop en las vistas rápidas | 1 | | |
 | [3.6.4](#364--2026-11-28) | 2026-11-28 | Adaptar los paquetes del kernel antes de instalar | 2 | | |
 | [3.6.3](#363--2026-11-28) | 2026-11-28 | Kernels de kernel.org en Ubuntu 24.04 | 1 | | |
@@ -40,10 +41,21 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **133** | **59.153** | **3.784** |
+| **Total** | | | **137** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.7.0] — 2026-11-28
+
+**Kernels sin fallas también en Debian y Arch.**
+
+4 cambios
+
+- Debian (14): el kernel oficial, el de backports, Liquorix y XanMod usan lo mismo que Ubuntu: antes de instalar se repara apt si quedó trabado, si la instalación falla se resuelve la causa y se sigue (DKMS, apt ocupado, descarga, espacio en /boot, dependencias), y solo si no se puede vuelve a como estaba y deja el kernel por defecto. Al abrir el script se repara apt si una instalación anterior lo dejó trabado
+- Arch (14): antes de poner un kernel por defecto se comprueba que pueda arrancar (vmlinuz e initramfs); si falta el initramfs se vuelve a generar y, si no se puede, se quita el kernel nuevo y GRUB sigue con el de siempre. Si la instalación falla por firmas viejas, se actualiza el llavero y se reintenta. Igual con los kernels de Manjaro (mhwd-kernel)
+- Los tres scripts: si el kernel nuevo quedó sin algún controlador DKMS (p. ej. NVIDIA), se pregunta si arrancarlo por defecto; si no, ya no dice "Reinicia para usarlo"
+- El código de reparación y reintentos ahora es una sola pieza compartida por Ubuntu y Debian (`partes/apt.sh`)
 
 ## [3.6.5] — 2026-11-28
 

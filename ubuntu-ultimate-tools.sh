@@ -41,7 +41,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.6.5"
+UT_VERSION="3.7.0"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -1504,7 +1504,7 @@ kernel_txn_rollback() {
     mapfile -t left < <(kernel_pkgs_present | comm -23 - <(printf '%s\n' "$KERNEL_TXN_PKGS") | grep -v -- "$running")
 
     # GRUB: la misma configuración que antes y arrancando el kernel de antes
-    if [ -n "$KERNEL_TXN_DEFAULT" ] && ! grep -qx "GRUB_DEFAULT=$KERNEL_TXN_DEFAULT" /etc/default/grub; then
+    if [ -n "$KERNEL_TXN_DEFAULT" ] && ! grep -qx "GRUB_DEFAULT=$KERNEL_TXN_DEFAULT" /etc/default/grub 2>/dev/null; then
         sudo sed -i "s|^GRUB_DEFAULT=.*|GRUB_DEFAULT=$KERNEL_TXN_DEFAULT|" /etc/default/grub
     fi
     run "Falló update-grub" sudo update-grub
@@ -1531,10 +1531,11 @@ kernel_txn_rollback() {
 # se reparan solos. Si es un kernel, se termina sin DKMS y GRUB sigue con el kernel en uso.
 repair_broken_packages() {
     local rc
-    runparts_shim_on > /dev/null
+    # (Ubuntu) run-parts de transición para los kernels de kernel.org
+    declare -F runparts_shim_on > /dev/null && runparts_shim_on > /dev/null
     repair_broken_packages_steps
     rc=$?
-    runparts_shim_off
+    declare -F runparts_shim_off > /dev/null && runparts_shim_off
     return $rc
 }
 
@@ -1548,7 +1549,7 @@ repair_broken_packages_steps() {
     echo -e "${YELLOW}🩹 Una instalación anterior quedó cortada y dejó apt trabado: se repara${NC}"
     [ ${#broken[@]} -gt 0 ] && echo -e "   A medias: ${broken[*]}"
     # Los de kernel.org a medias se quitan (no se pueden terminar sin headers)
-    kernel_org_clean_broken
+    declare -F kernel_org_clean_broken > /dev/null && kernel_org_clean_broken
     # Kernels que dpkg marcó "necesita ser reinstalado" y no están en uso: se quitan a la fuerza
     local reinst=()
     mapfile -t reinst < <(dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' 'linux-*' 2>/dev/null \
@@ -1892,7 +1893,8 @@ finish_custom_kernel() {
         return 1
     fi
 
-    kernel_default_ok && grub_select "$version"
+    kernel_default_ok || return 0
+    grub_select "$version"
 
     echo ""
     log_success "Kernel $label instalado: $version"
@@ -2389,7 +2391,8 @@ kernel_org_install_steps() {
     fi
 
     echo -e "${BLUE}[4/4] Configurando GRUB...${NC}"
-    kernel_default_ok && grub_select "$kver"
+    kernel_default_ok || return 0
+    grub_select "$kver"
     echo ""
     log_success "Kernel de kernel.org instalado: $kver"
     echo -e "${YELLOW}⚠ Reinicia para usarlo. Si no arranca, elige el kernel oficial en 'Opciones avanzadas' de GRUB${NC}"
