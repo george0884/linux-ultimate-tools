@@ -41,7 +41,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.5.4"
+UT_VERSION="3.5.5"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -1389,7 +1389,7 @@ optimize_kernel_menu() {
         echo -e "  ${BLUE}3)${NC} Kernel oficial Ubuntu: LTS, HWE o versión específica (recomendado)"
         echo -e "  ${BLUE}4)${NC} Kernel oficial + Livepatch (Ubuntu Pro)"
         echo -e "  ${BLUE}5)${NC} Ajustes avanzados de kernel"
-        echo -e "  ${BLUE}6)${NC} Kernel de kernel.org: los 3 estables más nuevos y el de prueba (rc)"
+        echo -e "  ${BLUE}6)${NC} Kernel de kernel.org, el más nuevo: los 3 estables más recientes y el de prueba (rc)"
         echo -e "\n  ${BLUE}0)${NC} 🔙 Volver"
         echo ""
         read -r -p "📌 Opción (0-6): " kernel_option
@@ -2034,6 +2034,8 @@ choose_specific_kernel_version() {
         [ "$v" = "$running" ] && mark=" ${GREEN}(en uso)${NC}"
         echo -e "  ${BLUE}[$(printf '%2s' "$i")]${NC} $v$mark"
     done
+    echo -e "\n${CYAN}ℹ Estas son las que publica Ubuntu $(os_release_value VERSION_ID). Las más nuevas de kernel.org${NC}"
+    echo -e "${CYAN}  (estables y de prueba) están en el menú del kernel, opción 6.${NC}"
     echo -e "\n  ${BLUE}[ 0]${NC} 🔙 Volver"
     echo ""
     read -r -p "📌 Número de versión: " choice
@@ -12676,7 +12678,7 @@ main_menu() {
             echo -e "  ${CYAN}12)${NC} 🔩 Configurar sistema (meta-paquete y manuales)"
         fi
         echo -e "  ${CYAN}13)${NC} 🎮 Optimizar GPU (NVIDIA/AMD/Intel)"
-        echo -e "  ${CYAN}14)${NC} 🐧 Optimizar Kernel (Liquorix/XanMod/Estándar)"
+        echo -e "  ${CYAN}14)${NC} 🐧 Kernel: Liquorix, XanMod, oficial o el más nuevo de kernel.org"
         echo -e "  ${CYAN}15)${NC} 💾 Optimizar Memoria RAM (automático)"
         echo -e "  ${CYAN}16)${NC} 🌐 Red, DNS y drivers"
         echo -e "  ${CYAN}23)${NC} 🔌 Periféricos: impresoras, escáneres, cámaras, Bluetooth, mandos..."

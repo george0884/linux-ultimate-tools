@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.5](#355--2026-11-28) | 2026-11-28 | Kernel de kernel.org más a la vista | 1 | | |
 | [3.5.4](#354--2026-11-28) | 2026-11-28 | KDE neon: respaldo con apt | 2 | | |
 | [3.5.3](#353--2026-11-28) | 2026-11-28 | Actualizar copias de git | 1 | | |
 | [3.5.2](#352--2026-11-28) | 2026-11-28 | KDE neon y actualización sin caché | 2 | | |
@@ -29,10 +30,18 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **110** | **59.153** | **3.784** |
+| **Total** | | | **111** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.5] — 2026-11-28
+
+**Kernel de kernel.org más a la vista.**
+
+1 cambio
+
+- El menú principal dice "Kernel: Liquorix, XanMod, oficial o el más nuevo de kernel.org", y la lista de versiones oficiales de Ubuntu (14 → 3 → 3) avisa que las más nuevas de kernel.org (estables y de prueba) están en 14 → 6
 
 ## [3.5.4] — 2026-11-28
 
