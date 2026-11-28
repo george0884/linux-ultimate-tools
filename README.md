@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
-[![Versión](https://img.shields.io/badge/Versión-3.5.6-7aa2f7.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Versión-3.5.7-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -613,8 +613,11 @@ Dentro de la opción 6:
 - La lista sale de kernel.org (`releases.json`); si no responde, se calcula con las compilaciones de Ubuntu.
 - Si Ubuntu todavía no compiló la versión más nueva, avisa e instala la más nueva compilada de esa serie.
 - Cada paquete se **comprueba con su suma SHA-256** publicada antes de instalar nada.
-- Si los headers piden bibliotecas más nuevas que las de tu Ubuntu, instala el kernel sin ellos y avisa
-  (sin headers no compilan NVIDIA ni VirtualBox).
+- Antes de instalar **simula** con apt. Si los headers piden bibliotecas de un Ubuntu más nuevo (p. ej. `libssl4`),
+  instala el kernel sin ellos. Si además tienes controladores **DKMS** (NVIDIA, VirtualBox...), avisa que con ese
+  kernel no van a funcionar y, si aceptas, instala salteando DKMS solo para él (si no, la instalación fallaría).
+- Si la instalación falla, **quita lo que quedó a medio instalar**: nunca deja apt trabado. Si un intento anterior
+  lo dejó así, el script lo arregla solo al abrirse.
 - GRUB queda arrancando el kernel nuevo; el oficial sigue de respaldo. **Quitar** (última opción de la lista)
   borra un kernel de kernel.org que no esté en uso.
 - No se actualizan solos: para pasar a una versión más nueva, vuelve a 14 → 6.
@@ -973,7 +976,7 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 
 ## 🔖 Versiones
 
-Versión actual: **3.5.6** (2026-11-28). Todos los cambios, contados por versión, están en
+Versión actual: **3.5.7** (2026-11-28). Todos los cambios, contados por versión, están en
 [CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
 tu distribución); también aparece en la cabecera del menú.
 

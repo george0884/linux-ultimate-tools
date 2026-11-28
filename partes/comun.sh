@@ -4,7 +4,7 @@
 #@@ datos_version
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.5.6"
+UT_VERSION="3.5.7"
 UT_VERSION_DATE="2026-11-28"
 #@@ log
 
@@ -100,6 +100,7 @@ run() {
     local desc="$1"
     shift
     echo "[$(date '+%H:%M:%S')] \$ $*" >> "$LOG_FILE"
+    RUN_LOG_START=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
     # Instalar, quitar o actualizar paquetes puede tardar minutos: con terminal se muestra el avance
     if [ -t 1 ] && progress_wanted "$@"; then
         run_with_progress "$desc" "$@"
@@ -109,8 +110,21 @@ run() {
     local rc=$?
     if [ $rc -ne 0 ]; then
         log_error "$desc (código $rc). Detalles en: $LOG_FILE"
+        show_command_errors "$RUN_LOG_START"
     fi
     return $rc
+}
+#@@ show_command_errors
+
+# Muestra el motivo de una falla: las líneas de error que el comando dejó en el registro (desde la línea $1)
+show_command_errors() {
+    local lines
+    lines=$(tail -n +"$((${1:-0} + 1))" "$LOG_FILE" 2>/dev/null \
+        | grep -a -E '^(E|W): |^Error|^dpkg: |[Ee]rror!|unmet dependencies|Depends: |exited with return code|failed for|not installable|Sub-process|errors were encountered|Errors were encountered' \
+        | grep -av 'unsandboxed' | tail -n 8)
+    [ -n "$lines" ] || return 0
+    echo -e "${YELLOW}   Motivo:${NC}"
+    sed 's/^/     /' <<< "$lines"
 }
 #@@ progress_wanted
 
@@ -212,6 +226,7 @@ run_with_progress() {
     [ -n "$status" ] && rm -f "$status"
     if [ $rc -ne 0 ]; then
         log_error "$desc (código $rc). Detalles en: $LOG_FILE"
+        show_command_errors "${RUN_LOG_START:-0}"
     elif [ $((SECONDS - start)) -ge 3 ]; then
         echo -e "  ${GREEN}✓ Listo en $(printf '%02d:%02d' $(((SECONDS - start) / 60)) $(((SECONDS - start) % 60)))${NC}"
     fi

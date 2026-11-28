@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.7](#357--2026-11-28) | 2026-11-28 | Kernel de kernel.org sin dejar apt trabado | 4 | | |
 | [3.5.6](#356--2026-11-28) | 2026-11-28 | Snap: qué hay antes de eliminar | 3 | | |
 | [3.5.5](#355--2026-11-28) | 2026-11-28 | Kernel de kernel.org más a la vista | 1 | | |
 | [3.5.4](#354--2026-11-28) | 2026-11-28 | KDE neon: respaldo con apt | 2 | | |
@@ -31,10 +32,21 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **114** | **59.153** | **3.784** |
+| **Total** | | | **118** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.7] — 2026-11-28
+
+**Kernel de kernel.org sin dejar apt trabado.** Arreglos de la prueba en una PC real con KDE neon.
+
+4 cambios
+
+- Arreglo: instalar un kernel de kernel.org fallaba (código 100) en Ubuntu 24.04 y derivadas: sus headers piden `libssl4` y, sin headers, DKMS no puede compilar los controladores y corta la instalación. Ahora se simula antes, se avisa qué controladores DKMS no van a funcionar con ese kernel y, si aceptas, se instala salteando DKMS solo para él
+- Arreglo: si la instalación falla, se quita lo que quedó a medio instalar; antes quedaba así y cada instalación con apt (incluido el kernel HWE) volvía a fallar. Al abrir el script se arregla solo si un intento anterior lo dejó así
+- Cuando una instalación falla, se muestra el motivo (las líneas de error de apt o dpkg), no solo el código
+- Los textos del kernel oficial dicen "tu versión LTS de Ubuntu" en vez del número (24.04), que cambia con los años
 
 ## [3.5.6] — 2026-11-28
 
