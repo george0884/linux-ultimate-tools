@@ -41,7 +41,7 @@ SELECTED_APPS=()
 SELECTED_OPTIONAL=()
 # Versión de Linux Ultimate Tools (la misma en los tres scripts). Al cambiarla, agrega su entrada en
 # CHANGELOG.md: "bash armar.sh --comprobar" avisa si falta
-UT_VERSION="3.5.8"
+UT_VERSION="3.5.9"
 UT_VERSION_DATE="2026-11-28"
 
 # ============================================================
@@ -1469,6 +1469,11 @@ kernel_pkgs_present() {
 
 # Antes de instalar: anota los kernels que hay y a cuál arranca GRUB
 kernel_txn_begin() {
+    # apt tiene que estar sano antes de empezar
+    if ! repair_broken_packages; then
+        log_error "apt tiene paquetes rotos que no se pudieron reparar: no se instala nada"
+        return 1
+    fi
     KERNEL_TXN_PKGS=$(kernel_pkgs_present)
     KERNEL_TXN_SAVED=$(sudo grub-editenv list 2>/dev/null | sed -n 's/^saved_entry=//p')
     KERNEL_TXN_DEFAULT=$(sed -n 's/^GRUB_DEFAULT=//p' /etc/default/grub 2>/dev/null | head -n1)
@@ -1524,12 +1529,14 @@ kernel_txn_rollback() {
 # Al abrir el script: si una instalación anterior se cortó y dejó paquetes a medias (apt trabado),
 # se reparan solos. Si es un kernel, se termina sin DKMS y GRUB sigue con el kernel en uso.
 repair_broken_packages() {
-    local broken=() running madeflag=false
+    local broken=() running madeflag=false sim removes=() p
     mapfile -t broken < <(dpkg_broken_pkgs)
-    [ ${#broken[@]} -gt 0 ] || return 0
+    if [ ${#broken[@]} -eq 0 ] && ! apt_unmet; then
+        return 0
+    fi
     running=$(uname -r)
-    echo -e "${YELLOW}🩹 Una instalación anterior quedó cortada y dejó paquetes a medias: se reparan${NC}"
-    echo -e "   ${broken[*]}"
+    echo -e "${YELLOW}🩹 Una instalación anterior quedó cortada y dejó apt trabado: se repara${NC}"
+    [ ${#broken[@]} -gt 0 ] && echo -e "   A medias: ${broken[*]}"
     # Los de kernel.org a medias se quitan (no se pueden terminar sin headers)
     kernel_org_clean_broken > /dev/null
     # shellcheck disable=SC2024  # el registro es del usuario: se escribe sin sudo
@@ -1543,15 +1550,39 @@ repair_broken_packages() {
         $madeflag && sudo rm -f /etc/dkms/no-autoinstall
         grub_select "$running"
     fi
-    [ -n "$(dpkg_broken_pkgs)" ] && run "apt no pudo reparar las dependencias" \
-        sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -f install
-    if [ -n "$(dpkg_broken_pkgs)" ]; then
-        log_error "No se pudo reparar: $(dpkg_broken_pkgs | tr '\n' ' ')(detalle en $LOG_FILE)"
+    # Paquetes instalados pero incompletos (p. ej. un kernel sin sus módulos): "apt --fix-broken install"
+    if [ -n "$(dpkg_broken_pkgs)" ] || apt_unmet; then
+        sim=$(LC_ALL=C apt-get -s -f install 2>&1)
+        mapfile -t removes < <(awk '/^Remv / {print $2}' <<< "$sim")
+        if [ ${#removes[@]} -gt 0 ]; then
+            echo -e "   Para destrabar apt se quita: ${removes[*]}"
+            # Si no son solo kernels que no están en uso, se pregunta
+            for p in "${removes[@]}"; do
+                if [[ "$p" != linux-* ]] || [[ "$p" == *"$running"* ]]; then
+                    confirm "${YELLOW}¿Quitar esos paquetes para reparar apt?${NC}" || return 1
+                    break
+                fi
+            done
+        fi
+        if [ ! -e /etc/dkms/no-autoinstall ]; then
+            sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
+        fi
+        run "apt no pudo reparar las dependencias" \
+            sudo env DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" -f install
+        $madeflag && sudo rm -f /etc/dkms/no-autoinstall
+        madeflag=false
+        grub_select "$running" > /dev/null
+    fi
+    if [ -n "$(dpkg_broken_pkgs)" ] || apt_unmet; then
+        log_error "No se pudo reparar apt (detalle en $LOG_FILE)"
         return 1
     fi
     log_success "Reparado: apt funciona normal y arranca tu kernel de siempre ($running)"
     sleep 2
 }
+
+# ¿apt tiene dependencias rotas? (lo que pide "apt --fix-broken install")
+apt_unmet() { ! LC_ALL=C apt-get check > /dev/null 2>&1; }
 
 # ¿Está el archivo del kernel en /boot?
 kernel_file_ok() { [ -e "/boot/vmlinuz-$1" ]; }
@@ -1772,7 +1803,7 @@ install_liquorix_kernel() {
     apt_update force || return 1
 
     echo -e "${BLUE}[2/4] Instalando kernel Liquorix (puede tardar varios minutos)...${NC}"
-    kernel_txn_begin
+    kernel_txn_begin || return 1
     apt_install linux-image-liquorix-amd64 linux-headers-liquorix-amd64 || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/4] Eliminando XanMod si existe...${NC}"
@@ -1825,7 +1856,7 @@ install_xanmod_kernel() {
     fi
 
     echo -e "${BLUE}[2/5] Instalando kernel XanMod (puede tardar varios minutos)...${NC}"
-    kernel_txn_begin
+    kernel_txn_begin || return 1
     apt_install "$package" || { kernel_txn_rollback; return 1; }
 
     echo -e "${BLUE}[3/5] Eliminando Liquorix si existe...${NC}"
@@ -2088,6 +2119,12 @@ kernel_org_install() {
     # de una versión de Ubuntu más nueva (p. ej. libssl4), y sin headers DKMS no puede compilar
     # controladores (NVIDIA, VirtualBox...): en ese caso dkms corta y toda la instalación falla
     local sim need mods=() nodkms=false madeflag=false rc
+    # apt tiene que estar sano antes de simular (si no, todo da "unmet dependencies")
+    if ! repair_broken_packages; then
+        log_error "apt tiene paquetes rotos que no se pudieron reparar: no se instala nada"
+        kernel_org_cleanup "$tmp"
+        return 1
+    fi
     if ! sim=$(LC_ALL=C apt-get install -s "${files[@]}" 2>&1); then
         need=$(grep -oE 'Depends: [^ ]+ .*(not installable|not going to be installed)' <<< "$sim" | head -n1 | awk '{print $2}')
         if ! sim=$(LC_ALL=C apt-get install -s "${noheaders[@]}" 2>&1); then
@@ -2110,7 +2147,7 @@ kernel_org_install() {
     fi
 
     echo -e "${BLUE}[3/4] Instalando...${NC}"
-    kernel_txn_begin
+    kernel_txn_begin || { kernel_org_cleanup "$tmp"; return 1; }
     if $nodkms && [ ! -e /etc/dkms/no-autoinstall ]; then
         sudo mkdir -p /etc/dkms && sudo touch /etc/dkms/no-autoinstall && madeflag=true
     fi
@@ -2119,7 +2156,7 @@ kernel_org_install() {
     rc=$?
     $madeflag && sudo rm -f /etc/dkms/no-autoinstall
     kernel_org_cleanup "$tmp"
-    if [ $rc -ne 0 ] || [ ! -e "/boot/vmlinuz-$kver" ] || [ -n "$(kernel_org_broken)" ]; then
+    if [ $rc -ne 0 ] || ! kernel_file_ok "$kver" || [ -n "$(kernel_org_broken)" ]; then
         log_error "El kernel $build no se pudo instalar"
         # Nunca dejarlo a medio instalar: si no, cada instalación con apt vuelve a fallar
         kernel_txn_rollback
@@ -2299,7 +2336,7 @@ switch_to_official_kernel() {
                 return 1
             fi ;;
     esac
-    kernel_txn_begin
+    kernel_txn_begin || return 1
     apt_install "${pkgs[@]}" || { kernel_txn_rollback; return 1; }
 
     case $kind in
