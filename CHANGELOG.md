@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.6.0](#360--2026-11-28) | 2026-11-28 | Instalar kernels resolviendo las fallas | 3 | | |
 | [3.5.9](#359--2026-11-28) | 2026-11-28 | Reparar apt con dependencias rotas | 2 | | |
 | [3.5.8](#358--2026-11-28) | 2026-11-28 | Si falla un kernel, vuelve solo al de antes | 3 | | |
 | [3.5.7](#357--2026-11-28) | 2026-11-28 | Kernel de kernel.org sin dejar apt trabado | 4 | | |
@@ -34,10 +35,20 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **123** | **59.153** | **3.784** |
+| **Total** | | | **126** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.6.0] — 2026-11-28
+
+**Instalar kernels resolviendo las fallas.** Pedido de la prueba en una PC real con KDE neon.
+
+3 cambios
+
+- Si la instalación de un kernel (kernel.org, oficial, HWE, Liquorix o XanMod) falla, el script busca la causa en el error, la resuelve y sigue con la instalación, hasta 3 reintentos: DKMS que no compila un controlador (se termina sin compilarlo), apt ocupado por otro programa (espera), instalación interrumpida (la completa), descarga cortada (actualiza y reintenta), falta de espacio en /boot (quita kernels viejos sin usar y la caché) y dependencias rotas (las repara)
+- Solo si no hay forma de resolverlo, vuelve a como estaba y deja el kernel por defecto
+- Si el kernel nuevo quedó sin algún controlador (p. ej. NVIDIA), pregunta si arrancarlo por defecto; si no, GRUB sigue con el kernel de siempre y no se borran los kernels anteriores
 
 ## [3.5.9] — 2026-11-28
 

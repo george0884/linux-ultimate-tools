@@ -4,7 +4,7 @@
 
 ### Limpia, optimiza y repara Ubuntu, Debian y Arch (y sus derivadas) desde un solo menú
 
-[![Versión](https://img.shields.io/badge/Versión-3.5.9-7aa2f7.svg)](CHANGELOG.md)
+[![Versión](https://img.shields.io/badge/Versión-3.6.0-7aa2f7.svg)](CHANGELOG.md)
 [![Licencia](https://img.shields.io/badge/Licencia-AGPL%20v3-blue.svg)](LICENSE)
 [![Bash](https://img.shields.io/badge/Shell-Bash-4EAA25?logo=gnu-bash&logoColor=white)](https://www.gnu.org/software/bash/)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-22.04%2B-E95420?logo=ubuntu&logoColor=white)](https://ubuntu.com/)
@@ -629,7 +629,11 @@ Dentro de la opción 3:
 - **Versión específica**: lista las 15 versiones oficiales más recientes y GRUB arranca siempre la elegida.
 - Al final se puede dejar **solo esa versión**, borrando el resto de kernels oficiales.
 - El kernel en uso nunca se borra en caliente: se elimina al reiniciar y volver a abrir el script.
-- **Si la instalación de cualquier kernel falla** (Liquorix, XanMod, oficial, HWE o kernel.org), el script vuelve
+- **Si la instalación de un kernel falla, el script la resuelve y sigue**: busca la causa en el error y la arregla
+  (DKMS que no compila → termina sin compilar ese controlador; apt ocupado → espera; descarga cortada → reintenta;
+  falta espacio en /boot → quita kernels viejos sin usar; dependencias rotas → las repara), hasta 3 reintentos.
+  Si el kernel nuevo quedó sin un controlador (p. ej. NVIDIA), pregunta si arrancarlo por defecto o seguir con el de siempre.
+- **Solo si no hay forma de resolverlo** (Liquorix, XanMod, oficial, HWE o kernel.org), el script vuelve
   solo a como estaba: quita lo que entró en ese intento y GRUB arranca el kernel que tenías por defecto. Si un
   paquete nuevo no se puede quitar (lo necesita otro), lo termina sin DKMS y fija GRUB en tu kernel de siempre.
 - **Al abrir el script y antes de instalar cualquier kernel**, si una instalación anterior dejó apt trabado (paquetes a
@@ -981,7 +985,7 @@ bash armar.sh   →   ubuntu-ultimate-tools.sh   debian-ultimate-tools.sh   arch
 
 ## 🔖 Versiones
 
-Versión actual: **3.5.9** (2026-11-28). Todos los cambios, contados por versión, están en
+Versión actual: **3.6.0** (2026-11-28). Todos los cambios, contados por versión, están en
 [CHANGELOG.md](CHANGELOG.md). Para ver qué versión tienes: `./ubuntu-ultimate-tools.sh --version` (o el script de
 tu distribución); también aparece en la cabecera del menú.
 
