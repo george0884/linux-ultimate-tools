@@ -14,6 +14,7 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 
 | Versión | Fecha | Hito | Cambios | Líneas agregadas | Líneas quitadas |
 |---|---|---|---:|---:|---:|
+| [3.5.0](#350--2026-11-28) | 2026-11-28 | Kernel de kernel.org | 4 | | |
 | [3.4.0](#340--2026-11-27) | 2026-11-27 | Quitar periféricos y actualización al iniciar | 8 | | |
 | [3.3.0](#330--2026-11-27) | 2026-11-27 | Pruebas y reinstalar controladores | 8 | | |
 | [3.2.0](#320--2026-11-27) | 2026-11-27 | Temas, periféricos y versionado | 7 | 3.025 | 284 |
@@ -24,10 +25,22 @@ Los tres scripts (`ubuntu-`, `debian-` y `arch-ultimate-tools.sh`) comparten la 
 | [1.1.0](#110--2026-11-09) | 2026-11-09 | Menú de arranque | 8 | 1.146 | 133 |
 | [1.0.0](#100--2026-11-01) | 2026-11-01 | Primera versión completa (Kubuntu) | 8 | 3.065 | 590 |
 | [0.1.0](#010--2026-05-22) | 2026-05-22 | Kubuntu Transformer | 8 | 2.270 | 0 |
-| **Total** | | | **99** | **59.153** | **3.784** |
+| **Total** | | | **103** | **59.153** | **3.784** |
 
 Hoy: **3 scripts** (Ubuntu, Debian y Arch), **23 opciones** en el menú principal, más de **40 sistemas** para descargar y
 el código en **8 piezas** (`partes/`) que `armar.sh` une.
+
+## [3.5.0] — 2026-11-28
+
+**Kernel de kernel.org.** En el menú del kernel (14) de Ubuntu, la opción 6 muestra los 3 estables más nuevos y el
+de prueba, como en la portada de kernel.org, y los instala.
+
+4 cambios
+
+- Kernel → 6: los 3 estables más nuevos (estable y largo plazo) y el de prueba (rc) de kernel.org, con cuál está instalado y en uso
+- Se instalan las compilaciones para Ubuntu de kernel.ubuntu.com, comprobadas con sus sumas SHA-256; si Ubuntu aún no compiló la última, se ofrece la más nueva de esa serie
+- Si los headers no se pueden instalar, el kernel se instala sin ellos y avisa; GRUB queda arrancando el nuevo y el oficial de respaldo
+- Kernel → 6 → Quitar: borra un kernel de kernel.org que no esté en uso
 
 ## [3.4.0] — 2026-11-27
 

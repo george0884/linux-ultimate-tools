@@ -687,9 +687,10 @@ optimize_kernel_menu() {
         echo -e "  ${BLUE}3)${NC} Kernel oficial Ubuntu: LTS, HWE o versión específica (recomendado)"
         echo -e "  ${BLUE}4)${NC} Kernel oficial + Livepatch (Ubuntu Pro)"
         echo -e "  ${BLUE}5)${NC} Ajustes avanzados de kernel"
+        echo -e "  ${BLUE}6)${NC} Kernel de kernel.org: los 3 estables más nuevos y el de prueba (rc)"
         echo -e "\n  ${BLUE}0)${NC} 🔙 Volver"
         echo ""
-        read -r -p "📌 Opción (0-5): " kernel_option
+        read -r -p "📌 Opción (0-6): " kernel_option
 
         case $kernel_option in
             1) submenu_run install_liquorix_kernel ;;
@@ -697,6 +698,7 @@ optimize_kernel_menu() {
             3) submenu_run optimize_standard_kernel ;;
             4) submenu_run install_standard_livepatch_kernel ;;
             5) submenu_run advanced_kernel_tweaks ;;
+            6) submenu_run kernel_org_menu ;;
             0) return 0 ;;
             *) echo -e "${RED}❌ Opción inválida${NC}"; sleep 1; continue ;;
         esac
@@ -728,7 +730,7 @@ check_custom_kernel_requirements() {
 
     if secure_boot_enabled; then
         log_error "Secure Boot está activado"
-        echo -e "${YELLOW}  Liquorix y XanMod no están firmados: con Secure Boot el equipo NO arrancará con ellos.${NC}"
+        echo -e "${YELLOW}  Liquorix, XanMod y los de kernel.org no están firmados: con Secure Boot el equipo NO arrancará con ellos.${NC}"
         echo -e "${YELLOW}  Desactiva Secure Boot en la BIOS/UEFI o usa el kernel oficial (opción 3).${NC}"
         return 1
     fi
@@ -877,6 +879,283 @@ install_xanmod_kernel() {
 
     echo -e "${BLUE}[5/5] Configurando GRUB...${NC}"
     finish_custom_kernel xanmod "XanMod"
+}
+
+# ------------------------------------------------------------
+# Kernel de kernel.org: los 3 estables más nuevos y el de prueba (rc), como en la portada de kernel.org.
+# Se instalan las compilaciones de Ubuntu (kernel.ubuntu.com/mainline), comprobadas con sus sumas SHA-256.
+# ------------------------------------------------------------
+
+KERNEL_ORG_JSON="https://www.kernel.org/releases.json"
+MAINLINE_URL="https://kernel.ubuntu.com/mainline"
+
+# Ordena versiones del kernel: 7.4-rc4 va antes de 7.4, y 7.4 antes de 7.4.1
+kernel_sort() {
+    awk -F'[.-]' '{ rc = 999; p = 0
+        for (i = 3; i <= NF; i++) { if ($i ~ /^rc[0-9]+$/) rc = substr($i, 3); else p = $i }
+        printf "%d.%d.%d.%d %s\n", $1, $2, p, rc, $0 }' | sort -V -k1,1 | cut -d' ' -f2
+}
+
+# Versiones compiladas para Ubuntu (carpetas de kernel.ubuntu.com), de la más vieja a la más nueva
+mainline_index() {
+    curl -fsSL --connect-timeout 5 -m 30 "$MAINLINE_URL/" 2>/dev/null \
+        | grep -oE 'href="v[0-9]+\.[0-9]+(\.[0-9]+)?(-rc[0-9]+)?/"' | sed -E 's/^href="v//; s/\/"$//' | kernel_sort
+}
+
+# Lo que muestra kernel.org: "tipo|versión" (prueba, estable o largo plazo).
+# Si kernel.org no responde, lo mismo calculado con las versiones compiladas para Ubuntu (MAINLINE_ALL).
+kernel_org_list() {
+    local json v series seen_series=" " n=0 i
+    json=$(curl -fsSL --connect-timeout 5 -m 20 "$KERNEL_ORG_JSON" 2>/dev/null)
+    if [ -n "$json" ] && command -v python3 &> /dev/null && python3 -c '
+import json, sys
+r = json.load(sys.stdin).get("releases", [])
+for x in r:
+    if x.get("moniker") == "mainline":
+        print(("prueba" if "-rc" in x["version"] else "recién salido") + "|" + x["version"])
+        break
+n = 0
+for x in r:
+    if x.get("moniker") in ("stable", "longterm") and n < 3:
+        print(("estable" if x["moniker"] == "stable" else "largo plazo") + "|" + x["version"])
+        n += 1
+' <<< "$json" 2>/dev/null; then
+        return 0
+    fi
+    [ ${#MAINLINE_ALL[@]} -gt 0 ] || return 1
+    v=${MAINLINE_ALL[${#MAINLINE_ALL[@]}-1]}
+    [[ "$v" == *-rc* ]] && echo "prueba|$v"
+    for ((i = ${#MAINLINE_ALL[@]} - 1; i >= 0 && n < 3; i--)); do
+        v=${MAINLINE_ALL[i]}
+        [[ "$v" == *-rc* ]] && continue
+        series=$(cut -d. -f1,2 <<< "$v")
+        [[ "$seen_series" == *" $series "* ]] && continue
+        seen_series+="$series "
+        echo "estable|$v"
+        n=$((n + 1))
+    done
+}
+
+# La compilación de Ubuntu para una versión de kernel.org: la misma o, si Ubuntu todavía
+# no la compiló, la más nueva de esa serie (sin pasar de una estable a una rc)
+mainline_build_for() {
+    local want="$1" series v best=""
+    series=$(cut -d. -f1,2 <<< "${want%%-*}")
+    for v in "${MAINLINE_ALL[@]}"; do
+        [ "$v" = "$want" ] && { echo "$v"; return 0; }
+        [[ "$want" != *-rc* && "$v" == *-rc* ]] && continue
+        [ "$(cut -d. -f1,2 <<< "${v%%-*}")" = "$series" ] && best=$v
+    done
+    [ -n "$best" ] && echo "$best"
+}
+
+# Paquetes .deb de amd64 de una compilación (vacío si falló o no existe)
+mainline_debs() {
+    curl -fsSL --connect-timeout 5 -m 30 "$MAINLINE_URL/v$1/amd64/" 2>/dev/null \
+        | grep -oE 'href="linux-(headers|image-unsigned|modules)-[^"/]*-generic_[^"/]*_amd64\.deb"|href="linux-headers-[^"/]*_all\.deb"' \
+        | sed 's/^href="//; s/"$//' | sort -u
+}
+
+# Versión del kernel que deja instalada una compilación (p. ej. 7.3.6-070306-generic)
+mainline_kver() {
+    printf '%s\n' "$@" | sed -n 's/^linux-image-unsigned-\(.*-generic\)_.*/\1/p' | head -n1
+}
+
+# Kernels de kernel.org instalados: "versión-generic"
+mainline_installed() {
+    installed_pkgs 'linux-image-unsigned-*' | sed 's/^linux-image-unsigned-//' | grep -E -- '-[0-9]{6}(rc[0-9]+)?-generic$' | sort -V
+}
+
+# Borra la carpeta temporal de la descarga
+kernel_org_cleanup() {
+    rm -f -- "${1:?}"/*.deb "${1:?}/CHECKSUMS"
+    rmdir -- "${1:?}" 2>/dev/null
+}
+
+kernel_org_menu() {
+    local items=() builds=() debs_of=() entry kind ver build debs kver mark label i choice running
+    clear
+    echo -e "${BLUE}${BOLD}"
+    echo "╔══════════════════════════════════════════════════════════════════╗"
+    echo "║             🐧 KERNEL DE KERNEL.ORG (ESTABLES Y PRUEBA)          ║"
+    echo "╚══════════════════════════════════════════════════════════════════╝"
+    echo -e "${NC}"
+    running=$(uname -r)
+    echo -e "${BLUE}🐧 Kernel en uso: ${BOLD}$running${NC}\n"
+    if [ "$(dpkg --print-architecture)" != amd64 ]; then
+        log_error "Las compilaciones de kernel.org para Ubuntu que instala el script son solo para amd64"
+        return 1
+    fi
+    echo -e "${CYAN}🔎 Buscando las versiones en kernel.org y las compilaciones para Ubuntu...${NC}"
+    mapfile -t MAINLINE_ALL < <(mainline_index)
+    if [ ${#MAINLINE_ALL[@]} -eq 0 ]; then
+        log_error "No se pudo leer $MAINLINE_URL (¿sin internet?)"
+        return 1
+    fi
+    mapfile -t items < <(kernel_org_list)
+    echo -e "\033[1A\033[2K${BLUE}📋 Versiones de kernel.org (como en su portada):${NC}\n"
+    i=0
+    for entry in "${items[@]}"; do
+        kind=${entry%%|*}; ver=${entry#*|}
+        build=$(mainline_build_for "$ver")
+        debs=""
+        [ -n "$build" ] && debs=$(mainline_debs "$build")
+        i=$((i + 1))
+        case $kind in
+            prueba) label="${YELLOW}de prueba (rc)${NC}" ;;
+            "recién salido") label="${YELLOW}recién salido${NC}" ;;
+            estable) label="${GREEN}estable${NC}" ;;
+            *) label="${GREEN}estable, largo plazo${NC}" ;;
+        esac
+        mark=""
+        if ! grep -q '^linux-image-unsigned' <<< "$debs"; then
+            mark=" ${RED}(Ubuntu aún no lo compiló)${NC}"
+            build=""
+        else
+            [ "$build" != "$ver" ] && mark=" ${YELLOW}→ se instala $build (Ubuntu aún no compiló $ver)${NC}"
+            # shellcheck disable=SC2086
+            kver=$(mainline_kver $debs)
+            [ -e "/boot/vmlinuz-$kver" ] && mark+=" ${GREEN}(instalado)${NC}"
+            [ "$kver" = "$running" ] && mark+=" ${GREEN}(en uso)${NC}"
+        fi
+        builds+=("$build"); debs_of+=("$debs")
+        echo -e "  ${BLUE}$i)${NC} ${BOLD}$ver${NC}  $label$mark"
+    done
+    echo -e "\n  ${BLUE}$((i + 1)))${NC} 🗑 Quitar un kernel de kernel.org instalado"
+    echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
+    echo -e "${YELLOW}ℹ No reciben actualizaciones automáticas ni están firmados (con Secure Boot no arrancan).${NC}"
+    echo -e "${YELLOW}  El de prueba es para probar: puede tener errores. El kernel oficial queda de respaldo en GRUB.${NC}\n"
+    read -r -p "📌 Opción: " choice
+    if [ -z "$choice" ] || [ "$choice" = 0 ]; then
+        return 2
+    fi
+    if [ "$choice" = "$((i + 1))" ]; then
+        kernel_org_remove
+        return
+    fi
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$i" ]; then
+        log_error "Opción inválida"
+        return 1
+    fi
+    build=${builds[choice - 1]}
+    if [ -z "$build" ]; then
+        log_error "Esa versión todavía no tiene compilación para Ubuntu: prueba en unos días"
+        return 1
+    fi
+    # shellcheck disable=SC2086
+    kernel_org_install "$build" ${debs_of[choice - 1]}
+}
+
+# Baja, comprueba e instala una compilación: kernel_org_install VERSIÓN DEBS...
+kernel_org_install() {
+    local build="$1" tmp d want got kver files=() noheaders=()
+    shift
+    kver=$(mainline_kver "$@")
+    if [ -e "/boot/vmlinuz-$kver" ]; then
+        echo -e "${YELLOW}ℹ El kernel $kver ya está instalado${NC}"
+        confirm "${BLUE}¿Dejarlo como predeterminado en GRUB?${NC}" || return 2
+        grub_select "$kver"
+        return
+    fi
+    [[ "$build" == *-rc* ]] && echo -e "${YELLOW}⚠ $build es de PRUEBA: úsalo para probar, no en un equipo del que dependes${NC}"
+    if lsmod 2>/dev/null | grep -q '^nvidia'; then
+        echo -e "${YELLOW}⚠ Usas el controlador de NVIDIA: con kernels muy nuevos a veces no compila y arranca sin él${NC}"
+    fi
+    confirm "${BLUE}¿Instalar el kernel $build?${NC}" || return 2
+    check_custom_kernel_requirements || return 1
+
+    tmp=$(mktemp -d) || return 1
+    chmod 755 "$tmp"
+    echo -e "${BLUE}[1/4] Descargando las sumas SHA-256...${NC}"
+    if ! curl -fsSL --connect-timeout 5 -m 30 -o "$tmp/CHECKSUMS" "$MAINLINE_URL/v$build/amd64/CHECKSUMS"; then
+        log_error "No se pudieron bajar las sumas: no se instala nada"
+        kernel_org_cleanup "$tmp"
+        return 1
+    fi
+    echo -e "${BLUE}[2/4] Descargando y comprobando el kernel $build...${NC}"
+    for d in "$@"; do
+        want=$(awk -v f="$d" '$2 == f && length($1) == 64 { print $1 }' "$tmp/CHECKSUMS")
+        if [ -z "$want" ] || ! curl -fL --progress-bar --connect-timeout 5 -o "$tmp/$d" "$MAINLINE_URL/v$build/amd64/$d"; then
+            log_error "No se pudo bajar $d (o no tiene suma publicada): no se instala nada"
+            kernel_org_cleanup "$tmp"
+            return 1
+        fi
+        got=$(sha256sum "$tmp/$d" | cut -d' ' -f1)
+        if [ "$got" != "$want" ]; then
+            log_error "La suma SHA-256 de $d no coincide: no se instala nada"
+            kernel_org_cleanup "$tmp"
+            return 1
+        fi
+        echo -e "  ${GREEN}✓ $d${NC}"
+        files+=("$tmp/$d")
+        [[ "$d" == linux-headers-* ]] || noheaders+=("$tmp/$d")
+    done
+
+    echo -e "${BLUE}[3/4] Instalando...${NC}"
+    if ! apt_install "${files[@]}"; then
+        # Los headers a veces piden bibliotecas más nuevas que las de tu Ubuntu: sin ellos el kernel
+        # arranca igual, pero no se pueden compilar módulos externos (NVIDIA, VirtualBox)
+        echo -e "${YELLOW}⚠ No se pudieron instalar los headers: se instala el kernel sin ellos (no compilan NVIDIA ni VirtualBox)${NC}"
+        if ! apt_install "${noheaders[@]}"; then
+            kernel_org_cleanup "$tmp"
+            return 1
+        fi
+    fi
+    kernel_org_cleanup "$tmp"
+    if [ ! -e "/boot/vmlinuz-$kver" ]; then
+        log_error "El kernel $kver no quedó instalado en /boot"
+        return 1
+    fi
+
+    echo -e "${BLUE}[4/4] Configurando GRUB...${NC}"
+    grub_select "$kver"
+    echo ""
+    log_success "Kernel de kernel.org instalado: $kver"
+    echo -e "${YELLOW}⚠ Reinicia para usarlo. Si no arranca, elige el kernel oficial en 'Opciones avanzadas' de GRUB${NC}"
+    echo -e "${YELLOW}  (mantén Shift o pulsa Esc al encender) y quítalo con 14 → 6.${NC}"
+}
+
+# Quita un kernel de kernel.org instalado (nunca el que está en uso)
+kernel_org_remove() {
+    local list=() v i=0 choice running
+    running=$(uname -r)
+    mapfile -t list < <(mainline_installed)
+    if [ ${#list[@]} -eq 0 ]; then
+        echo -e "${YELLOW}ℹ No hay kernels de kernel.org instalados${NC}"
+        return 0
+    fi
+    echo -e "\n${BLUE}📋 Kernels de kernel.org instalados:${NC}\n"
+    for v in "${list[@]}"; do
+        i=$((i + 1))
+        if [ "$v" = "$running" ]; then
+            echo -e "  ${BLUE}$i)${NC} $v ${GREEN}(en uso: reinicia con otro para quitarlo)${NC}"
+        else
+            echo -e "  ${BLUE}$i)${NC} $v"
+        fi
+    done
+    echo -e "  ${BLUE}0)${NC} 🔙 Volver\n"
+    read -r -p "📌 ¿Cuál quitas?: " choice
+    if [ -z "$choice" ] || [ "$choice" = 0 ]; then
+        return 2
+    fi
+    if ! [[ "$choice" =~ ^[0-9]+$ ]] || [ "$choice" -lt 1 ] || [ "$choice" -gt "$i" ]; then
+        log_error "Opción inválida"
+        return 1
+    fi
+    v=${list[choice - 1]}
+    if [ "$v" = "$running" ]; then
+        log_error "$v está en uso: reinicia con otro kernel y vuelve"
+        return 1
+    fi
+    confirm "${YELLOW}¿Quitar el kernel $v?${NC}" || return 2
+    purge_official_kernel_version "$v" || return 1
+    if [ -e "/boot/vmlinuz-$v" ]; then
+        log_error "$v sigue en /boot"
+        return 1
+    fi
+    # GRUB vuelve a arrancar el más reciente que quede
+    grub_select 0
+    log_success "Kernel $v quitado"
 }
 #@parte apt: available_pkgs
 
